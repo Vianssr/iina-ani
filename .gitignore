@@ -1,0 +1,85 @@
+# macOS
+.DS_Store
+.AppleDouble
+._*
+
+# Xcode generated output and per-user settings
+build/
+DerivedData/
+*.noindex/
+/IINA-ANI-*/
+xcuserdata/
+*.pbxuser
+!default.pbxuser
+*.mode1v3
+!default.mode1v3
+*.mode2v3
+!default.mode2v3
+*.perspectivev3
+!default.perspectivev3
+*.moved-aside
+*.xccheckout
+*.xcscmblueprint
+*.hmap
+*.dSYM
+*.dSYM.zip
+*.xcarchive
+*.xcresult
+/archive/
+
+# Swift Package Manager output; keep Package.resolved
+.build/
+.swiftpm/
+
+# Downloaded web dependencies and external IINA plugin; keep package-lock.json
+/IINA-ANI/WebFiles/node_modules/
+/IINA-ANI/iina-plugin-danmaku.iinaplgz
+
+# Local assistant state
+/.agents/
+/.claude/
+/.codex/
+/.cursor/
+/.vscode/
+/.idea/
+[Aa][Gg][Ee][Nn][Tt].[Mm][Dd]
+[Aa][Gg][Ee][Nn][Tt][Ss].[Mm][Dd]
+[Cc][Ll][Aa][Uu][Dd][Ee].[Mm][Dd]
+[Gg][Ee][Mm][Ii][Nn][Ii].[Mm][Dd]
+.cursorrules
+.cursorignore
+.mcp.json
+
+# Environment secrets; retain shareable templates
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+.envrc.local
+/Config/Local.xcconfig
+
+# Private credentials and signing exports; keep public CA/license resources
+*.key
+*.p8
+*.p12
+*.pfx
+*.mobileprovision
+*.provisionprofile
+id_rsa
+id_rsa.*
+id_ed25519
+id_ed25519.*
+AuthKey_*.pem
+private-key*.pem
+
+# Generated distributions and language caches
+/dist/
+/coverage/
+*.ipa
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+.cache/
