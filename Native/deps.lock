@@ -1,0 +1,20 @@
+# SHA-256 values are checked before extraction; submodule revision is read from the pinned libtorrent git tree.
+OPENSSL_VERSION=3.5.8
+OPENSSL_URL=https://www.openssl.org/source/openssl-3.5.8.tar.gz
+OPENSSL_SHA256=a8f84a39918ec6415ce765d9b429d313ba97b8143169c172e734b9514464f5b2
+CA_BUNDLE_DATE=2026-09-25
+CA_BUNDLE_URL=https://curl.se/ca/cacert-2026-09-25.pem
+CA_BUNDLE_SHA256=a41b5d356aea97a529fe27e0f7316d2f9d946d75927476cf9cf1b90637d00505
+LIBTORRENT_VERSION=2.1.2
+LIBTORRENT_COMMIT=6da363d2994f17c0b3c0450d124cf73a31a73847
+LIBTORRENT_URL=https://codeload.github.com/arvidn/libtorrent/tar.gz/6da363d2994f17c0b3c0450d124cf73a31a73847
+LIBTORRENT_SHA256=fbccb04ecb9434256f3e51520202bf810ce733ff6477c45d743b8bb0cfe35beb
+TRY_SIGNAL_COMMIT=105cce59972f925a33aa6b1c3109e4cd3caf583d
+TRY_SIGNAL_URL=https://codeload.github.com/arvidn/try_signal/tar.gz/105cce59972f925a33aa6b1c3109e4cd3caf583d
+TRY_SIGNAL_SHA256=6f111b0d77429a8051be4faed06cf23fb03cf6ee233967c84fdd9d8d3b42ba8e
+BOOST_VERSION=1.89.0
+BOOST_URL=https://archives.boost.io/release/1.89.0/source/boost_1_89_0.tar.bz2
+BOOST_SHA256=85a33fa22621b4f314f8e85e1a5e2a9363d22e4f4992925d4bb3bc631b5a0c7a
+CMAKE_VERSION=3.31.8
+CMAKE_URL=https://github.com/Kitware/CMake/releases/download/v3.31.8/cmake-3.31.8-macos-universal.tar.gz
+CMAKE_SHA256=d1449f969c54d5c00886d5b643340d493dfb3c81cb39ee29b35453395c11ebf7

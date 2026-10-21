@@ -1,0 +1,188 @@
+{
+  "schemaVersion": 1,
+  "componentContractVersion": 1,
+  "minimumAppVersion": "0.8.32",
+  "id": "iina-ani.example.full",
+  "version": "1.0.0",
+  "revision": 0,
+  "name": "Contour Full",
+  "author": "IINA-ANI example contributors",
+  "license": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+  "supportedVariants": [
+    "light",
+    "dark"
+  ],
+  "entryPaths": {
+    "theme": "theme.json",
+    "components": "components.json",
+    "pageMotion": "motions/page.xml"
+  },
+  "assets": {
+    "background-light": "assets/background-light.png",
+    "background-dark": "assets/background-dark.png",
+    "icon-normal": "assets/icon-normal.png",
+    "icon-hover": "assets/icon-hover.png",
+    "icon-pressed": "assets/icon-pressed.png",
+    "icon-selected": "assets/icon-selected.png",
+    "icon-focus": "assets/icon-focus.png",
+    "icon-disabled": "assets/icon-disabled.png",
+    "icon-loading": "assets/icon-loading.png",
+    "icon-error": "assets/icon-error.png",
+    "placeholder-normal": "assets/placeholder-normal.png",
+    "placeholder-hover": "assets/placeholder-hover.png",
+    "placeholder-pressed": "assets/placeholder-pressed.png",
+    "placeholder-selected": "assets/placeholder-selected.png",
+    "placeholder-focus": "assets/placeholder-focus.png",
+    "placeholder-disabled": "assets/placeholder-disabled.png",
+    "placeholder-loading": "assets/placeholder-loading.png",
+    "placeholder-error": "assets/placeholder-error.png",
+    "decoration-normal": "assets/decoration-normal.png",
+    "decoration-hover": "assets/decoration-hover.png",
+    "decoration-pressed": "assets/decoration-pressed.png",
+    "decoration-selected": "assets/decoration-selected.png",
+    "decoration-focus": "assets/decoration-focus.png",
+    "decoration-disabled": "assets/decoration-disabled.png",
+    "decoration-loading": "assets/decoration-loading.png",
+    "decoration-error": "assets/decoration-error.png"
+  },
+  "assetAttributions": {
+    "background-light": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "background-dark": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "icon-normal": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "icon-hover": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "icon-pressed": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "icon-selected": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "icon-focus": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "icon-disabled": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "icon-loading": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "icon-error": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "placeholder-normal": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "placeholder-hover": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "placeholder-pressed": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "placeholder-selected": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "placeholder-focus": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "placeholder-disabled": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "placeholder-loading": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "placeholder-error": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "decoration-normal": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "decoration-hover": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "decoration-pressed": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "decoration-selected": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "decoration-focus": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "decoration-disabled": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "decoration-loading": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+    "decoration-error": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  "provenance": {},
+  "layout": {
+    "schemaVersion": 1,
+    "pages": [
+      {
+        "id": "a502348a-33ac-5ca5-aab7-b20df91abe4b",
+        "title": "discovery.schedule",
+        "root": {
+          "kind": "component",
+          "id": "4151ba51-8797-53cc-8115-74e6013281cc",
+          "componentID": "discovery.schedule",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      },
+      {
+        "id": "e6212a9f-680b-5c9c-81f6-7a4899e882d9",
+        "title": "discovery.updates",
+        "root": {
+          "kind": "component",
+          "id": "5017b607-49af-51e0-bdb1-2209294bb077",
+          "componentID": "discovery.updates",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      },
+      {
+        "id": "a9b1f4e1-8cb6-5abd-bde3-e34402735df6",
+        "title": "discovery.recommendations",
+        "root": {
+          "kind": "component",
+          "id": "123c8098-c433-5e86-9efd-403ab8cf0962",
+          "componentID": "discovery.recommendations",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      },
+      {
+        "id": "9dcd6f3a-554a-54b2-a72a-551891ddf124",
+        "title": "search.results",
+        "root": {
+          "kind": "component",
+          "id": "82176d78-9f19-551f-9084-3487e0c30a57",
+          "componentID": "search.results",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      },
+      {
+        "id": "df6b1657-a655-54dc-85d1-1fdd34e8167f",
+        "title": "downloads.tasks",
+        "root": {
+          "kind": "component",
+          "id": "7963f1e4-608f-50fc-9fdc-cf9b78e79b4a",
+          "componentID": "downloads.tasks",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      },
+      {
+        "id": "126ba7b3-86c8-5ae2-aac7-b71a5f3f4a0b",
+        "title": "favorites.works",
+        "root": {
+          "kind": "component",
+          "id": "6518110c-2869-53fb-917f-a4d271bbb635",
+          "componentID": "favorites.works",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      },
+      {
+        "id": "9a868a29-5e7f-5534-8994-bbbcdc414c32",
+        "title": "favorites.links",
+        "root": {
+          "kind": "component",
+          "id": "c802d0aa-62ee-5223-82c3-5557634a9a39",
+          "componentID": "favorites.links",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      }
+    ],
+    "breakpointLayouts": []
+  }
+}

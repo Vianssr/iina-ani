@@ -1,0 +1,355 @@
+# IINA-ANI 使用指南
+
+IINA-ANI 以 [xjbeta/iina-plus](https://github.com/xjbeta/iina-plus) 的原始碼為基礎。W9 頁面與 W10 入口切換已實作：Workspace 是唯一主視窗，整合發現、搜尋、詳情、雙欄收藏、下載、五組設定與 Torrent，保留原播放器及彈幕能力。W10／M4 的逐站、最低系統與集中產品驗收仍未簽收；[交付與阻礙](plans/FRONTEND_REFACTOR_PLAN.md#w10-contract)。
+
+這是非官方衍生專案，不是從零建立的 Animeko 移植，也不是 IINA 播放核心的 fork。專案正式名稱為 **IINA-ANI**，文件中的本專案名稱統一使用此名稱；IINA+ 僅用於上游名稱、既有技術識別及歷史記錄。原始碼目錄、Xcode 工程、target／scheme、App 顯示名稱與產物均已更名為 `IINA-ANI`。Bundle ID `com.xjbeta.iina-plus` 與既有資料目錄（包含 Core Data 的 `Application Support/IINA+`）刻意保留，避免既有資料遺失；工程與 App 品牌更名不代表已完成獨立發佈。
+
+## 目前狀態
+
+- Workspace 是唯一主視窗，整合發現、搜尋、詳情、收藏、下載、設定、Layout／Skin 與 Torrent；保留 IINA／mpv、彈幕、JSPlayer 及虎牙代理。
+- 基礎服務、W9／W10 入口切換及 R0–R6 修復已交付；逐工作包狀態與未簽收範圍統一見[重構規劃狀態表](plans/FRONTEND_REFACTOR_PLAN.md#plan-status)，不在此重複交付日誌。
+- [R7 集中結果／受阻報告](plans/FRONTEND_REFACTOR_PLAN.md#r7-acceptance)已交付，但不代表全部旅程通過。兩帳號、完整 VoiceOver／放大字級、遠端 HLS、Torrent 產品全鏈、最低系統／Intel／正式簽署 Sandbox／公證及 M2／M3／MT3／M4／W8.3 關卡仍未簽收；外部腳本匯入保持關閉。
+- 最新詳情／二級來源窗口流程見下方「搜尋與日常更新服務」；名稱模糊與雙編號尋源已完成建置、回歸及真網服務鏈驗證，使用者手動確認本輪修正可用並結案；不據此擴大為全站或所有播放器驗收通過。
+- ani-subs、完整追番管理與觀看進度雙向同步不是目前能力；站點能力宣告不代表已逐站實測。
+- 上游固定基線與 fork 身分見 [PROJECT.md](architecture/PROJECT.md)；逐次改動及驗證限制保留於 [WORK_LOG.md](history/WORK_LOG.md)。
+
+> **僅作開發基線，尚未配置獨立發佈。** App 仍使用上游的 `com.xjbeta.iina-plus` Bundle ID；W10 已移除 Sparkle、上游 feed／公鑰及檢查更新入口，禁止以自動更新替換 fork。正式發佈仍需自己的產品身分、資料遷移策略與簽署，不應與上游版本混用資料。詳見 [PROJECT.md](architecture/PROJECT.md)。
+
+## 目前依賴結構與驗證政策
+
+- `AppDelegate` 擁有 `AppServices` 組裝根；服務以 concrete instance／小型 closure 注入，不全面 protocol 化。HTTP 路由與彈幕不再反向取得 `Processes.shared`；HTTP 啟動回傳實際綁定端點並傳遞錯誤，關閉可等待。
+- `VideoDecoder`／下載解析／Discovery 共用明確來源上下文；每個畫面獨立持有解析取消與搜尋分頁狀態。
+- `YouGetJSON` 保留媒體資料，`PlaybackEncoder` 負責既有播放器／外掛編碼；`AppStoragePaths` 提供原有持久目錄，下載任務不再依賴圖片快取目錄推導。
+- **2026-10-11 已恢復正式 App 端到端驗收。** 搜尋失效、重複點擊空白與產品流程改善依[修復計劃 §5.5](plans/FRONTEND_REFACTOR_PLAN.md#repair-plan)執行；計劃不代表修復完成，既有未簽收關卡保留。
+
+```sh
+# 預設亦為 --unit：播放編碼、來源 registry／本地身份、Range 邊界、偏好快照
+bash Tests/run-dependency-regression.sh --unit
+# W7.1–W7.6：入口錯誤／取消、搜尋／選擇、收藏重讀、日常聚合、下載恢復、偏好與快取
+bash Tests/run-w7-usecases.sh
+# Work／Episode／來源映射身份與舊模型遷移
+bash Tests/run-work-library.sh
+# W8.1：Layout 身份／嚴格驗證、跨斷點交易、狀態隔離與原子保存
+bash Tests/run-workspace-layout.sh
+# 原生 Renderer：先建置 Debug App；巢狀分頁生命週期、分頁排序與分隔線拖曳
+bash Tests/run-workspace-renderer.sh
+# 推薦網格：共同捲動／分頁水平座標、可視範圍與尺寸變更
+bash Tests/run-workspace-feed-grid.sh
+# W8.2：樣式優先序／素材上限、安全 ZIP／原子安裝／乾淨 profile 匯出重匯入
+bash Tests/run-skin-appearance.sh
+bash Tests/run-skin-package-store.sh
+# W8.3：獨立 JS helper、OS 權限拒絕／資源終止及生成 Layout 的驗證／保存
+bash Native/LayoutScript/security-regression.sh
+bash Tests/run-workspace-layout-script.sh
+```
+
+上述離線入口不啟動 App 或播放器、不建立 HTTP listener、不進行真實下載。HTTP 生命週期驗證使用 `--integration`，正式 App 旅程依 §5.5／§8 執行；編譯與單元通過不等於整體驗收。W7.6 歷史證據見 [A.7.1](plans/FRONTEND_REFACTOR_PLAN.md#a-w76)，M1／M2 未簽收項仍保留。
+
+## 目錄
+
+以下路徑以 checkout 根目錄為準；精簡專案導覽與首次 Git 提交步驟見 [README](../README.md)。
+
+| 路徑 | 用途 |
+| --- | --- |
+| `IINA-ANI/` | Swift App、AppKit／SwiftUI 介面、網頁播放器與資源 |
+| `IINA-ANI.xcodeproj/` | App 工程；target／scheme 為 `IINA-ANI` |
+| `Design/Icons/` | 40 個功能圖標的 SVG／透明 PNG、明暗預覽與素材對照；主要導航與功能按鈕已接入既有 Asset Catalog 的 `FunctionIcons/` |
+| `HuyaKit/` | 虎牙協議與串流代理套件，包含 `huyaproxy` CLI |
+| `InstallDeps.sh` | 下載外部 IINA 彈幕外掛並安裝網頁依賴 |
+| `docs/architecture/PROJECT.md` | fork 定位、重構範圍、驗證與發佈要求 |
+| `docs/plans/FRONTEND_REFACTOR_PLAN.md` | 下一階段 UI 方向、模塊契約、工作包與驗收標準 |
+| `docs/plans/FRONTEND_W0_BASELINE.md` | W0 已驗收基線、逐入口遷移位置、資料還原與實際驗證限制 |
+| `docs/research/ANIMEKO_TORRENT_REVIEW.md` | 固定版本 Torrent 研究與接入邊界 |
+| `docs/research/websitesforanime.md` | 來源接入結果與未完成驗證 |
+| `Examples/Skins/README.md` | Skin 格式、打包與分享契約 |
+| `docs/history/WORK_LOG.md` | 每次完成工作的交付與驗證記錄 |
+| `LICENSE`、`LicenseForIcons.pdf` | 上游程式及圖示授權資料 |
+
+## 開發環境
+
+- macOS 與完整 Xcode。App target 宣告最低 macOS **13.5**；這是工程設定，不是已完成的最低系統實測。
+- `HuyaKit/Package.swift` 要求 Swift tools **6.4**；App 的 Swift language mode 為 6.0，兩者不是同一個版本要求。
+- 本次檢查環境：Xcode 27.0、Apple Swift 6.4。
+- Node.js／npm：安裝 `IINA-ANI/WebFiles/` 的前端依賴，不是 App 的執行時。
+- GitHub CLI `gh`：`InstallDeps.sh` 下載外掛時使用；按 GitHub 存取權限及速率限制需要配置登入。
+- IINA 及彈幕外掛用於外部播放器驗證；mpv 用於獨立 mpv 路徑驗證。
+
+## 設定
+
+設定的五個分類合併在同一個連續捲動頁面。左側分類採用與主導航一致的整列圓角選單，上方圖標、下方文字置中，選中及滑過時高亮。點選會捲動至對應區段，滾輪／觸控板捲動時同步高亮目前分類；到達頁尾時選中「關於」。切換分類不重建設定控制項。
+
+搜尋仍支援設定名稱與同義詞；選取結果或按 Enter 會直接捲動並聚焦該設定。帳號狀態等非同步更新重建內容時保留捲動位置；偏好保存、帳號、下載及 Skin／Layout 預覽／套用流程不變。
+
+### 應用程式語言
+
+在「設定 → 外觀與佈局 → 應用程式語言」（Settings → Appearance & Layout → App Language）選擇 **System Default／English／简体中文／繁體中文**。預設依 macOS 語言順序選取支援語言，沒有符合語言時回退英文。選擇立即保存，**下次開啟 App 生效**，不強制重啟或中斷目前播放／下載；選回 System Default 會移除此 App 的語言覆寫，不修改系統語言。
+
+選單、工作區、設定、詳情、收藏、下載、Layout／Skin 工具與 App 自有提示使用同一組語言資源。既有內建頁面的顯示標題隨語言切換；自訂／改名頁面、作品／集數、來源資料、檔名及作者包內容不翻譯，也不改寫已保存的 Layout。
+
+翻譯維護於 `IINA-ANI/Localizable.xcstrings`，JSPlayer 與 Open Files 的 storyboard 字串維護於各自 `mul.lproj` 內的 catalog；新增字串須同步提供 `en`、`zh-Hans`、`zh-Hant`，並保留插值參數的型別與順序。
+
+## 同源自動連播
+
+「設定 → 播放與彈幕 → 同源自動連播」預設開啟；與「自動開啟解析結果」是兩個獨立開關。
+
+- **在線**：IINA／mpv 自然播完後，重新讀取目前來源目錄，按精確集數身份接續同一目錄分組的下一集。保留作品、帳號、線路及品質；不跨站、不跨目錄分組、不自動降級品質，也不改播本地檔。
+- **本地**：從本地影片、已完成下載或繼續觀看啟播時，將同資料夾所有影片按檔名自然排序（例如 `1 → 2 → 10`）載入 IINA／mpv 隊列，包含所選集數之前的檔案；仍從所選集數與保存秒數開始。IINA 透過 CLI 匯入完整播放列表，避免自身自動加檔造成重複。不遞迴子資料夾、不包含隱藏檔或符號連結；請將不同作品分開存放。不切回在線源。
+- 只有播放器回報自然 EOF 才接續；手動停止、關閉播放器、播放錯誤、來源身份不明或最後一集都停止，不循環。下一集解析／啟播失敗會提示，不跳過失敗集數。
+- 在線下一集重新解析媒體、建立觀看進度並準備彈幕；本地在同一播放器內換集，各集獨立記錄進度，只使用該檔自己的 XML，不沿用前集 XML。關閉開關不打斷當前影片，停止後續自動換集，但完整本地隊列仍可手動選播；末集或停用連播時停留在最後畫面。退出 App 會取消待處理的連播，不清空已交給播放器的隊列。
+- 直播與 Torrent 邊下邊播不自動換項；Torrent 完成後以本地檔開啟則適用本地規則。JSPlayer 保持既有來源能力，未新增本地／點播入口。
+
+驗證入口：`bash Tests/run-dependency-regression.sh --unit`（含在線目錄、完整本地隊列及 EOF 邊界）、`LOCAL_QUEUE_SMOKE=1 bash Tests/run-dependency-regression.sh --playback`（真實 mpv：完整隊列／M3U、續播、手動換集及連播開關）、`node Tests/Playback/JSPlayerAutoplayRegression.js`（網頁事件生命週期）。正式 App→IINA／mpv 的本地實播證據與版本／彈幕驗證限制見 `docs/history/WORK_LOG.md`。
+
+### 完季後清理繼續觀看
+
+- **只有已確認全集更新完畢、且末集自然播完，才自動清理同季記錄**。不依賴連播開關，不刪下載任務、影片、收藏或其他季。
+- 完結判定使用精確關聯作品的 Bangumi 資料：有明確總集數、完整且唯一的主線集數、已知集名與全部已過的播出日期；再確認目前來源目錄／下載集數確實到達該季末集。僅有日期的當日播出暫不算已確認更新完成。
+- **連載中、總集數／日期不明、目錄不完整或關聯不明都保留**；不能把「來源目前最後一集」或「資料夾最後一檔」當作全季已完結。本地需完成下載記錄能精確對應作品與集數，未關聯的本地資料夾不猜測完結。
+- 播完目前可看的末集但尚未確認完季時，卡片顯示「此集已看完 · 保留追更」，實際秒數與狀態跨重啟保留。點選此卡片會從頭重播該集；新集仍從詳情選播。關閉連播時，播完中間集也保留卡片。
+- 解析失敗、手動停止或關閉播放器不觸發整季清理；另個播放視窗在 EOF 後產生的新進度不會被較舊的清理覆寫。
+
+
+## 建置
+
+Bangumi 帳號登入需使用自己的 OAuth 應用配置；本機 `Config/Local.xcconfig` 不進 Git。未配置仍可建置及使用其他功能，但登入／續期會明確提示配置缺失。配置、回調及桌面端 secret 的公開分發限制見 [README](../README.md#bangumi-登入配置)。
+
+以下命令於專案根目錄執行：
+
+```sh
+# 下載外掛，安裝 CommentCoreLibrary、mpegts.js、crypto-js
+bash InstallDeps.sh
+
+# 解析 Swift Package 依賴
+xcodebuild -resolvePackageDependencies -project 'IINA-ANI.xcodeproj'
+
+# 本機開發建置，不作正式簽署
+xcodebuild -project 'IINA-ANI.xcodeproj' -scheme 'IINA-ANI' \
+  -configuration Debug -destination 'platform=macOS' \
+  -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
+```
+
+也可以直接用 Xcode 開啟 `IINA-ANI.xcodeproj`。未執行依賴安裝前，工程引用的 `IINA-ANI/iina-plugin-danmaku.iinaplgz` 與 `IINA-ANI/WebFiles/node_modules/` 不存在是預期狀態；不要以刪除資源引用的方式繞過。
+
+### W11 原生 Torrent 核心與下載任務
+
+Xcode 的 `Build Torrent Core` phase 自動執行 `Native/build.sh`，按 `ARCHS` 建置。首次需下載 `Native/deps.lock` 固定的 libtorrent 2.1.2、try_signal、Boost 1.89.0、OpenSSL 3.5.8 與私有 CMake 3.31.8；所有 archive 檢查 SHA-256，產物位於 `.build/torrent/<arch>/install`，後續增量建置，不依賴 Homebrew 或 Python binding。App 與原生核心明確固定 deployment target 13.5。
+
+```sh
+# 可獨立建置兩個原生架構
+bash Native/build.sh arm64
+bash Native/build.sh x86_64
+# 先完成上方 Debug App 建置，再執行隔離、實際載入 App dylib 的兩 peer 驗證
+bash Tests/run-w11-torrent.sh
+# 任務／恢復驗收另需測試主機的 ffmpeg、ffprobe；使用自建 FFV1 多檔影片
+bash Tests/run-w11-downloads.sh
+# Range 邊界與溢位回歸（實際載入同一 App dylib）
+bash Tests/run-w11-http-range.sh
+```
+
+`DownloadService.importTorrent` 接受 magnet 或本機 `.torrent`，回傳 metadata／檔案候選；`createTorrentTask` 必須傳入使用者明確選定的 file index。入口先取得 P2P 上傳同意與正數上傳上限，不接受未確認的純接收假設。v1／v2-only／hybrid 的算法標記 hash 集合、file index、路徑與大小沿用既有身份；JSPlayer 能力保持關閉。
+
+作品選集後，在「來源與播放選擇」切換 **BT 搜尋與播放**：自動帶入作品名稱，也可編輯關鍵字。每次搜尋讀取 `https://sub.creamycake.org/v1/bt1.json` 的 RSS `searchConfig.searchUrl`，替換 `{keyword}`，包括 JSON filter 的安全編碼；不寫死站點搜尋網址、不自動連接 P2P。結果須明確選取，再讀取 metadata、選擇精確影片檔案及「邊下邊播」；不猜首項或將 BT 搜尋結果自動綁定為已選集數。遠端 torrent enclosure 先有界下載到臨時檔，沿用同一匯入服務；magnet enclosure 直接沿用磁力匯入。個別 RSS 失敗列明來源，不阻斷其他結果。
+
+全域 magnet 開啟與「開啟 Torrent 檔案…」也使用同一播放窗口；既有 `torrent.import` 可編排組件保留。切換來源類型、換集或關窗取消未完成查詢／匯入，不停止已提交的播放或下載。BT 使用設定中的 IINA／mpv；每個檔案仍需明選，不繞過 private torrent 政策。解析回歸：`bash Tests/run-torrent-search.sh`。
+
+### 詳情頁快速下載
+
+詳情頁的「快速下載…」開啟獨立下載窗口，不必先播放或選定單集。詳情選集將空白／未知集名視為未更新，在各集數分組的最後一個已更新集數後，同一網格內合併顯示不可選取的「更新中」項目；該組全部未更新時只顯示此項目。已知集名維持原有集數身份。
+
+- **在線源下載**：先尋找並明確選擇作品來源，再從該來源的精確集數／分 P 目錄勾選多集（可全選／清除）。集數、品質與線路解析並通過既有下載能力檢查後，按「下載勾選且就緒的集數」一次建立多筆任務。切換來源清除未提交的勾選與解析，不預選來源或集數。番劇使用 guest；不猜測未匹配集數、不暗換帳號。
+- **BT下載**：帶入作品名稱搜尋，明選結果並讀取 metadata 後，以核取方塊勾選多個影片檔案，按「下載勾選檔案」批次建立任務。非影片不提供勾選，不預選首檔；同一 Torrent 的各集共用底層資料，但各有獨立下載記錄。
+- 已成功提交的項目在本次窗口內不可重複提交；未就緒或提交失敗的項目保留供處理。取消／關窗／離開詳情只停止未提交工作，已建立任務仍由共用下載頁管理；此窗口不觸發播放。下載頁先選取任務，再使用獨立操作列的「暫停」「繼續」「取消下載」；按任務狀態啟用操作，進度刷新不清除選取。完成檔另提供播放器開啟、Finder 顯示、刪除記錄與刪除完成檔。
+- **封面與下載標記**：建立下載任務時同步預抓番劇封面到共用圖片磁碟快取，關閉下載窗口不取消封面工作；下載頁顯示封面與集名。完成任務以精確來源集數、已確認的作品集數映射或 Torrent 檔案身份標示「已下載」，重啟後保留；完成檔不存在時不再標記，切回 App／重新開啟面板會重新核對。快速下載中的已完成在線集數不可重複勾選，不按標題或列表位置猜測對應集數。
+- **按番劇整理**：新番劇任務保存至下載根目錄內的「番劇名稱 [作品身份]」資料夾，同番不同集共用；優先使用 Bangumi ID，否則使用本機作品 ID 或精確來源作品身份，避免同名番劇混檔。舊任務和既有完成檔不搬移，普通非番劇影片維持原目錄。
+- 不新增站點下載能力、不繞過來源授權或 Cloudflare 驗證；BT RSS 的 HTTP 403 仍如實顯示。
+
+磁力匯入 session 會同時聯絡連結中既有的 tracker tiers，避免前置失效 tracker 阻塞後續可用節點而耗盡 metadata 等待期限；不額外加入 tracker、不延長 45 秒預設等待。本機 `.torrent` 匯入及非公開測試 session 不改此設定。資源沒有可用 peer 時仍無法取得磁力 metadata。
+
+`DownloadService` 是唯一持久任務 owner；相同 torrent 共用 transfer，重複匯入沿用已知 metadata，取消 metadata 選擇或個別任務不關閉其他使用者。共享上傳上限取有效使用者中最小值，包含 LAN／loopback peers；最後一個使用者釋放後停止傳輸，完成任務不繼續做種。選檔資料留在 owned `TorrentPrivate`，完成檔獨立發布；目錄快照、bookmark、刪記錄／刪檔沿用 W6。metadata／resume 為原子保存的私有附件；每次重開均重新校驗實際檔案並重建完成 bitmap，不把仍可解碼的舊 resume 當作檔案未變的證據。
+
+`TorrentSession` actor 持有 native owner；`close()` 等待 session／disk workers 結束，析構亦兜底釋放。一般 App 啟動不自動建立 BT session。取得 P2P 同意後的公開傳輸開啟 DHT／LSD／UPnP／NAT-PMP；已知 private torrent 禁止 DHT／LSD／PEX，並以本機 `.torrent` 匯入，不繞過 libtorrent 禁止 private metadata exchange 的限制；web-seed 不啟用。無 peer 的 metadata 等待預設 45 秒、可指定最多 60 秒，傳輸無 peer／無進度亦有界；錯誤不保存 tracker passkey 或 magnet 敏感參數。
+
+`Processes.openTorrent` 可從既有任務或匯入後的明確 file index 啟動邊下邊播；純播放不製造持久下載任務。`DownloadService.torrentPlayback`／`TorrentStreamingService` 只簽發指定檔案的 loopback URL：256-bit 隨機 token、六小時硬到期、最多 32 個授權及 32 個 HTTP requests。每個授權與 request 各有独立 lease，URL 不寫入任務／收藏或日誌。HEAD 忽略 Range；GET 支援完整內容、單一閉區間／開放尾端／suffix、206／416；多重 Range 明確忽略並回完整 200。NIO 逐塊等待背壓，僅讀取已校驗 piece，不以 sparse 檔案零值代替缺塊。
+
+`set_piece_deadline(alert_when_available)`／`read_piece_alert` 共用集中分派，已完成塊也從同一介面讀取；每次最多 256 KiB，遇 piece 邊界可短讀，缺塊預設等候上限 30 秒。native 每 session 最多 32 readers、每 reader 一個讀取，串流拒絕 piece 大於 16 MiB 的 metadata；最壞 32 個不同 piece 的 libtorrent 暫存上界為 512 MiB，並非只有 HTTP chunk 的 256 KiB。外部 IINA／mpv 使用私有 Unix IPC 觀察載入／end-file／關閉；載入等待有界，停止單一播放或 App 退出會撤銷 URL 並釋放 reader，不退出使用者的整個 IINA 程序或停止獨立下載。
+
+核心及 OpenSSL 靜態連結，原生 fixture 的動態依賴只有系統 libc++／CoreFoundation／SystemConfiguration，沒有第三方 Torrent／OpenSSL dylib。HTTPS tracker 驗證憑證並使用隨包 CA；`Native/licenses` 的 libtorrent、Boost、try_signal、OpenSSL 與 CA／MPL 聲明隨 App 放在 `Contents/Resources/TorrentLicenses`。arm64 已執行真實傳輸，x86_64 已建置及檢查 Mach-O；Intel 實機、macOS 13.5 執行與正式簽署／公證仍未驗證。
+
+`run-w11-downloads.sh` 預設驗證真實傳輸、重啟與資料隔離。真實 ENOSPC 驗收另設定 `W112_DISK_FULL_DIR`，指向專用、已掛載且剩餘空間小於測試影片的磁碟映像；runner 只建立／清除該卷內自己的 UUID 子目錄，不會自動填滿指定卷。不要使用系統卷或正式資料目錄。可用 `W112_PHASE` 單獨執行 `no-peers`、`v1-local`、`cancel-import`、`symlink`、`restart`、`normal-restart`、`disk-full`、`sharing-v2`、`v2-recheck`、`private-local` 或 `hybrid`。
+
+注意：
+
+- `InstallDeps.sh` 不帶參數時下載外掛最新 release；需要固定版本時，將實際 release tag 作為第一個參數傳入，並記錄採用版本。
+- 腳本會覆寫已下載的外掛包；設定 `CI=true` 時，也會依外掛 metadata 改寫 `IINAApp.swift` 的內建外掛版本常數。
+- 保留 `Package.resolved` 與 `package-lock.json`。依賴安裝不代表 App 建置或播放驗證通過。
+- 最初基線整理未執行完整依賴安裝、App 建置或播放器驗證；此記錄不代表後續來源接入的驗證結果。
+
+HuyaKit 的獨立入口：
+
+```sh
+swift package --package-path HuyaKit dump-package
+swift build --package-path HuyaKit --product huyaproxy
+```
+
+第一條只驗證套件 manifest；第二條才會解析依賴並建置 CLI。
+
+IINA 彈幕外掛啟播使用每份解析結果的獨立會話網址，並明確從 0 秒開始，避免代理占位網址共用觀看進度。此歸零只作用於 App 發起的新播放；外掛內同片切換品質／線路仍沿用既有進度保留行為，不清除 IINA 的其他觀看紀錄。
+
+## 驗證與回報
+
+- 改動站點或播放流程時，實際完成「輸入網址 → 選品質／集數 → 播放器載入」；開啟 URL scheme 不代表已播放。
+- 改動彈幕時，檢查連線、訊息、設定同步及視窗關閉後的資源釋放。
+- 改動 UI 時，建置並啟動此專案的 `IINA-ANI.app`，提供真實視窗證據；不要啟動 Animeko 或使用已刪除的舊工程產物。
+- 沒有配置 XCTest target；`bash Tests/run-work-library.sh` 運行真實 Core Data 模型／持久化／關聯回歸。完成 Debug 建置後，`bash Tests/run-w2-services.sh` 驗證偏好、Keychain／Bili／Douyu 帳號池及 Bangumi 單帳號生命週期、lease、guest pinning、重新授權／取消提交及 owned-cache；`bash Tests/run-w4-bangumi.sh` 驗證 Bangumi 分頁／快取／離線、關聯競態、OAuth 回調／state、續期與單帳號遷移；`bash Tests/run-w5-favorites.sh` 驗證收藏身份／分 P／離線修復、兩類收藏獨立操作、刪除隔離、真實舊 SQLite 的 WAL 備份／遷移／重啟／失敗回滾與還原。各 runner 使用隔離資料，不使用真實有效帳號。`WebFiles/Danmaku/test.htm` 是輔助頁，不是自動化套件。
+- `bash Tests/run-w6-downloads.sh` 連結生產下載服務，使用隔離 loopback HTTP 與 FFmpeg 生成的實際媒體驗證 Range／ETag 身份、取消、未知總量、跨 host Cookie 邊界、帳號 lease、暫停恢復、授權失效重解析、真實程序中斷恢復，以及 AES-128／fMP4／BYTERANGE／主清單音視訊。需要 `ffmpeg`／`ffprobe`。
+- `bash Tests/run-w7-usecases.sh` 驗證搜尋替換／底層取消、URL 與 Bangumi 隔離、獨立來源分頁、固定日期排期／跨日、持久新增集比較、Bangumi 趨勢排序及分區／過期快取故障隔離；真實站點、播放器與程序重開另見[重構文檔附錄 A.7](plans/FRONTEND_REFACTOR_PLAN.md#a-w7) 的歷史煙霧證據，不以 fixture 代替有效登入。
+- 問題回報請使用 [ISSUE_TEMPLATE.md](../.github/ISSUE_TEMPLATE.md)，先移除 Cookie、token、私人路徑及帶簽名的串流網址。
+
+- [R0 正式 App 基線](plans/FRONTEND_REFACTOR_PLAN.md#r0-baseline)與 [R1 搜尋修復](plans/FRONTEND_REFACTOR_PLAN.md#r1-search)證據：Bangumi URL 精確詳情路由、search 能力來源選單、取消／分頁／返回及完整局部錯誤，正式 App 搜尋、Bilibili 20→40 筆與普通 URL→mpv 解碼畫面。六站的遠端拒絕／格式錯誤仍如實回報；R2／R3 各有獨立驗收，不由 R1 代簽。
+
+### 搜尋與日常更新服務
+
+`AppServices.makeBrowseSearch()` 為每個搜尋面板建立 `BrowseSearchService`，提供 `search(_:enabledSourceIDs:contentFilter:)`、`loadMore()`、`cancel()` 與 `searchableSourceIDs(enabledSourceIDs:)`。`BrowseContentFilter` 僅保留番劇／視頻／直播，默認番劇；新實例或已移除的舊分類回到番劇，既有有效分類選擇仍保存。番劇關鍵詞只搜尋 Bangumi，來源選單固定為 Bangumi；視頻／直播只搜尋啟用且宣告 search 的播放來源，不搜尋 Bangumi，亦不觸發搜尋結果的 Bangumi 二級分類查詢。未確認的混合站點結果不冒充視頻。分類、來源、查詢與游標為同一快照；結果保留來源身份及分類出處，分頁失敗保留已有列，過濾後空頁仍可按遠端游標載入更多。HTTP(S) 的 bangumi.tv／bgm.tv／chii.in `/subject/<正整數>`（可附尾斜線、query／fragment）保留精確作品路由；其他 URL 直接走既有影片選擇／解析，不受關鍵詞分類限制。新查詢、分類替換／取消停止舊傳輸，過時結果不能覆寫；面板取消分頁保留前頁，來源局部錯誤明示。詳情／自動番劇尋源的既有分類契約不變。
+
+Hanime1 屬混合站點，包含動畫與一般影片；不再按站點整體宣告為番劇。缺少單片內容分類證據時保持「待確認」，不自動歸入番劇或視頻；直接網址解析與品質選擇不變。
+
+`AppDelegate.discovery()` 是 MainActor 日常資料 owner；`refresh(force: true)` 手動刷新。啟動、回前景及跨日通知共用每日快照，不常駐輪詢。收藏更新只比較已收藏作品的實際來源集數身份，首次建基線、重排、移除後再出現不報新。私有 `Application Support/<bundle ID>/Discovery/source-baselines-v1.json` 保存已見身份，不屬可重建快取。
+
+**作品收藏分類與 Bangumi 同步**
+
+作品詳情按「收藏作品…」開啟一列 **想看、在看、已看、擱置、丟棄** 按鈕；點選分類即確認收藏並關閉彈窗，不再顯示分類下拉選單、說明文字或二次確認按鈕。只開啟或關閉彈窗不會加入收藏。已收藏作品按「已收藏作品…」開啟同一介面，點選其他分類即儲存；目前分類停用，不在詳情重試同步。儲存結果與錯誤沿用詳情狀態列。未登入或同步失敗仍先保留本機分類。已移除未分類／不變更分類選項；舊未分類收藏在讀取時補為本機「想看」，不因這項轉換自動寫回 Bangumi，也不覆蓋待同步修改。
+
+收藏頁保留作品／連結雙欄，搜尋與排序位於列表上方，開啟／編輯／移除集中於列表下方。作品列顯示收藏分類與待同步狀態，可篩選五種分類或待同步；篩選隨組件保存，不觸發遠端同步。連結保留來源／直播狀態篩選，新增表單將網址與選填標題分行。只有手動排序且沒有搜尋／篩選時允許拖曳重排；移除收藏仍需確認，不刪除下載。內建收藏頁頂端的更新區在無項目時收為緊湊提示，有項目時恢復更新列；不改寫使用者 Layout 或收藏資料。
+
+- 分類先保存本機，再以已關聯的 Bangumi subject ID 同步；需登入 Bangumi 並具有收藏寫入權限。只更新收藏類型，不覆寫評分、評論、標籤、隱私或集數進度。
+- 作品收藏的「載入在線收藏」讀取目前登入 Bangumi 帳號的全部番劇收藏，包含五種分類及帳號有權存取的私密收藏；分頁讀完後才合併本機，可在載入中取消。重複載入按 Bangumi ID 去重，保留既有作品名稱、來源、下載、本機待同步／載入期間的新修改；不刪除遠端清單中沒有的本機收藏，也不寫回遠端。未登入、帳號變更、取消或分頁請求失敗不匯入部分清單。
+- 開啟作品詳情或按「刷新」只讀取該作品的 Bangumi 收藏分類；批次載入必須按「載入在線收藏」。未同步的本機修改優先保留，避免被遠端舊值覆蓋。
+- 未登入、未關聯或網路失敗時，分類與待同步狀態跨重啟保留，收藏列表明示未同步。**只有收藏頁提供「重試同步」**：選取待同步作品後按下，提交該作品目前保存的分類；未選取、非待同步或同步中時停用。不在背景自動重送。
+- 收藏寫入接受現行服務回傳的 HTTP 202，以及官方文件列出的 204；不將其他 2xx 一律當作成功。舊版若顯示 `Expected HTTP 204, received 202`，可能已寫入遠端但本機誤保留待同步；更新後可在收藏頁選取該作品並按「重試同步」，無須刪除收藏或重新登入。
+- 這是作品收藏狀態同步，不是觀看秒數或逐集進度同步；播放完畢不自動切換收藏分類。
+
+發現頁依序為 **Trends → 繼續觀看 → 推薦**。Trends 高度縮至 210 pt，封面採填滿裁切及較小卡片間距；推薦按可用寬度增加有效欄數。向下捲至末端自動接續 Bangumi 熱度分頁，亦可按「載入更多」，錯誤時保留作品並提供重試，末頁停止請求。繼續觀看是一行橫向卡片，直接顯示作品／集數、實際已播放時間與已知時長的進度；未知時長明示未知，沒有未看完資料時收為緊湊提示。點選重新解析已選來源並從保存的秒數續播，不把啟動播放器視為已觀看。日曆由右上角按鈕開啟，Esc 或點外側關閉；收藏更新在收藏頁頂端，作品／連結雙欄保留。組件密度、選中與捲動偏移仍由實例保存；自動遷移僅限全部斷點仍符合舊內建三／四分區或 Trends／推薦兩區與雙欄收藏結構的工作區，保留存續 ID 與設定；任何自訂尺寸、順序、參數或結構均不覆寫。
+
+主頁三區整合為同一個縱向交互／捲動單元，Trends 與繼續觀看不再固定在上方；向下捲動時三區一起離開可視範圍。推薦網格直接展開在共同內容中，不再有內層縱向捲動區。Layout 的組件身份與獨立編排能力保留，不覆寫自訂佈局。
+
+本地观看记录由 `AppServices.playbackHistory()` 持有，保存於 `Application Support/<bundle ID>/Playback/history-v1.json`，不屬可重建快取。記錄來自 IINA／mpv 每窗 IPC 與 JSPlayer 的實際播放秒數；保存作品、集標題及原選擇身份，不保存短效串流 URL、Cookie、token 或帳號憑證。看完會移出續看列；直播不產生續看項。續播仍需來源可用與有效權限，不新增 Bangumi 觀看進度雙向同步。
+
+「繼續觀看」僅收錄明確分類為番劇（anime）的播放項目；普通 Bilibili 影片、其他一般影片與未知類型不顯示，即使已有歷史或檔名像番劇亦不例外。已下載的本地番劇以精確檔案對應的下載來源分類判定。此篩選亦適用於既有記錄與「保留追更」項目；不刪除被隱藏影片的播放進度。
+
+繼續觀看的番劇封面共用既有記憶體／磁碟圖片快取；同一封面的卡片重設不重建縮圖，播放進度更新保留已載入圖片。重開 App 時可使用尚未過期或清除的磁碟快取，來源暫時不可達也能顯示。封面快取仍受設定中的清理與容量限制管理，清除圖片不刪觀看記錄。
+
+首頁續看會按下載記錄的完成檔身份補齊本地影片的作品名稱、集數與封面，舊觀看記錄也適用。同一作品僅展示最近觀看的一集（按觀看更新時間，不按最大集號或最遠秒數），其他集的獨立進度仍保留；無作品身份的本地檔案不以檔名猜測合併。從下載頁播放完成檔也會保存作品／集數／封面，首頁卡片保留該本地檔的實際秒數與續播目標；下載記錄或播放進度變更會更新續看列。
+
+在「繼續觀看」卡片上按右鍵，選「刪除記錄」可刪除該集保存的觀看進度；清單即時更新，重開 App 仍維持刪除。不刪除影片、下載任務、收藏或其他集數的進度；若同作品仍有其他集的記錄，會依原有最近觀看規則顯示。之後再次實際播放該集可重新產生記錄。
+
+發現、全週放送與收藏更新的卡片平時只顯示封面，番名改由封面上的固定懸浮浮層顯示：鼠標移入時以 0.18 秒淡入較通透的深色毛玻璃濾鏡與底置白色文字，移出時淡出，長番名按卡片寬度換行。濾鏡層與文字層分開，毛玻璃不透明度為 55%、黑色疊色為 18%，文字保持不透明。不使用系統 toolTip 顯示番名，亦不跟隨鼠標移動；鍵盤選中時提供相同呈現，系統降低動態效果開啟時直接切換。完整名稱／來源說明保留為輔助資訊；收藏新集數、錯誤與載入狀態仍直接可見。搜尋及收藏雙欄的列表標題不受此改動影響。
+
+Bilibili 關注動態採 YouTube 式自適應影片網格，向下捲動瀏覽：16:9 圓角縮圖、右下角時長，下方常駐兩行標題、UP 主、觀看數及多分 P 提示。欄數依視窗寬度與組件密度調整；保留雙擊／鍵盤開啟、複製網址、原始頁面、刷新及較舊影片操作，接近底部自動載入較舊動態，失敗時保留已有影片並可手動重試。此變更不影響其他發現卡片或 Bilibili 登入與播放解析。
+
+Bilibili 普通影片採直接播放：開啟動態卡片、影片網址或搜尋結果後，解析成功便播放網址指定的分 P，未指定時播放第一 P，不先等待手動選集，也不依賴一般影片的自動開啟偏好。詳情頁與「來源與播放選擇」窗口保留，分 P 網格預設選中正在播放的項目，仍可切換分 P、品質及播放器；番劇選集策略不變。
+
+工作區與主要內容面板按手勢的主要方向鎖定捲動，慣性尾段沿用同一方向與接收面板。發現頁在 Trends 或繼續觀看上橫滑只移動該橫向卡片，縱滑則捲動整個主頁；不把縱向滾輪強制轉成橫向。Layout 重繪會清除舊分流，已隱藏或卸載的面板不接收分流。
+
+普通瀏覽支援按住鼠標左鍵拖動內容捲動：Trends／繼續觀看可左右拖動，在兩者或推薦上縱向拖動會捲動整個主頁。每次拖動鎖定主要方向，拖動時顯示抓取游標，不改變卡片順序，亦不觸發單擊續播／雙擊詳情。文字輸入／選取、原生按鈕、表格排序及分隔線操作不被接管；觸控板與滾輪行為保留。分區／頁面拖動編排仍須從「編輯佈局」按鈕開啟，在草稿中調整並明確保存。
+
+「編輯佈局」使用同一視窗的原生畫布與編輯側欄，不再另開預覽視窗。點選畫布上的組件／容器標題可直接選取，邊框高亮與側欄編排樹同步。側欄分成「編輯／新增／編排／進階」四頁，組件尺寸、分隔比例與頁面動效只在選取對應項目時顯示，避免在長表單中尋找。
+在「新增」點選組件按鈕即可加入目前選取的頁面／容器（選取組件時加入其所屬容器），成功後自動選取新組件並切回「編輯」。尺寸使用步進器直接更新，或輸入 pt 數值後按 Return；沿用 32 pt 吸附及最小尺寸限制。分隔比例可拖動滑桿後放開更新、輸入精確比例後按 Return，亦可直接拖曳畫布分隔線。編排樹與頁面管理收在「編排」，寬度斷點收在「進階」。
+
+編排樹保留拖放、跨容器移動與頁面管理；工具列提供撤銷、重做、恢復內建草稿、取消及「保存並結束」。所有修改先留在草稿，取消或關閉不覆寫已保存佈局。寬度斷點須在側欄明選，縮放編輯視窗不會自動切換正在編輯的版本。畫布重用原生面板但隔離業務服務，展示安全預覽／空態，不載入真實收藏或提交播放、下載。
+
+巢狀分頁切換會恢復可見組件的操作與資料觀察，離開時只暫停該畫面的工作，不重建其他可見組件。編排分頁順序後，畫布立即同步並保留仍存在的選取分頁。普通工作區及 Skin 預覽亦可拖動原生分隔線；目前視窗的比例會隨縮放保留，永久保存比例仍須在編輯佈局中明確保存。
+
+**頁面進場動效**：在編排樹選取功能頁面（包含分頁容器內的巢狀頁面），於側欄選擇「無／淡入／滑入／縮放」，或調整時間、起始不透明度、水平／垂直位移、起始縮放及時間曲線，再按「套用參數」。可重播畫布動效；「保存並結束」後切換頁面使用相同設定。動效按目前寬度版本保存，支援撤銷／重做。「無」與舊佈局使用 Skin 的預設動效；Skin 未配置則不播放。其他自訂頁面動效優先於 Skin。系統開啟「減少動態效果」時不播放進場動效。
+
+「從 XML 載入…」將本機動效檔套用至選取頁面的草稿，取消或格式錯誤不改草稿。範例位於 [`Examples/PageMotions/`](../Examples/PageMotions)；程式接口為 `WorkspacePageMotion.loadXML(from:)`／`decodeXML(_:)`：
+
+```xml
+<pageMotion version="1" duration="0.25" opacity="0"
+            offsetX="0" offsetY="16" scale="1" curve="easeOut"/>
+```
+
+所有屬性皆必填：時間為 0–5 秒（0 停用）、不透明度 0–1、位移 ±2048 pt、縮放 0.1–4 倍；動畫結束恢復正常位置、大小及不透明度。曲線可用 `linear`、`easeIn`、`easeOut`、`easeInOut`。XML 限 UTF-8／16 KiB，不接受 DTD、實體、註解、CDATA、處理指令、額外屬性或子節點，不載入遠端資源或執行腳本。
+
+Skin 可在 `manifest.json` 的 `entryPaths` 新增 `"pageMotion": "motions/page.xml"`，以同一 XML 格式配置預設進場動效；預覽、安裝、作者原包與衍生包匯出均保留，純換皮不改寫 Layout。`minimal`／`full` 範例分別提供淡入／滑入。作者 Layout 的個別 `page.motion` 也隨包保存；格式、優先序及打包方式見 [Skin 配置](../Examples/Skins/README.md#skin-頁面動效)。
+已明列且通過驗證的隱藏入口檔（例如 `.motion.xml` 或 `.motions/page.xml`）同樣保留於原包／衍生包匯出；更換 Skin 時的差異清單也包含這些檔案。不放寬未明列檔案、符號連結或不安全路徑的限制。
+
+拖動接收範圍包含面板標題旁、邊距等非互動空白，不限於卡片；這些空白按所屬面板分流。首頁跨分區間隙的縱向拖動同樣捲動整個主頁；普通點擊空白不啟動播放或開啟詳情。
+
+目前推薦來源固定為 Bangumi：
+- **全週放送**：對應 [Bangumi 日曆](https://bangumi.tv/calendar)，透過官方 `https://api.bgm.tv/calendar` 取得星期一至日完整排期；以七欄網格顯示，固定第一行為「周日｜周一｜周二｜周三｜周四｜周五｜周六」，作品依星期放在對應欄下；移除星期篩選切換，只有作品內容垂直捲動；不代表播放站已上架。頭圖另從 `https://bangumi.tv/subject/<id>` 簡介頁的主封面取得，優先原圖連結、其次同一資訊區的封面圖片；不使用日曆 API 圖片。全週按 subject ID 去重請求主封面，同日排期去重而跨日排期保留，最多四個同時請求，保留 24 小時頭圖網址快取。個別頭圖失敗不隱藏排期，有舊圖便保留並顯示刷新錯誤。
+- 日曆的評分排名與收藏統計可能省略，缺失欄位保留為未知，不會阻擋整份全週放送解碼；作品詳情不將未提供的統計顯示成 0。
+- **Trends／推薦流**：直接讀取 [動畫近期注目](https://bangumi.tv/anime/browser/?sort=trends)，第一頁置頂，下方推薦從第二頁延續網站熱度順序並按 subject ID 去重。後續頁使用 `&page=N`，分頁快取獨立；是否還有下一頁以網站 pager 為準，末頁／空末頁停止載入。不使用當季限制或其他站點搜尋成功門檻；公開 API 的 `rank`／`heat` 不是此頁 `trends`，不混用。
+- 點選兩者均開啟 Bangumi 作品詳情，再由使用者搜尋／確認播放來源；不自動關聯作品或直接啟播。保留 24 小時快取與強制刷新；失敗時有舊資料便顯示舊資料及刷新錯誤，無資料則明示失敗。趨勢頁使用無 Cookie／OAuth 的公開請求；驗證頁或結構不符不當作空推薦。
+
+播放站點是可替換的追番背景來源，不是逐站帳號支援或全部站點可用的產品承諾。作品、集數與已確認來源關聯仍由既有追番服務管理；此清單僅使用訪客能力，不新增網站帳號，也不匯入 Cookie、token、遠端腳本或媒體嗅探規則。
+
+**設定 → 來源與帳號 → 來源訂閱… → 檢查訂閱更新**：在獨立子窗口從 `https://sub.creamycake.org/v1/css1.json` 取得 web-selector v2 訂閱，預覽每項的欄位差異／保留原因，再明確套用或捨棄。關閉子窗口、Esc 或取消會停止檢查並清除未套用預覽；不在背景自動套用。原始訂閱不能直接放入 sources 目錄。更新僅替換支援的公開搜尋欄位，沿用既有播放／目錄解析器，不新增來源能力。
+
+目前清單為 18 項／17 站：Hanime 兩檔共用來源，Forest 保持排除，可接受 16 個既有來源的搜尋配置。映射只接受核准的 host 與既有路徑／查詢欄位；未知站、未知格式、相互衝突的重複來源保留舊版並顯示原因，不根據名稱猜測新域名。搜尋請求使用 css1 的 searchUrl（只轉換關鍵詞／頁碼佔位符），不再把櫻花／熱播換成基線網址；核准網域間重新導向後，以實際回應網址解析作品、封面及相對連結，交給既有作品／集數匹配流程。索引配對採已核對的本地轉換，保留風車／海星選擇器修正。原生基線在 `Sources/native-search.json`，Fqdm 基線在 `Sources/fqdm.json`；海星仍用零起始 `pageindex`，服務頁碼由 1 起。既有訂閱快照須重新「檢查訂閱更新 → 套用此預覽」才會更新先前保存的搜尋網址。
+
+變更過的搜尋規則會以公開關鍵詞「海贼王」執行搜尋，必須取得可辨識的同來源作品；失敗、驗證頁或沒有結果時，僅保留該來源先前已套用的訂閱配置（尚未套用者不啟用），不阻止其他有效項目。與轉換基線相同的規則不重複探測，但仍須明確套用訂閱才能啟用。這是更新安全檢查，不代表站點永久可用或播放／下載通過。
+
+明確套用後，去除憑證的快照原子保存於 `Application Support/<bundle ID>/sources/subscriptions/css1.json`，下一次啟動／重載恢復。失敗寫入、過時預覽、失敗重載均不替换活動快照；缺項不刪已有配置或作品收藏，不中斷現有播放／下載。Bilibili／直播等原專案來源不在訂閱覆寫範圍。
+
+css1 訂閱是後加番劇來源唯一的搜尋／自動尋源入口：舊搜尋規則只保留作轉換基線，不宣告搜尋能力，須在設定中明確套用該站訂閱後才啟用，不會 fallback 至舊規則。原專案來源、直接網址解析、既有播放／目錄適配器均保留。訂閱失敗或缺项僅保留先前已套用的配置；尚未套用的來源維持未啟用。正式 App 不再使用測試模式開關或專用啟動攔截，不刪除、搬移或自動匯入 `.build/subscription-isolation/home/` 的測試使用者資料。
+
+Bilibili 額外接入使用者提供的 `https://search.bilibili.com/all?keyword={keyword}`：以非持久訪客 WKWebView 載入官方前端，僅容許 search.bilibili.com／www.bilibili.com 的 HTTPS 主頁導航（含已觀察的訪客跳轉），在該 origin 讀官方影片搜尋 API 分頁；不使用登入容器／帳號 Cookie，不以 HTTP 412 假裝空結果。結果的 BV 頁面仍走既有解析、準備與播放器流程；搜尋接入不新增其下載能力。
+
+R3 類型與來源身份分開：`MediaClassification` 保存番劇／一般影片／直播／待確認及分類出處，不改 `SourceItemRef` 去重身份。純動畫適配器明確宣告內容範圍，Jibi／Dilidili 歸番劇；Fqdm 宣告 `contentKind: anime`，未宣告使用者配置保持未知。Forest 內建配置移除，不刪既有收藏。Bilibili `/video/` 統一一般影片，不細分搬運番劇；直播路由保持直播。Bilibili `/bangumi/play/` 與 Didahd／Kanba／YouKnow／Rebo 按來源作品標題進行匿名 Bangumi 動畫（type=2）二級查詢：標準化後精確匹配原名／中文名／別名，完整分頁中唯一作品匹配為番劇，成功無匹配為一般影片（影視劇），歧義、缺標題或查詢失敗為待確認；取消向外傳遞。不按模糊搜尋第一筆猜測、不自動建立 Bangumi ID 關聯。詳情中的舊自動分類可由可靠新查詢更新，手動修正優先；播放帳號保持原選擇，公開分類不受失效帳號阻擋。
+
+Work 分類持久於既有 JSON payload，R3 使用獨立版本標記 `IINA.WorkClassificationMigration.version` 與 `<store>.r3-backup/backup.sqlite` 事前一致副本，不另造資料庫／更換 Work 或 Episode UUID。旧資料只有已保存 `subject.type` 才可分類，否則明示待確認；既有手動修正不被元資料刷新覆蓋。分類修正保留來源、收藏及下載；一般內容仍可保存 generic 來源連結，但番劇 Bangumi 關聯／集數映射只接受已確認番劇。直播內容在下載資料層拒絕，不會因來源 ref 被標成 video 而變成錄影能力。R3 副本還原沿用下節離線 `restoreBackup` API，應先關閉所有使用該庫的 App。
+
+
+番劇詳情顯示 Bangumi 完整資訊欄位、Tags／分類標籤、評分分佈與收藏統計，另獨立載入人物介紹／配音、關聯條目及公開短評。關聯條目在應用內開啟；評論按頁「載入更多」，不提供發送評論。各區域獨立顯示快取時間與失敗原因，單一區域失敗不遮蔽其他資料；公開評論請求不攜帶帳號 Cookie 或 Bearer token，沿用 24 小時快取與過期資料回退。
+
+詳情頁採「作品摘要 → 選集 → 資訊分頁」層級：海報、名稱、年份／型態／集數及評分位於頂部，收藏／刷新／原始頁面／管理集中於工具列；簡介、人物、關聯、評論為四個互斥分頁。簡介與作品資訊使用寬版雙欄、窄版縱排卡片，Tags 自動換行；人物介紹與評論各自使用卡片，關聯條目按關係分組。診斷及分類／關聯維護收進「管理」，不與閱讀內容混排。
+人物介紹旁顯示人物圖片，關聯條目的分組網格顯示作品封面及開啟按鈕；沿用共用縮圖元件的非同步載入與圖片快取，缺圖／載入失敗保留佔位提示，不影響文字閱讀或開啟關聯作品。
+作品與人物簡介預設顯示最多 280 字元／六個文字行的摘要，超出時提供「展開全文／收合」，不截掉原始資料。詳情文字將 HTML 段落、換行與實體轉成原生文字，HTML 超連結與純網址可點擊；只接受 HTTP／HTTPS，不執行腳本、不載入 iframe 或 HTML 圖片。
+
+作品選集是正篇／SP／OP／ED等分組按鈕網格，以 Bangumi ID 或本機 Episode UUID 保持選擇。點選集數或「播放所選集數…」開啟應用內二級窗口，即代表本次播放意圖：自動尋找該集的來源，優先核對已保存精確映射；唯一可信候選自動解析並提交播放，多候選或作品證據不足時核對名稱並選擇匹配來源，即解析並播放，沒有額外來源確認或播放確認按鈕。二級窗口沿用一級所選集數，不顯示來源選集／分 P 網格，也不允許更改集數；品質、線路與播放器仍可調整。前台來源選項僅包含具精確集數身份且無失敗原因的候選，錯季／錯年／型態不符／缺集／停用／解析失敗收進預設折疊的「來源診斷與管理」，不混入可選項。沒有匹配時不猜第一集、不暗換站；保留明確重新尋源操作。舊「播放 ▾」及 App 固定播放選單與專用呼叫端仍已移除。一般影片既有來源分 P、自動開啟偏好與 Option 行為不變。換集、關閉窗口或替換詳情取消未完成來源操作，不撤回已提交的播放／下載；連按開窗或重選已提交的同一來源不重複啟播。名稱與編號匹配已完成 Debug 建置、離線回歸及真實網路服務鏈驗證；使用者已手動確認本輪來源匹配修正可用，驗收回報與限制見 WORK_LOG.md；未擴大宣稱全站、所有線路或播放器實務驗收通過。
+
+上述一般影片的自動開啟偏好／Option 規則不適用於 Bilibili 普通影片入口；Bilibili 使用前述直接播放策略，但保留分 P 頁面與當前播放項的選中狀態。
+
+尋源名稱改為保守模糊比對：統一繁簡、大小寫、空白與標點，辨識尾端季別／賽段，容許完整標題成分換序；長名稱可容許少量文字差異，但不以任意子字串或同系列名稱當作同部作品。搜尋優先完整名稱、去結構化限定的名稱與完整短關鍵詞，最多四個查詢；不相關結果不占八個可評估作品名額。換序、近似或站方未標分段的命中只列為手動候選，仍须有一級所選類型／集號的精確來源頁；明確季別、分段、年份或型態衝突仍拒收，不自動關聯、綁定或改播。
+
+集數匹配保留 Bangumi episode ID／本機 Episode UUID，不重寫 `sort`。官方 `sort` 是連續集號，`ep` 是條目內編號；以已關聯的官方集數身份取得兩者，按每條來源線路的季別／分段、編號範圍與唯一集名判定連續或季度內編號，不按目錄位置或排序換算。分季來源可用 `ep`（例如藥屋第二季 25→1、第三季 49→1）；未標分段的 JOJO 合併來源維持 `sort`（第二部分 2→2）。集名命中僅作手動候選；同一線路同集號／集名對應多個不同頁面、集名與編號證據衝突、重疊區間無法判定或合輯範圍時不猜測。缺 `ep` 的舊 API／作品快取會重新抓取官方資料；離線保留舊快取及已保存關聯，不以列表位置偽造編號。
+
+清單站點只在原選擇實際解析成受支援直連檔／有限非 DRM HLS 時可下載；無帳號提供者則明確 guest，不製造登入。Didahd 只允許該來源當次註冊、未過期且精確端口／路徑的 owned PNG→TS 代理，不開放任意 loopback 或轉送 Cookie。能力宣告不保證每站每條線路可用；403、驗證頁及失效媒體會保留失敗，原 M2 的真人帳號下載驗收不以 guest 或 lease fixture 代替。
+
+### 收藏與舊書籤遷移
+
+`FavoriteLibrary` 是兩類收藏的命令入口。作品按本機 Work UUID 去重，沿用 Work 的可選 Bangumi 關聯；新增來源須明確呼叫 `addSource(workID:source:)`，不按標題合併。連結保留原始 URL 與來源規範身份；B 站分 P 及配置來源的 query 仍區分項目。離線短鏈不猜測重定向目的地，未知／失效網址可保存並編輯。舊書籤只遷為連結收藏，不自動升格作品；既有重複列、標題及 Double 排序完整保留，新新增項目才按來源／canonical URL 去重。
+
+啟動在開庫升級前，以 SQLite backup API 將包括已提交 WAL 的一致快照寫入原庫旁 `<store>.w5-backup/backup.sqlite`（例如 `DataModel.sqlite.w5-backup/backup.sqlite`）；備份目錄僅擁有者可讀寫，既有有效備份不覆蓋。備份或遷移失敗會中止載入；完成版本寫入 SQLite metadata，即使空庫且沒有後續收藏操作亦可持久保存。舊資料沒有建立時間，匯入時記錄遷移時間。
+
+還原為離線維護 API：先退出所有使用該庫的 App，關閉全部 Core Data coordinator，再呼叫 `BookmarkFavoritesMigration.restoreBackup(at: backupURL, to: storeURL)`。它先驗證備份、拒絕仍開啟的庫，再原子替換；備份本身不被消耗。還原會回到備份當時的整個資料庫，備份後的修改不保留；不可只手動切換 model 版本，或在 App 運行中覆蓋 sqlite／刪除 sidecar。重新開啟再遷移，不重複匯入。
+
+W5 僅操作隔離資料副本，未遷移使用者現用資料庫；刪收藏只刪會員／連結列，保留作品、集數與來源關聯。W5 的媒體／帳號 fixture 不冒充下載或有效授權；W6 的獨立真實下載證據見下節及重構文檔。
+
+### 真實下載服務與 FFmpeg
+
+`Processes.shared.downloads()` 是任務入口；`create(selection:title:episodeTitle:workID:)` 接受已選集數、線路、品質及帳號的 `PlayableSelection`。`events()` 提供初始快照及型別化更新，`record`／`list` 回傳狀態、實際 bytes／分段、可得速度／ETA、錯誤及 `allowedOperations`。下載頁已隨 W9 整合；建立任務不依賴詳情頁。
+
+- 排程預設 2 項、偏好範圍 1–8；每個任務捕獲目錄、security-scoped bookmark、併發及暫存策略，不搬動舊任務。任務檔為 Application Support 下 App-owned `Downloads/tasks-v1.json`，原子保存、權限 0600、單一 writer lock；不改 Core Data。重開把中斷工作標為 `paused`／`needsRecovery`，需明確 `resume`，不虛報下載中。
+- 普通直連檔只在原解析 URL、strong ETag、完整 Content-Range／總長一致時續傳；簽名 URL 改變或伺服器不支援時明示完整重下載。每次恢復重新解析原選擇，不換集數、品質、來源或帳號。未知總量不製造百分比。
+- HLS 支援已結束的公開 TS／fMP4、主清單與分離音訊、AES-128／IV、MAP、BYTERANGE、discontinuity。初次主清單採最高宣告 BANDWIDTH；恢復保留該變體身份，缺失時拒絕而非降級。HLS 暫停後從頭下載分段；不拼接無法驗證的片段。直播、DRM／SAMPLE-AES、LL-HLS PART／GAP 等不支援形式明確拒絕。來源所需 Referer／User-Agent 與 host-scoped Cookie 同時作用於清單、key、map、分段及重定向，憑證與串流 URL 不存入任務檔。
+- `pause` 停止 writer 但保留帳號 lease；`cancel` 清理本任務暫存並釋放。完成／失敗也釋放，失敗後可重新授權再恢復；guest 不採用新預設帳號。`finalizing` 不接受暫停／取消。封裝及 exclusive rename 成功並保存完成記錄後才回報 `completed`，檔名衝突增加後綴而不覆寫。`deleteRecord` 不刪完成檔；`deleteFile` 是獨立命令。`fileForOpening` 提供真實位置，`Processes.shared.openDownloadedFile(_:)` 沿用 IINA／mpv 開啟命令。
+- App 正常退出先保留既有 Core Data 保存／取消確認，再等待下載 writer 停止並保存待恢復狀態；強制退出由下一次開庫恢復，不自動重新開始傳輸。
+
+HLS 分段先由 URLSession 下載到私有目錄，再由 **FFmpeg stream copy** 封裝為 MKV；FFmpeg 只讀本機重寫清單，限制 `file,crypto,data`，不向命令列傳遠端 URL／Cookie。開發環境需安裝 FFmpeg；優先找 App 的 `Contents/Helpers/ffmpeg`，再找 `/opt/homebrew/bin/ffmpeg`、`/usr/local/bin/ffmpeg`、`/usr/bin/ffmpeg`。目前未把 Homebrew 動態執行檔直接打包，缺少工具會回 `mediaToolMissing`，不是假完成。直連下載不要求 FFmpeg。
+
+正式打包須提供相同架構、最低 macOS 相容的 helper 及其所有 dylib／rpath，簽署並驗證 App 內執行；隨包保留實際 FFmpeg 配置、授權及對應源碼／建置材料。FFmpeg 預設主要為 LGPL 2.1+，啟用 GPL 組件改受 GPL 約束；本機 FFmpeg 8.1 為 `--enable-gpl --enable-version3`，不是可任意複製的一個二進位。不可發佈 `--enable-nonfree` 構建；詳見 [FFmpeg Legal](https://ffmpeg.org/legal.html)。此處是打包／授權要求，不代表已完成 fork 發佈。
+
+### 帳號登入
+
+**設定（⌘,）→ 來源與帳號**只顯示 Bilibili、鬥魚與 Bangumi 的登入狀態、已登入名稱及登入／登出操作；不再提供號池、新增身份、預設切換、啟停、UUID 或活動 lease 管理。登入重用目前身份或待登入身份，取消不反覆新增帳號；既有其他身份與憑證不自動刪除。活動任務使用中不能登出，由服務保護並提示原因。Bilibili／鬥魚登入頁有獨立底欄取消按鈕；Bangumi 授權前後皆可按 Done 或 Esc 關閉，不依賴網頁的返回操作。直播／影片來源窗口僅顯示「已登入／未登入」，沒有切換帳號；解析與活動任務仍保留原帳號上下文。
+
+Bangumi 的「登入… → Sign In」直接在官方頁登入個人帳號並同意授權。程式隱式處理應用憑證，以 OAuth 授權碼換取使用者 access token／refresh token；不需要建立或貼上開發者平台 token。通過 `GET /v0/me` 身份驗證後才存入 macOS Keychain，元資料請求使用此帳號。Bangumi 保持單一個人資料帳號；失效後由登入入口重新授權，登出刪除兩種 token 並恢復匿名存取。重新授權失敗保留舊憑證。舊版手貼 token 記錄需重新完成 OAuth；其他舊憑證不自動刪除或重新啟用。
+
+應用先打開官方登入頁，以 `chii_referer` 攜帶完整授權返回地址；內層 `redirect_uri` 與外層返回地址分別作完整百分號編碼，避免 Bangumi 的未登入授權重定向／返回地址解析丟參。回調為 `iina-ani://bangumi/oauth`，由內嵌 WebView 攔截並核對目的地及 `state`，不需本機 HTTP 接收器；若在 Bangumi 後台設定回調，應保持完全一致。桌面內置 app secret 可被提取，隱式配置不等於伺服器端保密。此帳號僅用於元資料，與 Bilibili 番劇／影音播放來源無關；公開資料不要求登入，不將 token 貼到回報或聊天。
+
+## 授權與上游
+
+保留 IINA+ 的作者與版權聲明，程式授權見 [LICENSE](../LICENSE)（GPL v3），圖示授權見 [LicenseForIcons.pdf](../LicenseForIcons.pdf)。第三方依賴及外部彈幕外掛依各自授權處理。
+
+本專案與 IINA、IINA+ 及 Animeko 無官方隸屬關係。上游文件及分析中的上游連結不是本 fork 的發佈或問題回報地址。

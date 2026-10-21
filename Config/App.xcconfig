@@ -1,0 +1,6 @@
+// Public checkout defaults: OAuth stays unavailable until configured locally.
+BANGUMI_CLIENT_ID =
+BANGUMI_CLIENT_SECRET =
+
+// Optional; intentionally excluded from Git. See Local.xcconfig.example.
+#include? "Local.xcconfig"

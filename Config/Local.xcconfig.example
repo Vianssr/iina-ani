@@ -1,0 +1,5 @@
+// Copy to Local.xcconfig and enter your own Bangumi application credentials.
+// Register callback: iina-ani://bangumi/oauth
+// Do not commit Local.xcconfig or distribute its resulting app as a secret store.
+BANGUMI_CLIENT_ID =
+BANGUMI_CLIENT_SECRET =

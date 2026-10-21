@@ -1,0 +1,20 @@
+{
+  "system": {
+    "fontSize": 14,
+    "spacing": 10,
+    "radius": 8,
+    "borderWidth": 1,
+    "density": "regular",
+    "opacity": 1
+  },
+  "light": {
+    "foreground": "#172B40",
+    "background": "#F4F8FC",
+    "borderColor": "#49657E"
+  },
+  "dark": {
+    "foreground": "#EDF5FF",
+    "background": "#182331",
+    "borderColor": "#9AB7D3"
+  }
+}

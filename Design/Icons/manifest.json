@@ -1,0 +1,291 @@
+{
+  "name": "IINA-ANI Function Icons",
+  "version": 1,
+  "grid": 24,
+  "strokeWidth": 1.75,
+  "linecap": "round",
+  "linejoin": "round",
+  "assetPrefix": "ani-",
+  "icons": [
+    {
+      "id": "discover",
+      "label": "發現",
+      "category": "探索與導航",
+      "asset": "ani-discover",
+      "svg": "svg/discover.svg"
+    },
+    {
+      "id": "search",
+      "label": "搜尋",
+      "category": "探索與導航",
+      "asset": "ani-search",
+      "svg": "svg/search.svg"
+    },
+    {
+      "id": "calendar",
+      "label": "放送日曆",
+      "category": "探索與導航",
+      "asset": "ani-calendar",
+      "svg": "svg/calendar.svg"
+    },
+    {
+      "id": "favorites",
+      "label": "作品收藏",
+      "category": "探索與導航",
+      "asset": "ani-favorites",
+      "svg": "svg/favorites.svg"
+    },
+    {
+      "id": "history",
+      "label": "繼續觀看",
+      "category": "探索與導航",
+      "asset": "ani-history",
+      "svg": "svg/history.svg"
+    },
+    {
+      "id": "downloads",
+      "label": "下載任務",
+      "category": "探索與導航",
+      "asset": "ani-downloads",
+      "svg": "svg/downloads.svg"
+    },
+    {
+      "id": "settings",
+      "label": "設定",
+      "category": "探索與導航",
+      "asset": "ani-settings",
+      "svg": "svg/settings.svg"
+    },
+    {
+      "id": "open-link",
+      "label": "開啟網址",
+      "category": "探索與導航",
+      "asset": "ani-open-link",
+      "svg": "svg/open-link.svg"
+    },
+    {
+      "id": "play",
+      "label": "播放",
+      "category": "播放與彈幕",
+      "asset": "ani-play",
+      "svg": "svg/play.svg"
+    },
+    {
+      "id": "pause",
+      "label": "暫停",
+      "category": "播放與彈幕",
+      "asset": "ani-pause",
+      "svg": "svg/pause.svg"
+    },
+    {
+      "id": "stop",
+      "label": "停止",
+      "category": "播放與彈幕",
+      "asset": "ani-stop",
+      "svg": "svg/stop.svg"
+    },
+    {
+      "id": "next",
+      "label": "下一集",
+      "category": "播放與彈幕",
+      "asset": "ani-next",
+      "svg": "svg/next.svg"
+    },
+    {
+      "id": "playlist",
+      "label": "播放列表",
+      "category": "播放與彈幕",
+      "asset": "ani-playlist",
+      "svg": "svg/playlist.svg"
+    },
+    {
+      "id": "danmaku",
+      "label": "彈幕",
+      "category": "播放與彈幕",
+      "asset": "ani-danmaku",
+      "svg": "svg/danmaku.svg"
+    },
+    {
+      "id": "subtitles",
+      "label": "字幕",
+      "category": "播放與彈幕",
+      "asset": "ani-subtitles",
+      "svg": "svg/subtitles.svg"
+    },
+    {
+      "id": "live",
+      "label": "直播",
+      "category": "播放與彈幕",
+      "asset": "ani-live",
+      "svg": "svg/live.svg"
+    },
+    {
+      "id": "work",
+      "label": "作品詳情",
+      "category": "內容與來源",
+      "asset": "ani-work",
+      "svg": "svg/work.svg"
+    },
+    {
+      "id": "episodes",
+      "label": "選集",
+      "category": "內容與來源",
+      "asset": "ani-episodes",
+      "svg": "svg/episodes.svg"
+    },
+    {
+      "id": "bookmark",
+      "label": "連結收藏",
+      "category": "內容與來源",
+      "asset": "ani-bookmark",
+      "svg": "svg/bookmark.svg"
+    },
+    {
+      "id": "sync",
+      "label": "收藏同步",
+      "category": "內容與來源",
+      "asset": "ani-sync",
+      "svg": "svg/sync.svg"
+    },
+    {
+      "id": "source",
+      "label": "播放來源",
+      "category": "內容與來源",
+      "asset": "ani-source",
+      "svg": "svg/source.svg"
+    },
+    {
+      "id": "subscription",
+      "label": "來源訂閱",
+      "category": "內容與來源",
+      "asset": "ani-subscription",
+      "svg": "svg/subscription.svg"
+    },
+    {
+      "id": "account",
+      "label": "帳號",
+      "category": "內容與來源",
+      "asset": "ani-account",
+      "svg": "svg/account.svg"
+    },
+    {
+      "id": "quality",
+      "label": "畫質",
+      "category": "內容與來源",
+      "asset": "ani-quality",
+      "svg": "svg/quality.svg"
+    },
+    {
+      "id": "torrent",
+      "label": "BT 傳輸",
+      "category": "下載與外觀",
+      "asset": "ani-torrent",
+      "svg": "svg/torrent.svg"
+    },
+    {
+      "id": "magnet",
+      "label": "磁力連結",
+      "category": "下載與外觀",
+      "asset": "ani-magnet",
+      "svg": "svg/magnet.svg"
+    },
+    {
+      "id": "folder",
+      "label": "本地檔案",
+      "category": "下載與外觀",
+      "asset": "ani-folder",
+      "svg": "svg/folder.svg"
+    },
+    {
+      "id": "import",
+      "label": "匯入",
+      "category": "下載與外觀",
+      "asset": "ani-import",
+      "svg": "svg/import.svg"
+    },
+    {
+      "id": "export",
+      "label": "匯出",
+      "category": "下載與外觀",
+      "asset": "ani-export",
+      "svg": "svg/export.svg"
+    },
+    {
+      "id": "appearance",
+      "label": "外觀主題",
+      "category": "下載與外觀",
+      "asset": "ani-appearance",
+      "svg": "svg/appearance.svg"
+    },
+    {
+      "id": "layout",
+      "label": "佈局編排",
+      "category": "下載與外觀",
+      "asset": "ani-layout",
+      "svg": "svg/layout.svg"
+    },
+    {
+      "id": "delete",
+      "label": "刪除",
+      "category": "下載與外觀",
+      "asset": "ani-delete",
+      "svg": "svg/delete.svg"
+    },
+    {
+      "id": "add",
+      "label": "新增",
+      "category": "通用操作",
+      "asset": "ani-add",
+      "svg": "svg/add.svg"
+    },
+    {
+      "id": "close",
+      "label": "關閉",
+      "category": "通用操作",
+      "asset": "ani-close",
+      "svg": "svg/close.svg"
+    },
+    {
+      "id": "check",
+      "label": "完成",
+      "category": "通用操作",
+      "asset": "ani-check",
+      "svg": "svg/check.svg"
+    },
+    {
+      "id": "back",
+      "label": "返回",
+      "category": "通用操作",
+      "asset": "ani-back",
+      "svg": "svg/back.svg"
+    },
+    {
+      "id": "refresh",
+      "label": "重新整理",
+      "category": "通用操作",
+      "asset": "ani-refresh",
+      "svg": "svg/refresh.svg"
+    },
+    {
+      "id": "filter",
+      "label": "篩選",
+      "category": "通用操作",
+      "asset": "ani-filter",
+      "svg": "svg/filter.svg"
+    },
+    {
+      "id": "sort",
+      "label": "排序",
+      "category": "通用操作",
+      "asset": "ani-sort",
+      "svg": "svg/sort.svg"
+    },
+    {
+      "id": "info",
+      "label": "關於",
+      "category": "通用操作",
+      "asset": "ani-info",
+      "svg": "svg/info.svg"
+    }
+  ]
+}

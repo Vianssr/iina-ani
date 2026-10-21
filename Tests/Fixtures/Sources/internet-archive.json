@@ -1,0 +1,43 @@
+{
+  "id": "internet-archive",
+  "name": "Internet Archive — public MP4",
+  "version": 1,
+  "hosts": ["archive.org"],
+  "mediaHosts": ["archive.org"],
+  "anonymousExternalHTTPSMedia": true,
+  "credentialHosts": [],
+  "capabilities": ["information", "resolve", "episodes", "search", "iina", "mpv", "download"],
+  "route": {
+    "pattern": "^/details/([A-Za-z0-9][A-Za-z0-9_.-]*)/?$",
+    "idGroup": 1,
+    "detailTemplate": "https://archive.org/details/{id}",
+    "idIsPositiveInteger": false,
+    "queryIdentityParameter": "file"
+  },
+  "catalog": {
+    "url": "https://archive.org/metadata/{id}",
+    "format": "json",
+    "jsonTitlePath": "metadata.title",
+    "jsonEntriesPath": "files",
+    "jsonEpisodeTitlePath": "name",
+    "jsonEpisodeIdentityPath": "name",
+    "jsonMediaPath": "name",
+    "jsonEntryExtensions": ["mp4"]
+  },
+  "player": {
+    "format": "json",
+    "streamURLTemplate": "https://archive.org/download/{id}/{file}",
+    "allowedExtensions": ["mp4"]
+  },
+  "search": {
+    "url": "https://archive.org/advancedsearch.php?q={query}%20AND%20mediatype%3Amovies&fl%5B%5D=identifier&fl%5B%5D=title&sort%5B%5D=identifier%20asc&rows=20&page={page}&output=json",
+    "format": "json",
+    "queryParameter": "query",
+    "pageParameter": "page",
+    "rowsPerPage": 20,
+    "jsonResultsPath": "response.docs",
+    "jsonTitlePath": "title",
+    "jsonIdentifierPath": "identifier",
+    "jsonTotalPath": "response.numFound"
+  }
+}

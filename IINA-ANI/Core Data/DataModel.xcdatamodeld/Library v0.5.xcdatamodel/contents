@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="19461" systemVersion="21A559" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="Bookmark" representedClassName=".Bookmark" versionHashModifier="added order" syncable="YES">
+        <attribute name="favoriteID" optional="YES" attributeType="UUID" indexed="YES" usesScalarValueType="NO"/>
+        <attribute name="originalURL" optional="YES" attributeType="String"/>
+        <attribute name="canonicalURL" optional="YES" attributeType="String" indexed="YES"/>
+        <attribute name="sourceID" optional="YES" attributeType="String" indexed="YES"/>
+        <attribute name="favoriteTitle" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="cover" optional="YES" attributeType="String"/>
+        <attribute name="liveName" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="liveTitle" optional="YES" attributeType="String" defaultValueString=""/>
+        <attribute name="order" optional="YES" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="remark" optional="YES" attributeType="String"/>
+        <attribute name="state" optional="YES" attributeType="Integer 16" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="updateDate" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="url" optional="YES" attributeType="String" defaultValueString="https://live.bilibili.com/1010"/>
+    </entity>
+    <entity name="WorkRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES" usesScalarValueType="NO"/>
+        <attribute name="payload" optional="NO" attributeType="Binary"/>
+    </entity>
+    <entity name="EpisodeRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES" usesScalarValueType="NO"/>
+        <attribute name="workID" optional="NO" attributeType="UUID" indexed="YES" usesScalarValueType="NO"/>
+        <attribute name="payload" optional="NO" attributeType="Binary"/>
+    </entity>
+    <entity name="WorkSourceLinkRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES" usesScalarValueType="NO"/>
+        <attribute name="workID" optional="NO" attributeType="UUID" indexed="YES" usesScalarValueType="NO"/>
+        <attribute name="payload" optional="NO" attributeType="Binary"/>
+    </entity>
+    <entity name="WorkFavoriteRecord" representedClassName="NSManagedObject" syncable="YES">
+        <attribute name="id" optional="NO" attributeType="UUID" indexed="YES" usesScalarValueType="NO"/>
+        <attribute name="order" optional="NO" attributeType="Double" defaultValueString="0.0" usesScalarValueType="YES"/>
+        <attribute name="createdAt" optional="NO" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <elements>
+        <element name="Bookmark" positionX="-103.39453125" positionY="-9" width="177.39453125" height="149"/>
+        <element name="WorkRecord" positionX="108" positionY="-9" width="128" height="75"/>
+        <element name="EpisodeRecord" positionX="108" positionY="90" width="128" height="90"/>
+        <element name="WorkSourceLinkRecord" positionX="108" positionY="210" width="160" height="90"/>
+    </elements>
+</model>

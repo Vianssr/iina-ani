@@ -1,0 +1,1363 @@
+{
+  "slots": {
+    "workCard": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "list": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "search": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "navigation": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "primaryAction": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "tabs": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "progress": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "background": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "icon": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "placeholder": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "decoration": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "panel": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "header": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "row": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "result": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "task": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "workRow": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "linkRow": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    },
+    "emptyState": {
+      "values": {
+        "radius": 8,
+        "borderWidth": 1,
+        "iconAsset": "icon-normal",
+        "placeholderAsset": "placeholder-normal",
+        "decorationAsset": "decoration-normal"
+      },
+      "states": {
+        "normal": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-normal",
+          "placeholderAsset": "placeholder-normal",
+          "decorationAsset": "decoration-normal"
+        },
+        "hover": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-hover",
+          "placeholderAsset": "placeholder-hover",
+          "decorationAsset": "decoration-hover"
+        },
+        "pressed": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-pressed",
+          "placeholderAsset": "placeholder-pressed",
+          "decorationAsset": "decoration-pressed"
+        },
+        "selected": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-selected",
+          "placeholderAsset": "placeholder-selected",
+          "decorationAsset": "decoration-selected"
+        },
+        "focus": {
+          "opacity": 1,
+          "borderWidth": 2,
+          "iconAsset": "icon-focus",
+          "placeholderAsset": "placeholder-focus",
+          "decorationAsset": "decoration-focus"
+        },
+        "disabled": {
+          "opacity": 0.55,
+          "borderWidth": 1,
+          "iconAsset": "icon-disabled",
+          "placeholderAsset": "placeholder-disabled",
+          "decorationAsset": "decoration-disabled"
+        },
+        "loading": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-loading",
+          "placeholderAsset": "placeholder-loading",
+          "decorationAsset": "decoration-loading"
+        },
+        "error": {
+          "opacity": 1,
+          "borderWidth": 1,
+          "iconAsset": "icon-error",
+          "placeholderAsset": "placeholder-error",
+          "decorationAsset": "decoration-error"
+        }
+      }
+    }
+  },
+  "overrides": {
+    "discovery.schedule": {
+      "header": {
+        "values": {
+          "fontSize": 16
+        },
+        "states": {
+          "focus": {
+            "borderWidth": 2
+          }
+        }
+      }
+    },
+    "discovery.updates": {
+      "header": {
+        "values": {
+          "fontSize": 16
+        },
+        "states": {
+          "focus": {
+            "borderWidth": 2
+          }
+        }
+      }
+    },
+    "discovery.recommendations": {
+      "header": {
+        "values": {
+          "fontSize": 16
+        },
+        "states": {
+          "focus": {
+            "borderWidth": 2
+          }
+        }
+      }
+    },
+    "search.results": {
+      "header": {
+        "values": {
+          "fontSize": 16
+        },
+        "states": {
+          "focus": {
+            "borderWidth": 2
+          }
+        }
+      }
+    },
+    "downloads.tasks": {
+      "header": {
+        "values": {
+          "fontSize": 16
+        },
+        "states": {
+          "focus": {
+            "borderWidth": 2
+          }
+        }
+      }
+    },
+    "favorites.works": {
+      "header": {
+        "values": {
+          "fontSize": 16
+        },
+        "states": {
+          "focus": {
+            "borderWidth": 2
+          }
+        }
+      }
+    },
+    "favorites.links": {
+      "header": {
+        "values": {
+          "fontSize": 16
+        },
+        "states": {
+          "focus": {
+            "borderWidth": 2
+          }
+        }
+      }
+    }
+  }
+}

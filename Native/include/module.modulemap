@@ -1,0 +1,4 @@
+module TorrentBridge {
+    header "TorrentBridge.h"
+    export *
+}

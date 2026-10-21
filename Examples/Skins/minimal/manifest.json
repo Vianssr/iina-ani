@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "componentContractVersion": 1,
+  "minimumAppVersion": "0.8.32",
+  "id": "iina-ani.example.minimal",
+  "version": "1.0.0",
+  "revision": 0,
+  "name": "Contour Minimal",
+  "author": "IINA-ANI example contributors",
+  "license": "CC0-1.0; original geometric artwork and example JSON dedicated to the public domain. https://creativecommons.org/publicdomain/zero/1.0/",
+  "supportedVariants": [
+    "light",
+    "dark"
+  ],
+  "entryPaths": {
+    "theme": "theme.json",
+    "pageMotion": "motions/page.xml"
+  },
+  "assets": {},
+  "assetAttributions": {},
+  "provenance": {},
+  "layout": {
+    "schemaVersion": 1,
+    "pages": [
+      {
+        "id": "9106064a-8be3-5eca-ae1c-3dc69cf42153",
+        "title": "favorites.works",
+        "root": {
+          "kind": "component",
+          "id": "6a26ed5d-27d8-5c5a-9e4c-423895e25084",
+          "componentID": "favorites.works",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      },
+      {
+        "id": "5ab2809f-bb25-554c-9fb5-28478cd0fe87",
+        "title": "favorites.links",
+        "root": {
+          "kind": "component",
+          "id": "7aba47fa-c115-5828-b46c-cd959a717c93",
+          "componentID": "favorites.links",
+          "contractVersion": 1,
+          "parameters": {},
+          "size": {
+            "width": 760,
+            "height": 640
+          }
+        }
+      }
+    ],
+    "breakpointLayouts": []
+  }
+}

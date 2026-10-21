@@ -1,0 +1,239 @@
+{
+  "version": 1,
+  "sources": {
+    "bilibili": {
+      "hosts": ["api.bilibili.com"],
+      "resultURLTemplate": "https://www.bilibili.com/video/{id}",
+      "search": {
+        "url": "https://api.bilibili.com/x/web-interface/search/type?search_type=video&page_size=20",
+        "format": "json",
+        "queryParameter": "keyword",
+        "pageParameter": "page",
+        "rowsPerPage": 20,
+        "jsonResultsPath": "data.result",
+        "jsonTitlePath": "title",
+        "jsonIdentifierPath": "bvid",
+        "jsonCoverPath": "pic",
+        "jsonTotalPath": "data.numResults"
+      }
+    },
+    "xifan": {
+      "hosts": ["dm1.xfdm.pro"],
+      "search": {
+        "url": "https://dm1.xfdm.pro/search.html?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": ".public-list-box.search-box",
+        "titleSelector": ".thumb-content > .thumb-txt",
+        "linkSelector": ".public-list-exp",
+        "coverSelector": ".public-list-exp img",
+        "coverAttribute": "data-src",
+        "hrefAttribute": "href"
+      }
+    },
+    "girigiri": {
+      "hosts": ["ani.girigirilove.com"],
+      "search": {
+        "url": "https://ani.girigirilove.com/search/-------------/?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": ".vod-detail",
+        "titleSelector": ".detail-info .slide-info-title",
+        "linkSelector": ".detail-info > a",
+        "hrefAttribute": "href"
+      }
+    },
+    "didahd": {
+      "hosts": ["www.didahd.pro", "didahd.pro", "www.didahd.xyz", "didahd.xyz"],
+      "search": {
+        "url": "https://www.didahd.pro/search/-------------.html?wd={query}&submit=",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": ".myui-vodlist__media h4 > a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "jibi": {
+      "hosts": ["www.jibi.cc"],
+      "search": {
+        "url": "https://www.jibi.cc/index.php/vod/search.html?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": "div.module-card-item-title > a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "eacg": {
+      "hosts": ["www.eacg1.com"],
+      "search": {
+        "url": "https://www.eacg1.com/vodsearch/-------------.html?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": "body > div.fed-main-info.fed-min-width > div > div > dl > dd.fed-deta-content > h1 a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "senfun": {
+      "hosts": ["senfun.in"],
+      "search": {
+        "url": "https://senfun.in/search.html?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": "div.module-card-item-title > a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "fengche": {
+      "hosts": ["www.dongmandaquan.vip"],
+      "search": {
+        "url": "https://www.dongmandaquan.vip/vodsearch/-------------.html?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "rejectSelectors": ["title:contains(系统安全验证)"],
+        "resultsSelector": ".post-list .block-info .entry-title > a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "kanba": {
+      "hosts": ["11kt.net"],
+      "search": {
+        "url": "https://11kt.net/index.php/vod/search.html?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": ".fed-part-eone.fed-font-xvi a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "haixing": {
+      "hosts": ["www.haixingdmx.com"],
+      "search": {
+        "url": "https://www.haixingdmx.com/s_all?ex=1&kw={query}",
+        "format": "html",
+        "queryParameter": "kw",
+        "pageParameter": "pageindex",
+        "rowsPerPage": 24,
+        "firstPage": 0,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": ".lpic li",
+        "titleSelector": "h2 > a",
+        "linkSelector": "h2 > a",
+        "coverSelector": "img",
+        "hrefAttribute": "href"
+      }
+    },
+    "yinghua": {
+      "hosts": ["www.yinghuabb.com", "www.yinghua2.com"],
+      "search": {
+        "url": "https://www.yinghuabb.com/index.php/vod/search.html?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": ".title > a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "dilidili": {
+      "hosts": ["dilidili.io"],
+      "search": {
+        "url": "https://dilidili.io/search?q={query}",
+        "format": "html",
+        "queryParameter": "q",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": "dl h3 a[href^='/anime/']",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "youknow": {
+      "hosts": ["www.youknow.tv"],
+      "search": {
+        "url": "https://www.youknow.tv/search/-------------/?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": ".module-card-item-title > a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "hanime1": {
+      "hosts": ["hanime1.me"],
+      "search": {
+        "url": "https://hanime1.me/search?query={query}",
+        "format": "html",
+        "queryParameter": "query",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": "#home-rows-wrapper > div.content-padding-new > div > div > div > div > a",
+        "titleSelector": ".title",
+        "hrefAttribute": "href"
+      }
+    },
+    "wedm": {
+      "hosts": ["www.vdm5.com"],
+      "search": {
+        "url": "https://www.vdm5.com/search_-------------.html?wd={query}",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": "div.detail > h3 > a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    },
+    "rebo": {
+      "hosts": ["www.rebozj.cc", "www.rebozj.pro"],
+      "search": {
+        "url": "https://www.rebozj.cc/search/-------------.html?wd={query}&submit=",
+        "format": "html",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 24,
+        "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁), a[aria-label=Next]",
+        "resultsSelector": ".stui-vodlist__box h4 > a",
+        "titleSelector": "self",
+        "hrefAttribute": "href"
+      }
+    }
+  }
+}
