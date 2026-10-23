@@ -1,99 +1,121 @@
 # IINA-ANI
 
-[xjbeta/iina-plus](https://github.com/xjbeta/iina-plus) 的非官方重構 fork。以原有站點解析、IINA／mpv、彈幕及內建 JSPlayer 為基礎，提供追番搜尋、Bangumi 資訊、收藏、下載及可自訂的 Workspace／Layout／Skin。
+面向 macOS 的追番與影音工作區，整合 **Bangumi 作品資訊、來源搜尋、IINA／mpv 播放、彈幕、收藏與下載**，並提供可自訂的頁面佈局與主題外觀。
 
-**目前是開發基線，不是獨立發佈版本。** 原始碼倉庫為 [Vianssr/iina-ani](https://github.com/Vianssr/iina-ani)。Bundle ID 及既有資料目錄仍沿用上游；不要與上游混用資料。尚未配置更新服務、正式簽署及公證。保留上游 GPL v3、作者與圖示授權，不代表與 IINA、IINA+ 或 Animeko 有官方關係。
+本專案是 [xjbeta/iina-plus](https://github.com/xjbeta/iina-plus) 的非官方重構 fork，保留原有站點解析、播放器及虎牙代理能力；與 IINA、IINA+、Animeko 無官方隸屬關係。
 
-## 專案導覽
+## 發現與搜尋
 
-| 路徑 | 職責 |
-| --- | --- |
-| `IINA-ANI/App/` | AppDelegate、AppServices 組裝根、偏好與原生選單 |
-| `IINA-ANI/Features/` | Accounts、Bangumi、Discovery、Sources、Playback、Downloads、Torrent |
-| `IINA-ANI/Infrastructure/` | Persistence、HTTP、本機圖片 Cache |
-| `IINA-ANI/Workspace/` | Shell、Panels、Settings、Layout、Skin |
-| `IINA-ANI/Shared/` | 共用 extensions、日誌及小型工具 |
-| `IINA-ANI/Assets/`、`WebFiles/`、`Sources/`、`Core Data/` | 圖像、網頁播放器、來源配置與版本化 Core Data schema；後三者同樣位於 `IINA-ANI/` |
-| `IINA-ANI.xcodeproj/` | 唯一 App 工程；scheme／target：`IINA-ANI` |
-| `Config/` | 共用建置設定、空白 OAuth 範本；本機憑證檔不進 Git |
-| `HuyaKit/` | 虎牙協議與 `huyaproxy` Swift package |
-| `Native/` | Torrent C ABI／原生核心及受限 LayoutScript helper |
-| `Tests/` | 按功能分類的回歸程式、fixtures；`run-*.sh` 保留於根層 |
-| `Examples/`、`Design/` | Skin／頁面動效範例及圖示來源 |
-| `docs/` | 使用指南、架構約束、規劃、研究與歷史驗證 |
-| `.github/ISSUE_TEMPLATE.md` | 問題回報模板 |
+- **番劇首頁**：以 Bangumi 近期注目為基礎，展示熱度趨勢、繼續觀看與可接續載入的推薦內容。
+- **全週放送**：七欄日曆呈現一週排期，可直接開啟作品詳情。放送日期不代表播放來源已上架。
+- **分類搜尋**：番劇搜尋使用 Bangumi；影片與直播搜尋使用已啟用且具搜尋能力的來源。也可直接貼上作品或影片網址。
+- **Bilibili**：提供關注動態與獨立首頁推薦頁，支援刷新、分頁及開啟影片。普通影片解析成功後直接播放指定分 P，仍可切換分 P、品質與播放器。
+- **YouTube**：獨立首頁與搜尋頁，支援分頁、複製網址及在瀏覽器開啟。**目前不提供 App 內 YouTube 播放解析**；訪客首頁可能要求先搜尋。
 
-目錄分層不建立新的 Swift module；現有服務 ownership、持久身份、資源名稱及外掛協議維持不變。功能服務不依賴 Workspace UI；AppServices 負責組裝，Workspace 負責呈現與使用者操作。詳細邊界見 [專案架構](docs/architecture/PROJECT.md)。
+## 作品詳情與選集
 
-## 建置
+作品頁整合封面、簡介、評分、標籤、收藏統計、關聯作品、人物與評論；完整資訊可在子頁閱讀。評論支援垂直列表自動載入，或橫向卡片手動載入，目前僅供閱讀，不提供發送評論。
 
-需要 macOS、完整 Xcode、Swift tools 6.4、Node.js／npm 與 GitHub CLI `gh`。App 宣告最低 macOS 13.5，不代表已實測最低系統。以下指令於 checkout 根目錄執行：
+- 按正篇、SP、OP、ED 等類型分組選集，尚未更新的項目不提供選取。
+- 選集後尋找對應來源，優先使用已保存的精確映射；唯一可信候選可直接解析播放，多候選則由使用者選擇。
+- 可調整線路、品質與播放器；缺集、錯季、停用或解析失敗的來源另列診斷，不以第一集代替，也不暗中換站。
+- 可管理作品分類、Bangumi 關聯與來源資料，或從詳情直接收藏、批次下載。
 
-```sh
-# 下載外部彈幕外掛及 npm 資源；可傳入真實 release tag 固定外掛版本
-bash InstallDeps.sh
+## 播放、彈幕與續看
 
-xcodebuild -resolvePackageDependencies -project IINA-ANI.xcodeproj
-xcodebuild -project IINA-ANI.xcodeproj -scheme IINA-ANI \
-  -configuration Debug -destination 'platform=macOS' \
-  -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
-```
+- **外部播放器**：整合 IINA 與 mpv，依來源提供集數、線路及品質選擇。
+- **彈幕**：保留來源彈幕、IINA 彈幕外掛及本地影片搭配 XML 的開啟流程；實際能力依來源與播放器而異。
+- **內建 JSPlayer**：保留既有支援來源的網頁播放路徑，不作為所有影片或 Torrent 的通用播放器。
+- **繼續觀看**：根據播放器回報的實際秒數保存進度。首頁僅展示已確認為番劇的項目，同一作品顯示最近觀看的一集；在線續播會重新解析來源，本地續播開啟對應檔案。
+- **同源自動連播**：IINA／mpv 自然播完後，接續同來源、同目錄分組的下一集，保留線路與品質；本地影片則按同資料夾檔名自然排序建立播放列表。
+- **追更記錄**：尚未確認完季時保留追更卡片；只有全集更新已確認、且末集自然播完，才自動清理同季續看記錄。也可手動刪除單集進度，不刪影片、下載或收藏。
 
-首次建置會下載 `Native/deps.lock` 固定的原生依賴並檢查 SHA-256。`.build/`、npm dependencies 及下載的 `.iinaplgz` 不進 Git；新 checkout 必須先安裝依賴，不能刪除 Xcode 資源引用來繞過缺檔。`CI=true` 的依賴安裝會改寫內建外掛版本常數，提交前須檢查該來源變動。
+直播與 Torrent 邊下邊播不自動換項。手動停止、關閉播放器或播放錯誤不會觸發在線下一集。
 
-完整依賴、播放器與 FFmpeg 要求見 [使用指南：建置](docs/USER_GUIDE.md#建置)。
+## 收藏與 Bangumi 同步
+
+收藏頁分開管理「作品」與「連結」，提供搜尋、篩選、排序與編輯；作品收藏上方顯示來源的新集數更新。
+
+- 作品分類為 **想看、在看、已看、擱置、丟棄**。
+- 登入 Bangumi 後，可同步已關聯作品的收藏分類，或手動載入帳號的在線番劇收藏。
+- 分類先保存本機；未登入或同步失敗時保留修改，並可在收藏頁手動重試。
+- 匯入在線收藏按 Bangumi ID 去重，保留既有來源、下載及未同步的本機修改，不刪除遠端清單之外的本機收藏。
+- 連結收藏保留原始網址與來源身份；既有書籤遷移為連結，不自動變成作品收藏。
+
+**同步範圍僅為作品收藏分類**，不包含觀看秒數、逐集進度、評分或評論；播放完畢不會自動改成「已看」。
+
+## 下載與 Torrent
+
+### 在線下載
+
+從作品詳情開啟「快速下載」，明確選擇來源、勾選多集並解析線路與品質後，批次建立下載任務。
+
+- 支援符合條件的直連檔案與有限、非 DRM 的 HLS 點播。
+- 下載頁提供進度、可得的速度與剩餘時間，以及暫停、繼續、取消、播放器開啟與 Finder 顯示。
+- 新番劇下載依作品身份整理到獨立資料夾，避免同名作品混檔；完成集數會標示「已下載」。
+- 任務跨重啟保存，中斷後需手動恢復。刪除記錄與刪除完成檔是分開的操作。
+- HLS 由 FFmpeg 封裝為 MKV；暫停後重新下載分段，不拼接無法驗證的舊片段。直連續傳取決於伺服器及檔案身份檢查。
+
+不支援直播錄影、DRM／SAMPLE-AES 或部分低延遲 HLS 形式；來源能播放不代表能下載。
+
+### BT 搜尋與邊下邊播
+
+- 從作品選集窗口使用 BT 搜尋，或直接開啟 magnet／本機 `.torrent`。
+- 搜尋透過 RSS 訂閱取得結果；搜尋本身不啟動 P2P，需明確選取結果與影片檔案。
+- 支援多檔批次下載，以及透過 IINA／mpv 對指定檔案邊下邊播。
+- 同一 Torrent 的任務共用底層傳輸，各自保存下載記錄；完成任務不繼續做種。
+- 開始 P2P 前需同意上傳並設定正數上傳上限；private torrent 使用本機種子匯入，不繞過其限制。
+
+Torrent 可用性取決於 tracker 與 peer；沒有可用節點時，可能無法取得 metadata 或持續播放。
+
+## 自訂工作區與外觀
+
+Workspace 是主視窗，將發現、搜尋、詳情、收藏、下載、設定與 Torrent 組件集中在同一個可編排介面。
+
+### Layout 佈局
+
+- 在原視窗開啟編輯畫布，新增組件、管理頁面、拖動排列、調整尺寸及折疊區域。
+- 支援水平／垂直容器、分頁與多欄排列；可直接向頁面加入分欄，再將組件放入空白欄位。
+- 欄數可增減、分隔比例可拖動；縮減欄數時合併超出內容，不刪除組件。
+- 支援寬度斷點、撤銷／重做與恢復內建草稿；修改需按「保存並結束」才永久套用，取消不覆寫原佈局。
+- 可設定頁面淡入、滑入、縮放等進場動效，並匯入受限格式的 XML 動效。
+
+### Skin 主題
+
+- 以 `.iinaskin` 匯入、預覽、套用及匯出主題，支援明暗外觀、字型、色彩、密度、素材與組件狀態樣式。
+- 預設只更換外觀；只有明確選擇套用作者 Layout，才取代目前排列。
+- 支援個人外觀覆寫與衍生包分享；主題及佈局不承載帳號憑證、收藏或觀看歷史。
+- 詳情封面轉場可選滑動放大、影院推近、光圈揭幕或關閉；動效遵循系統「減少動態效果」。
+
+格式與範例見 [Skin 作者指南](Examples/Skins/README.md)及[頁面動效範例](Examples/PageMotions/)。
+
+## 來源、帳號與語言
+
+- 保留 Bilibili、Bilibili 直播、鬥魚、虎牙、抖音、網易 CC 等來源解析，並接入可替換的番劇背景來源。搜尋、播放、彈幕與下載能力分別判定，不保證每站、每條線路都可用。
+- 後加番劇來源的搜尋／自動尋源，需在「設定 → 來源與帳號 → 來源訂閱…」檢查、預覽並明確套用訂閱後啟用；訂閱只更新既有來源的公開搜尋規則，不執行遠端播放腳本。
+- 設定提供 Bilibili、鬥魚與 Bangumi 登入／登出；YouTube 在獨立頁經使用者同意後，一次匯入選定 Chrome／Safari 設定檔的 YouTube Cookies，也可手動匯入 `cookies.txt`。不繞過系統權限、不定期同步瀏覽器資料。
+- 介面支援 **繁體中文、簡體中文、English** 與跟隨系統；變更語言於下次開啟 App 生效。
+- 設定頁支援搜尋，可管理播放與彈幕、來源與帳號、下載、外觀與佈局等偏好。
+
+Skin 各項操作、作者配置與常見問題見 [Skin 功能指南](docs/SKIN_GUIDE.md)。
+
+## 使用前須知
+
+- App 工程宣告最低 **macOS 13.5**，不代表最低系統與 Intel 實機已完整驗證。
+- 使用外部播放需自行安裝 IINA 或 mpv；IINA 彈幕路徑另需對應外掛。HLS 下載封裝需要 FFmpeg，直連下載不需要。
+- 目前仍為開發版本，未配置獨立更新服務、正式簽署與公證。Bundle ID 及部分資料目錄沿用上游，請勿與上游 IINA+ 同時啟動或混用資料。
+- 網站限制、登入權限、驗證頁、失效媒體及網路錯誤都可能影響功能；App 不繞過來源授權或存取限制。
 
 ### Bangumi 登入配置
 
-公開原始碼不含 OAuth 應用憑證。需要 Bangumi 帳號登入時：
+公開原始碼不含 OAuth 應用憑證。自行建置並需要 Bangumi 登入時，將 `Config/Local.xcconfig.example` 複製為 `Config/Local.xcconfig`，填入自己應用的 `BANGUMI_CLIENT_ID` 與 `BANGUMI_CLIENT_SECRET`，回調設為 `iina-ani://bangumi/oauth`，再重新建置。
 
-```sh
-cp Config/Local.xcconfig.example Config/Local.xcconfig
-```
-
-在本機檔填入自己應用的 `BANGUMI_CLIENT_ID`／`BANGUMI_CLIENT_SECRET`，並於 Bangumi 註冊回調 `iina-ani://bangumi/oauth`，再重新建置。`Config/App.xcconfig` 由 Debug／Release 共用並選擇性載入本機檔；未配置仍可建置，登入／續期會明確拒絕，不發送空憑證請求。不要把個人 access token 填成 client secret。
-
-`Config/Local.xcconfig` 已忽略。**這只避免憑證進 Git，不會讓桌面 App 內的 secret 保密**：建置後值存在 App bundle，可被取出；公開分發前須評估 Bangumi 應用註冊及授權架構。原憑證曾明文存在於本機來源，建議擁有者在開發者平台輪替，勿上傳舊來源備份或含建置設定的日誌。
-
-## 驗證入口
-
-先建置 App，再按改動選擇現有入口；各腳本仍可從根目錄直接執行：
-
-```sh
-bash Tests/run-dependency-regression.sh --unit
-bash Tests/run-w7-usecases.sh
-bash Tests/run-workspace-layout.sh
-bash Tests/run-workspace-renderer.sh
-bash Tests/run-skin-appearance.sh
-bash Tests/run-skin-package-store.sh
-node Tests/Playback/JSPlayerAutoplayRegression.js
-```
-
-離線回歸不等於真實播放或正式 App 驗收。HTTP integration、Torrent、播放器及完整功能說明見 [使用指南](docs/USER_GUIDE.md)；實際驗證證據與限制見 [工作記錄](docs/history/WORK_LOG.md)。既有最低系統／Intel、正式簽署與產品集中驗收的未簽收項仍保留。
-
-## 原始碼倉庫
-
-原始碼發布於 [Vianssr/iina-ani](https://github.com/Vianssr/iina-ani)，預設分支為 `main`。新環境可直接取得：
-
-```sh
-git clone https://github.com/Vianssr/iina-ani.git
-cd iina-ani
-```
-
-倉庫保留共用建置設定與空白 OAuth 範本；本機憑證、助理指令／設定、個人 IDE 狀態與建置產物不隨原始碼發布。
-
-提交前核對：
-
-- 保留 App／HuyaKit 的 `Package.resolved`、`package-lock.json`、`Native/deps.lock`、原始碼、fixtures、必要資源及共用 Xcode scheme。
-- 排除 `.build`、DerivedData、`node_modules`、下載外掛、`xcuserdata`、本機助理狀態、環境憑證與簽署私鑰；不要用 `git add -f` 繞過。
-- 不上傳 Cookies、token、授權 header、帶簽名的串流 URL、使用者 Application Support／偏好／播放歷史。忽略規則不是憑證掃描器，仍須檢閱暫存內容。
-- 原始碼上傳不等於可公開散發 App；獨立產品身分、資料遷移、第三方授權及正式簽署要求見 [發佈邊界](docs/architecture/PROJECT.md#6-fork-身分安全與發佈邊界)。
+未配置仍可建置及使用不需登入的功能；登入／續期會提示配置缺失。本機配置不納入 Git，但建置後的 secret 可從 App bundle 取出，不能視為桌面端保密機制。不要將個人 access token 當作 client secret，也不要分享 Cookies、token 或含憑證的日誌。
 
 ## 文件與授權
 
-- [功能與操作指南](docs/USER_GUIDE.md)
-- [專案定位、架構及發佈安全](docs/architecture/PROJECT.md)
-- [前端重構計劃與驗收狀態](docs/plans/FRONTEND_REFACTOR_PLAN.md)、[W0 歷史基線](docs/plans/FRONTEND_W0_BASELINE.md)
-- [Torrent 研究](docs/research/ANIMEKO_TORRENT_REVIEW.md)、[來源接入研究](docs/research/websitesforanime.md)
-- [Skin 作者格式](Examples/Skins/README.md)、[逐次工作記錄](docs/history/WORK_LOG.md)
-- [GPL v3](LICENSE)、[圖示授權](LicenseForIcons.pdf)、`Native/licenses/`
+- [完整使用指南與建置方式](docs/USER_GUIDE.md)
+- [專案架構與資料／發佈邊界](docs/architecture/PROJECT.md)
+- [實際驗證記錄與限制](docs/history/WORK_LOG.md)
+
+本專案保留上游作者與版權聲明，採用 [GPL v3](LICENSE)。圖示另見[圖示授權](LicenseForIcons.pdf)，原生依賴聲明位於 [Native/licenses/](Native/licenses/)；其他依賴與外部彈幕外掛依各自授權處理。
