@@ -21,7 +21,7 @@ for module in "$BUILD/Intermediates.noindex/GeneratedModuleMaps/"*.modulemap; do
 done
 xcrun momc "$ROOT/IINA-ANI/Core Data/DataModel.xcdatamodeld" "$TEMP_DIR/DataModel.momd"
 # Offline service checks: no App, player, listener or live-site requests.
-for regression in Playback/OpenFilesEntryRegression Sources/BrowseSearchRegression Playback/PlaybackSelectionRegression Bangumi/BangumiWorkSyncRegression Library/FavoriteLibraryRegression Sources/DiscoveryRegression Sources/AnimeSourceRegression Sources/SourceSearchRegression Downloads/DownloadServiceStateRegression Infrastructure/PreferencesRegression; do
+for regression in Playback/OpenFilesEntryRegression Sources/BrowseSearchRegression Playback/PlaybackSelectionRegression Bangumi/BangumiWorkSyncRegression Library/FavoriteLibraryRegression Sources/DiscoveryRegression Sources/BilibiliFeedRegression Sources/BilibiliRecommendationRegression Sources/YouTubeBrowseRegression Accounts/YouTubeCookieImportRegression Accounts/YouTubeBrowserCookiesRegression Sources/AnimeSourceRegression Sources/SourceSearchRegression Downloads/DownloadServiceStateRegression Infrastructure/PreferencesRegression; do
     source="${regression##*/}"
     xcrun swiftc -swift-version 6 -parse-as-library "${FLAGS[@]}" \
         "$ROOT/Tests/$regression.swift" \

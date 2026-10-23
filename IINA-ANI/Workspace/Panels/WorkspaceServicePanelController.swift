@@ -11,7 +11,8 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     NSTableViewDelegate, NSCollectionViewDataSource, NSCollectionViewDelegate,
     NSSearchFieldDelegate, WorkspaceDetachablePanel
 {
-    private enum PanelKind: Equatable { case schedule, updates, recommendations, continuing, feed, followed, search, downloads }
+    private enum PanelKind: Equatable { case schedule, updates, recommendations, continuing, feed, followed, bilibiliRecommendations, youtube, search, downloads }
+    private enum YouTubeCookieImportError: Error { case invalidFileSize }
     let componentID: String
     private let instanceID: UUID
     private let kind: PanelKind
@@ -23,8 +24,10 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     private let queryField = WorkspaceSkinSearchField()
     private let table = NSTableView()
     private lazy var cards = WorkspaceDiscoveryCollectionView()
-    private var isDiscovery: Bool { kind == .schedule || kind == .updates || kind == .recommendations || kind == .continuing || kind == .feed || kind == .followed }
-    private var isHorizontalDiscovery: Bool { isDiscovery && kind != .feed && kind != .schedule && kind != .followed }
+    private var isBilibiliVideoGrid: Bool { kind == .followed || kind == .bilibiliRecommendations }
+    private var isVideoGrid: Bool { isBilibiliVideoGrid || kind == .youtube }
+    private var isDiscovery: Bool { kind == .schedule || kind == .updates || kind == .recommendations || kind == .continuing || kind == .feed || isVideoGrid }
+    private var isHorizontalDiscovery: Bool { isDiscovery && kind != .feed && kind != .schedule && !isVideoGrid }
     private var selectedIndex: Int { isDiscovery ? cards.selectionIndexPaths.first?.item ?? -1 : table.selectedRow }
     private let scroll = WorkspaceScrollView()
     private weak var pageScrollOwner: WorkspaceScrollView?
@@ -78,6 +81,32 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     private var followedManager: BilibiliDynamicManger?
     private var followedLoading = false
     private var followedFailure: String?
+    private var recommendationTask: Task<Void, Never>?
+    private var recommendationGeneration: UInt64 = 0
+    private var recommendationNextPage = 1
+    private var recommendationLoading = false
+    private var recommendationFailure: String?
+    private var recommendationAllowsAutoLoad = false
+    private var recommendationSeen = Set<String>()
+    private var youtubeVideos: [YouTubeVideo] = []
+    private var youtubeContinuation: YouTubeContinuation?
+    private var youtubeQuery = ""
+    private var youtubeLoading = false
+    private var youtubeFailure: String?
+    private var youtubeMessage: String?
+    private var youtubeGeneration: UInt64 = 0
+    private var youtubeTask: Task<Void, Never>?
+    private var youtubeSeen = Set<String>()
+    private var youtubeAllowsAutoLoad = false
+    private var youtubeNeedsFirstPage = true
+    private var youtubeAccount: SiteAccount?
+    private var youtubeAccountBusy = false
+    private let youtubeAccountLabel = NSTextField(labelWithString: "")
+    private let youtubeImportButton = WorkspaceSkinButton()
+    private let youtubeSignOutButton = WorkspaceSkinButton()
+    private var youtubeBrowseControls: [NSControl] = []
+    private weak var youtubeOpenPanel: NSOpenPanel?
+    private var youtubeImportAlert: NSAlert?
     private var feedPage = 2
     private var feedHasMore = true
     private var feedLoading = false
@@ -102,6 +131,8 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         case "playback.continue": kind = .continuing
         case "discovery.feed": kind = .feed
         case "discovery.followed": kind = .followed
+        case "discovery.bilibiliRecommendations": kind = .bilibiliRecommendations
+        case "discovery.youtube": kind = .youtube
         case "search.results": kind = .search
         default: kind = .downloads
         }
@@ -113,6 +144,8 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         case .continuing: title = String(localized: "繼續觀看")
         case .feed: title = String(localized: "推薦")
         case .followed: title = String(localized: "Bilibili 關注動態")
+        case .bilibiliRecommendations: title = String(localized: "Bilibili 推薦影片")
+        case .youtube: title = "YouTube"
         case .search: title = String(localized: "Search")
         case .downloads: title = String(localized: "Downloads")
         }
@@ -244,6 +277,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             }
             panel.addArrangedSubview(NSStackView(views: [category, sourceFilter]))
         }
+        if kind == .youtube { configureYouTubeControls(in: panel) }
         status.textColor = .secondaryLabelColor
         status.maximumNumberOfLines = kind == .search ? 0 : 3
         status.isHidden = true
@@ -253,7 +287,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             panel.addArrangedSubview(statusPresentation)
             statusPresentation.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         }
-        if kind == .followed {
+        if isBilibiliVideoGrid {
             let buttons: [(String, Selector, WorkspaceIcon?)] = [(String(localized: "開啟影片"), #selector(activateSelection), .play),
                 (String(localized: "複製網址"), #selector(copyFollowedURL), nil), (String(localized: "原始頁面"), #selector(openFollowedPage), .openLink)]
             let commands = NSStackView()
@@ -319,7 +353,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             doubleClick.numberOfClicksRequired = kind == .continuing ? 1 : 2
             cards.addGestureRecognizer(doubleClick)
             cards.setAccessibilityLabel(heading.stringValue + (isHorizontalDiscovery ? String(localized: " · 水平內容") : String(localized: " · 垂直內容")))
-            scroll.setAccessibilityLabel(heading.stringValue + (kind == .feed || kind == .followed ? String(localized: " · 向下捲動載入更多") : isHorizontalDiscovery ? String(localized: " · 水平捲動") : String(localized: " · 全週垂直捲動")))
+            scroll.setAccessibilityLabel(heading.stringValue + (kind == .feed || isVideoGrid ? String(localized: " · 向下捲動載入更多") : isHorizontalDiscovery ? String(localized: " · 水平捲動") : String(localized: " · 全週垂直捲動")))
             scroll.documentView = cards
             scroll.hasHorizontalScroller = isHorizontalDiscovery
             scroll.hasVerticalScroller = !isHorizontalDiscovery
@@ -384,6 +418,8 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             case .feed: loadFeed()
             case .downloads: attachDownloads()
             case .followed: loadFollowed(.init😅)
+            case .bilibiliRecommendations: loadBilibiliRecommendations(replacing: true)
+            case .youtube: loadYouTube(replacing: true, requestedQuery: "")
             case .search:
                 showEmpty(String(localized: "Enter a keyword or URL, then choose Search."))
                 refreshSearchSources()
@@ -413,6 +449,15 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             primary.title = String(localized: "刷新")
             secondary.title = String(localized: "載入更多")
             secondary.isHidden = false
+        case .bilibiliRecommendations:
+            primary.title = String(localized: "刷新")
+            secondary.title = String(localized: "載入更多")
+            secondary.isHidden = false
+        case .youtube:
+            primary.title = String(localized: "Refresh")
+            secondary.title = String(localized: "Load More")
+            secondary.isHidden = false
+            secondary.isEnabled = false
         case .followed:
             primary.title = String(localized: "刷新")
             secondary.title = String(localized: "較舊影片")
@@ -446,6 +491,9 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         if !previewOnly, kind == .continuing { reloadHistory() }
         restoreScroll(savedScrollPosition)
         if !previewOnly, kind == .followed { loadFollowed(followedCards.isEmpty ? .init😅 : .new) }
+        if !previewOnly, kind == .bilibiliRecommendations, recommendationNextPage == 1 {
+            loadBilibiliRecommendations(replacing: true)
+        }
     }
 
     override func viewDidLayout() {
@@ -468,6 +516,12 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         case .feed: if rows.isEmpty { loadFeed() }
         case .downloads: attachDownloads()
         case .followed: loadFollowed(followedCards.isEmpty ? .init😅 : .new)
+        case .bilibiliRecommendations:
+            updateBilibiliRecommendationStatus()
+            if recommendationNextPage == 1 { loadBilibiliRecommendations(replacing: true) }
+        case .youtube:
+            if youtubeNeedsFirstPage { loadYouTube(replacing: true, requestedQuery: youtubeQuery) }
+            else { updateYouTubeStatus() }
         case .search: refreshSearchSources()
         }
         restoreScroll(savedScrollPosition)
@@ -485,6 +539,11 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         historyReloadTask = nil
         feedGeneration &+= 1
         feedLoading = false
+        recommendationTask?.cancel()
+        recommendationTask = nil
+        recommendationGeneration &+= 1
+        recommendationLoading = false
+        cancelYouTubeRequest()
         streamTask?.cancel()
         streamTask = nil
         sourceMenuTask?.cancel()
@@ -516,17 +575,24 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
            (scroll.documentView?.frame.height ?? 0) - scroll.contentView.bounds.maxY < 240 {
             loadFollowed(.history)
         }
+        if kind == .bilibiliRecommendations, recommendationAllowsAutoLoad,
+           recommendationFailure == nil, isNearBilibiliVideoEnd {
+            loadBilibiliRecommendations()
+        }
+        if kind == .youtube, youtubeAllowsAutoLoad, youtubeFailure == nil, isNearBilibiliVideoEnd {
+            loadYouTube()
+        }
     }
 
     func submitSearch(_ input: String) {
         guard !previewOnly else { return }
         _ = view
         queryField.stringValue = input
-        search()
+        if kind == .youtube { searchYouTube() } else { search() }
     }
     func focusSearch() {
         guard !previewOnly else { return }
-        guard kind == .search, isViewLoaded else { return }
+        guard kind == .search || kind == .youtube, isViewLoaded else { return }
         view.window?.makeFirstResponder(queryField)
     }
 
@@ -538,6 +604,23 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         case .feed: loadFeed(reset: true)
         case .downloads: attachDownloads()
         case .search: refreshSearchSources()
+        case .youtube:
+            cancelYouTubeRequest()
+            clearYouTubePage()
+            loadYouTube(replacing: true, requestedQuery: "")
+        case .bilibiliRecommendations:
+            recommendationTask?.cancel()
+            recommendationTask = nil
+            recommendationGeneration &+= 1
+            recommendationLoading = false
+            recommendationNextPage = 1
+            recommendationAllowsAutoLoad = false
+            recommendationSeen.removeAll()
+            followedCards.removeAll()
+            selectedRowID = nil
+            savedScrollPosition = 0
+            showFollowedCards()
+            loadBilibiliRecommendations(replacing: true)
         case .followed:
             if let followedManager { Task { await followedManager.cancel() } }
             followedManager = nil; followedCards = []; followedLoading = false
@@ -547,6 +630,14 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
 
     func controlTextDidChange(_ notification: Notification) {
         guard !previewOnly else { return }
+        if kind == .youtube {
+            cancelYouTubeRequest()
+            youtubeNeedsFirstPage = true
+            youtubeFailure = nil
+            youtubeMessage = String(localized: "Press Return or Search to search YouTube.")
+            updateYouTubeStatus()
+            return
+        }
         query = queryField.stringValue
         searchGeneration &+= 1
         operation?.cancel()
@@ -566,6 +657,9 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         case .continuing: reloadHistory()
         case .feed: loadFeed(reset: true, force: true)
         case .followed: loadFollowed(followedCards.isEmpty ? .init😅 : .new)
+        case .bilibiliRecommendations: loadBilibiliRecommendations(replacing: true)
+        case .youtube:
+            loadYouTube(replacing: true, requestedQuery: youtubeQuery)
         case .search: search()
         case .downloads: performSelectedDownloadOperation(.pause)
         }
@@ -577,11 +671,480 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         case .search: loadMore()
         case .feed: loadFeed()
         case .followed: loadFollowed(.history)
+        case .bilibiliRecommendations: loadBilibiliRecommendations()
+        case .youtube: loadYouTube()
         case .downloads: performSelectedDownloadOperation(.resume)
         default: break
         }
     }
     @objc func reload(_ sender: Any?) { primaryAction() }
+
+    private func configureYouTubeControls(in panel: NSStackView) {
+        queryField.stringValue = ""
+        queryField.placeholderString = String(localized: "Search YouTube")
+        queryField.delegate = self
+        queryField.sendsSearchStringImmediately = false
+        queryField.target = self
+        queryField.action = #selector(searchYouTube)
+        queryField.controlSize = .large
+        let home = WorkspaceSkinButton(title: String(localized: "Home"), target: self, action: #selector(showYouTubeHome))
+        let search = WorkspaceSkinButton(title: String(localized: "Search"), target: self, action: #selector(searchYouTube))
+        youtubeBrowseControls = [home, search, queryField]
+        let searchRow = NSStackView(views: [home, queryField, search])
+        searchRow.spacing = 8
+        panel.addArrangedSubview(searchRow)
+        searchRow.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
+        queryField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        queryField.widthAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
+        youtubeImportButton.title = String(localized: "Import Browser Cookies…")
+        youtubeImportButton.target = self
+        youtubeImportButton.action = #selector(importYouTubeCookies)
+        youtubeSignOutButton.title = String(localized: "Sign Out")
+        youtubeSignOutButton.target = self
+        youtubeSignOutButton.action = #selector(signOutYouTube)
+        let login = WorkspaceSkinButton(title: String(localized: "Sign in on YouTube"), target: self, action: #selector(openYouTubeHome))
+        let accountRow = NSStackView(views: [youtubeImportButton, youtubeSignOutButton, login])
+        accountRow.spacing = 8
+        panel.addArrangedSubview(accountRow)
+        youtubeAccountLabel.font = .systemFont(ofSize: 12)
+        youtubeAccountLabel.textColor = .secondaryLabelColor
+        youtubeAccountLabel.stringValue = String(localized: "YouTube · Guest")
+        panel.addArrangedSubview(youtubeAccountLabel)
+        let help = NSTextField(wrappingLabelWithString: String(localized: "Sign in on youtube.com in Chrome or Safari, then select Import Browser Cookies… and explicitly allow a one-time import from your chosen browser/profile. macOS may request Keychain access or Full Disk Access separately. You can also import an exported Netscape cookies.txt file; keep that sensitive file private and delete it after import. No embedded Google login is used."))
+        help.font = .systemFont(ofSize: 11)
+        help.textColor = .secondaryLabelColor
+        panel.addArrangedSubview(help)
+        help.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
+        let open = WorkspaceSkinButton(title: String(localized: "Open in Browser"), target: self, action: #selector(openYouTubeVideo))
+        let copy = WorkspaceSkinButton(title: String(localized: "Copy URL"), target: self, action: #selector(copyYouTubeURL))
+        panel.addArrangedSubview(NSStackView(views: [open, copy]))
+        for button in [home, search, youtubeImportButton, youtubeSignOutButton, login, open, copy] {
+            button.bezelStyle = .rounded
+            button.isEnabled = !previewOnly
+            button.bindSkin(dependencies.skinAppearance, slot: "primaryAction", componentID: componentID)
+            button.updateSkinState()
+        }
+        youtubeSignOutButton.isEnabled = false
+    }
+
+    private func clearYouTubePage() {
+        youtubeVideos.removeAll()
+        youtubeSeen.removeAll()
+        youtubeContinuation = nil
+        youtubeNeedsFirstPage = true
+        youtubeMessage = nil
+        rows.removeAll()
+        destinations.removeAll()
+        coverURLs.removeAll()
+        posters.removeAll()
+        selectedRowID = nil
+        savedScrollPosition = 0
+        count.stringValue = "0"
+        reloadRowsPreservingSelection()
+    }
+
+    private func cancelYouTubeRequest() {
+        youtubeTask?.cancel()
+        youtubeTask = nil
+        youtubeGeneration &+= 1
+        youtubeOpenPanel?.cancel(nil)
+        youtubeOpenPanel = nil
+        if let sheet = youtubeImportAlert?.window, let parent = sheet.sheetParent {
+            parent.endSheet(sheet, returnCode: .cancel)
+        }
+        youtubeImportAlert = nil
+        youtubeLoading = false
+        youtubeAccountBusy = false
+        youtubeAllowsAutoLoad = false
+    }
+
+    private func updateYouTubeStatus() {
+        guard kind == .youtube else { return }
+        primary.isEnabled = !previewOnly && !youtubeAccountBusy
+        secondary.isEnabled = !previewOnly && !youtubeLoading && !youtubeAccountBusy
+            && !youtubeNeedsFirstPage && youtubeContinuation != nil
+        youtubeImportButton.isEnabled = !previewOnly && !youtubeAccountBusy
+        youtubeSignOutButton.isEnabled = !previewOnly && !youtubeAccountBusy && youtubeAccount != nil
+        for control in youtubeBrowseControls { control.isEnabled = !previewOnly && !youtubeAccountBusy }
+        if let account = youtubeAccount {
+            if account.status == .expired {
+                youtubeAccountLabel.stringValue = String(localized: "YouTube · Login expired — import fresh cookies")
+            } else if !account.enabled || account.status == .needsLogin {
+                youtubeAccountLabel.stringValue = String(localized: "YouTube · Account unavailable — import fresh cookies or sign out")
+            } else {
+                youtubeAccountLabel.stringValue = String(localized: "YouTube · Signed in")
+            }
+        } else {
+            youtubeAccountLabel.stringValue = String(localized: "YouTube · Guest")
+        }
+        status.stringValue = youtubeFailure ?? (youtubeAccountBusy
+            ? String(localized: "Updating YouTube account…")
+            : youtubeLoading ? String(localized: "Loading YouTube…")
+            : youtubeMessage ?? (youtubeVideos.isEmpty
+                ? String(localized: "No YouTube videos to show. Try Search, or sign in in your browser and import cookies for your home feed.")
+                : ""))
+        status.isHidden = status.stringValue.isEmpty
+        status.workspaceSkinBinding?.state = youtubeFailure != nil ? .error : youtubeLoading || youtubeAccountBusy ? .loading : .normal
+    }
+
+    private func loadYouTube(replacing: Bool = false, requestedQuery: String? = nil) {
+        guard kind == .youtube, !previewOnly, attached, !youtubeAccountBusy else { return }
+        if replacing {
+            cancelYouTubeRequest()
+            youtubeQuery = (requestedQuery ?? youtubeQuery).trimmingCharacters(in: .whitespacesAndNewlines)
+            query = youtubeQuery
+            queryField.stringValue = youtubeQuery
+            youtubeNeedsFirstPage = true
+        } else {
+            guard !youtubeLoading, !youtubeNeedsFirstPage, youtubeContinuation != nil else { return }
+        }
+        youtubeLoading = true
+        youtubeFailure = nil
+        youtubeMessage = nil
+        updateYouTubeStatus()
+        let generation = youtubeGeneration
+        let input = youtubeQuery
+        let continuation = youtubeContinuation
+        youtubeTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.attached, generation == self.youtubeGeneration {
+                    self.youtubeLoading = false
+                    self.youtubeTask = nil
+                    self.updateYouTubeStatus()
+                    if self.youtubeAllowsAutoLoad {
+                        Task { @MainActor [weak self] in
+                            await Task.yield()
+                            guard let self, self.attached, generation == self.youtubeGeneration,
+                                  self.isNearBilibiliVideoEnd else { return }
+                            self.loadYouTube()
+                        }
+                    }
+                }
+            }
+            do {
+                let account = try await SiteAccounts.shared.defaultAccount(sourceID: "youtube")
+                guard self.attached, !Task.isCancelled, generation == self.youtubeGeneration else { return }
+                self.youtubeAccount = account
+                self.updateYouTubeStatus()
+                let page = try await SiteAccounts.shared.withSource(sourceID: "youtube") {
+                    if !replacing, let continuation {
+                        return try await YouTubeBrowseService.shared.more(continuation)
+                    }
+                    if input.isEmpty { return try await YouTubeBrowseService.shared.home() }
+                    return try await YouTubeBrowseService.shared.search(input)
+                }
+                guard self.attached, !Task.isCancelled, generation == self.youtubeGeneration else { return }
+                if replacing {
+                    self.youtubeVideos.removeAll()
+                    self.youtubeSeen.removeAll()
+                    self.selectedRowID = nil
+                    self.savedScrollPosition = 0
+                }
+                var added = 0
+                for video in page.videos where self.youtubeSeen.insert(video.id).inserted {
+                    self.youtubeVideos.append(video)
+                    added += 1
+                }
+                self.youtubeContinuation = page.continuation
+                self.youtubeNeedsFirstPage = false
+                self.youtubeMessage = page.message
+                self.youtubeAllowsAutoLoad = added > 0 && page.continuation != nil
+                self.rows = self.youtubeVideos.map { "\($0.title) — \($0.channel) · \($0.viewCountText)" }
+                self.destinations = self.youtubeVideos.map { .address($0.watchURL.absoluteString) }
+                self.coverURLs = self.youtubeVideos.map(\.thumbnailURL)
+                self.posters = self.youtubeVideos.map { _ in false }
+                self.count.stringValue = "\(self.youtubeVideos.count)"
+                self.reloadRowsPreservingSelection()
+            } catch is CancellationError {
+            } catch {
+                guard self.attached, !Task.isCancelled, generation == self.youtubeGeneration else { return }
+                self.youtubeAllowsAutoLoad = false
+                self.youtubeFailure = self.youTubeFailureMessage(error)
+                let account = try? await SiteAccounts.shared.defaultAccount(sourceID: "youtube")
+                guard self.attached, !Task.isCancelled, generation == self.youtubeGeneration else { return }
+                self.youtubeAccount = account
+                if case SiteAccountError.expired = error { self.youtubeAccount?.status = .expired }
+            }
+        }
+    }
+
+    private func youTubeFailureMessage(_ error: Error) -> String {
+        // Never surface provider bodies, cookie values, file paths, or request headers.
+        if let failure = error as? YouTubeBrowseError { return failure.localizedDescription }
+        if let failure = error as? YouTubeBrowserCookiesError { return failure.localizedDescription }
+        switch error {
+        case YouTubeCookieImportError.invalidFileSize:
+            return String(localized: "Choose a nonempty Netscape cookies.txt file no larger than 1 MiB.")
+        case SiteAccountError.expired, SiteAccountError.needsLogin:
+            return String(localized: "YouTube login expired. Sign in in your browser and import fresh cookies, or Sign Out to browse as a guest.")
+        case SiteAccountError.invalidCookies, SiteAccountError.validationFailed:
+            return String(localized: "YouTube could not validate these cookies. Export fresh Netscape cookies.txt for youtube.com after signing in.")
+        case SiteAccountError.accountInUse:
+            return String(localized: "The YouTube account is still in use. Wait for the current request to stop and try again.")
+        case SiteAccountError.disabled:
+            return String(localized: "The YouTube source or account is disabled.")
+        case SiteAccountError.secureStorage:
+            return String(localized: "Secure credential storage is unavailable.")
+        default:
+            return String(localized: "YouTube could not complete this request. Check your connection and try again; existing videos have been kept.")
+        }
+    }
+
+    @objc private func showYouTubeHome() {
+        loadYouTube(replacing: true, requestedQuery: "")
+    }
+
+    @objc private func searchYouTube() {
+        loadYouTube(replacing: true, requestedQuery: queryField.stringValue)
+    }
+
+    @objc private func openYouTubeHome() {
+        guard !previewOnly, let url = URL(string: "https://www.youtube.com/") else { return }
+        NSWorkspace.shared.open(url)
+    }
+
+    @objc private func openYouTubeVideo() {
+        guard !previewOnly, youtubeVideos.indices.contains(selectedIndex) else { return }
+        NSWorkspace.shared.open(youtubeVideos[selectedIndex].watchURL)
+    }
+
+    @objc private func copyYouTubeURL() {
+        guard !previewOnly, youtubeVideos.indices.contains(selectedIndex) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(youtubeVideos[selectedIndex].watchURL.absoluteString, forType: .string)
+    }
+
+    @objc private func importYouTubeCookies() {
+        guard !previewOnly, attached, !youtubeAccountBusy, let window = view.window else { return }
+        let previousRequest = youtubeTask
+        cancelYouTubeRequest()
+        youtubeAccountBusy = true
+        youtubeFailure = nil
+        updateYouTubeStatus()
+        let generation = youtubeGeneration
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Allow YouTube cookie import?")
+        alert.informativeText = String(localized: "Choose Chrome or Safari. After you allow, select a profile if the browser has more than one. IINA-ANI will read only YouTube cookies from that browser/profile once, validate them with YouTube, and save them in Keychain. Passwords, browsing history, and other sites’ cookies are not imported. macOS may separately ask for Keychain access or require Full Disk Access in System Settings > Privacy & Security. This in-app consent does not grant macOS permissions.")
+        alert.addButton(withTitle: String(localized: "Allow Import"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.addButton(withTitle: String(localized: "Import cookies.txt…"))
+        let browserChoice = NSPopUpButton()
+        let browsers = YouTubeCookieBrowser.allCases
+        browserChoice.addItems(withTitles: browsers.map { browser in
+            switch browser {
+            case .chrome: return "Chrome"
+            case .safari: return "Safari"
+            }
+        })
+        alert.accessoryView = youTubeImportChoiceView(label: String(localized: "Browser"), choice: browserChoice)
+        youtubeImportAlert = alert
+        alert.beginSheetModal(for: window) { [weak self, weak window] response in
+            guard let self, let window, self.attached, self.view.window === window,
+                  generation == self.youtubeGeneration else { return }
+            self.youtubeImportAlert = nil
+            switch response {
+            case .alertFirstButtonReturn:
+                guard browsers.indices.contains(browserChoice.indexOfSelectedItem) else {
+                    self.finishYouTubeCookieImport(generation: generation)
+                    return
+                }
+                // Neither profile metadata nor cookie stores are accessed until this explicit consent.
+                self.loadYouTubeBrowserProfiles(
+                    browser: browsers[browserChoice.indexOfSelectedItem],
+                    generation: generation, previousRequest: previousRequest)
+            case .alertThirdButtonReturn:
+                self.chooseYouTubeCookieFile(generation: generation, previousRequest: previousRequest)
+            default:
+                self.finishYouTubeCookieImport(generation: generation)
+            }
+        }
+    }
+
+    private func youTubeImportChoiceView(label: String, choice: NSPopUpButton) -> NSView {
+        choice.setAccessibilityLabel(label)
+        let stack = NSStackView(views: [NSTextField(labelWithString: label), choice])
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.spacing = 6
+        stack.frame = NSRect(x: 0, y: 0, width: 420, height: 56)
+        choice.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        return stack
+    }
+
+    private func loadYouTubeBrowserProfiles(
+        browser: YouTubeCookieBrowser, generation: UInt64, previousRequest: Task<Void, Never>?
+    ) {
+        guard !previewOnly, attached, generation == youtubeGeneration else { return }
+        youtubeTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try Task.checkCancellation()
+                let profiles = try await YouTubeBrowserCookies.profiles(for: browser)
+                guard self.attached, !Task.isCancelled, generation == self.youtubeGeneration else { return }
+                self.youtubeTask = nil
+                guard !profiles.isEmpty else {
+                    self.finishYouTubeCookieImport(
+                        generation: generation,
+                        message: String(localized: "No browser profiles were found. Open the selected browser and sign in to YouTube, then try again, or use Import cookies.txt…. Safari may require Full Disk Access in System Settings > Privacy & Security."))
+                    return
+                }
+                if profiles.count == 1, let profile = profiles.first {
+                    self.performYouTubeCookieImport(generation: generation, previousRequest: previousRequest) {
+                        try await YouTubeBrowserCookies.read(profile: profile)
+                    }
+                    return
+                }
+                self.chooseYouTubeBrowserProfile(
+                    profiles, generation: generation, previousRequest: previousRequest)
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.finishYouTubeCookieImport(
+                    generation: generation,
+                    message: error is CancellationError ? nil : self.youTubeFailureMessage(error))
+            }
+        }
+    }
+
+    private func chooseYouTubeBrowserProfile(
+        _ profiles: [YouTubeBrowserProfile], generation: UInt64, previousRequest: Task<Void, Never>?
+    ) {
+        guard !previewOnly, attached, generation == youtubeGeneration, let window = view.window else {
+            finishYouTubeCookieImport(generation: generation)
+            return
+        }
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Choose a browser profile")
+        alert.informativeText = String(localized: "Only YouTube cookies from the selected profile will be imported.")
+        alert.addButton(withTitle: String(localized: "Import"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        let profileChoice = NSPopUpButton()
+        profileChoice.addItems(withTitles: profiles.map(\.name))
+        alert.accessoryView = youTubeImportChoiceView(label: String(localized: "Profile"), choice: profileChoice)
+        youtubeImportAlert = alert
+        alert.beginSheetModal(for: window) { [weak self, weak window] response in
+            guard let self, let window, self.attached, self.view.window === window,
+                  generation == self.youtubeGeneration else { return }
+            self.youtubeImportAlert = nil
+            guard response == .alertFirstButtonReturn,
+                  profiles.indices.contains(profileChoice.indexOfSelectedItem) else {
+                self.finishYouTubeCookieImport(generation: generation)
+                return
+            }
+            let profile = profiles[profileChoice.indexOfSelectedItem]
+            self.performYouTubeCookieImport(generation: generation, previousRequest: previousRequest) {
+                try await YouTubeBrowserCookies.read(profile: profile)
+            }
+        }
+    }
+
+    private func chooseYouTubeCookieFile(generation: UInt64, previousRequest: Task<Void, Never>?) {
+        guard !previewOnly, attached, generation == youtubeGeneration, let window = view.window else {
+            finishYouTubeCookieImport(generation: generation)
+            return
+        }
+        let panel = NSOpenPanel()
+        youtubeOpenPanel = panel
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.title = String(localized: "Import cookies.txt…")
+        panel.message = String(localized: "Choose Netscape cookies.txt exported for youtube.com. Keep this sensitive file private and delete it after importing.")
+        panel.beginSheetModal(for: window) { [weak self, weak window] response in
+            guard let self, let window, self.attached, self.view.window === window,
+                  generation == self.youtubeGeneration else { return }
+            self.youtubeOpenPanel = nil
+            guard response == .OK, let url = panel.url else {
+                self.finishYouTubeCookieImport(generation: generation)
+                return
+            }
+            self.performYouTubeCookieImport(generation: generation, previousRequest: previousRequest) {
+                let scoped = url.startAccessingSecurityScopedResource()
+                defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+                guard try url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true else {
+                    throw CocoaError(.fileReadUnknown)
+                }
+                let handle = try FileHandle(forReadingFrom: url)
+                defer { try? handle.close() }
+                let maximumBytes = 1_048_576
+                let data = try handle.read(upToCount: maximumBytes + 1) ?? Data()
+                guard !data.isEmpty, data.count <= maximumBytes else {
+                    throw YouTubeCookieImportError.invalidFileSize
+                }
+                return data
+            }
+        }
+    }
+
+    private func performYouTubeCookieImport(
+        generation: UInt64, previousRequest: Task<Void, Never>?,
+        readData: @escaping @MainActor () async throws -> Data
+    ) {
+        guard !previewOnly, attached, generation == youtubeGeneration else { return }
+        youtubeTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                try Task.checkCancellation()
+                let data = try await readData()
+                await previousRequest?.value
+                try Task.checkCancellation()
+                guard self.attached, generation == self.youtubeGeneration else { return }
+                let account = try await SiteAccounts.shared.importYouTubeCookies(data)
+                guard self.attached, !Task.isCancelled, generation == self.youtubeGeneration else { return }
+                self.clearYouTubePage()
+                self.youtubeAccount = account
+                self.youtubeAccountBusy = false
+                self.youtubeTask = nil
+                self.loadYouTube(replacing: true, requestedQuery: "")
+            } catch {
+                guard !Task.isCancelled else { return }
+                self.finishYouTubeCookieImport(
+                    generation: generation,
+                    message: error is CancellationError ? nil : self.youTubeFailureMessage(error))
+            }
+        }
+    }
+
+    private func finishYouTubeCookieImport(generation: UInt64, message: String? = nil) {
+        guard attached, generation == youtubeGeneration else { return }
+        youtubeAccountBusy = false
+        youtubeTask = nil
+        if let message { youtubeFailure = message }
+        updateYouTubeStatus()
+    }
+
+    @objc private func signOutYouTube() {
+        guard !previewOnly, attached, !youtubeAccountBusy else { return }
+        let previousRequest = youtubeTask
+        cancelYouTubeRequest()
+        youtubeAccountBusy = true
+        youtubeFailure = nil
+        updateYouTubeStatus()
+        let generation = youtubeGeneration
+        youtubeTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                await previousRequest?.value
+                try Task.checkCancellation()
+                if let account = try await SiteAccounts.shared.defaultAccount(sourceID: "youtube") {
+                    try Task.checkCancellation()
+                    try await SiteAccounts.shared.signOut(accountID: account.id)
+                }
+                guard self.attached, !Task.isCancelled, generation == self.youtubeGeneration else { return }
+                self.clearYouTubePage()
+                self.youtubeAccount = nil
+                self.youtubeAccountBusy = false
+                self.youtubeTask = nil
+                self.loadYouTube(replacing: true, requestedQuery: "")
+            } catch {
+                guard self.attached, !Task.isCancelled, generation == self.youtubeGeneration else { return }
+                self.youtubeAccountBusy = false
+                self.youtubeTask = nil
+                self.youtubeFailure = self.youTubeFailureMessage(error)
+                self.updateYouTubeStatus()
+            }
+        }
+    }
 
     private func loadFollowed(_ action: BilibiliDynamicAction) {
         guard !previewOnly, attached, !followedLoading else { return }
@@ -595,6 +1158,78 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             await manager.loadBilibiliCards(action)
         }
     }
+
+    private var isNearBilibiliVideoEnd: Bool {
+        (scroll.documentView?.frame.height ?? 0) - scroll.contentView.bounds.maxY < 240
+    }
+
+    private func updateBilibiliRecommendationStatus() {
+        primary.isEnabled = !recommendationLoading
+        // Empty or filtered pages are not an end-of-feed signal.
+        secondary.isEnabled = !recommendationLoading
+        secondary.title = recommendationFailure == nil ? String(localized: "載入更多") : String(localized: "重試載入")
+        secondary.setFunctionIcon(recommendationFailure == nil ? .add : .refresh)
+        status.stringValue = recommendationFailure ?? (recommendationLoading
+            ? String(localized: "正在載入 Bilibili 推薦影片…")
+            : followedCards.isEmpty ? String(localized: "暫無可播放的 Bilibili 推薦影片；可刷新或載入更多。") : "")
+        status.isHidden = status.stringValue.isEmpty
+        status.workspaceSkinBinding?.state = recommendationFailure != nil ? .error : recommendationLoading ? .loading : .normal
+    }
+
+    private func loadBilibiliRecommendations(replacing: Bool = false) {
+        guard kind == .bilibiliRecommendations, !previewOnly, attached, !recommendationLoading else { return }
+        recommendationLoading = true
+        recommendationFailure = nil
+        updateBilibiliRecommendationStatus()
+        let generation = recommendationGeneration
+        // Refresh requests a fresh batch rather than replaying the initial page.
+        let page = recommendationNextPage
+        recommendationTask = Task { [weak self] in
+            guard let self else { return }
+            defer {
+                if self.attached, generation == self.recommendationGeneration {
+                    self.recommendationLoading = false
+                    self.recommendationTask = nil
+                    self.updateBilibiliRecommendationStatus()
+                }
+            }
+            do {
+                let cards = try await SiteAccounts.shared.withSource(sourceID: "bilibili") {
+                    try await Bilibili.shared.recommendationList(page: page)
+                }
+                guard self.attached, !Task.isCancelled, generation == self.recommendationGeneration else { return }
+                if replacing {
+                    self.recommendationSeen.removeAll()
+                    self.followedCards.removeAll()
+                    self.selectedRowID = nil
+                    self.savedScrollPosition = 0
+                }
+                var addedCount = 0
+                for card in cards where self.recommendationSeen.insert(card.bvid).inserted {
+                    self.followedCards.append(card)
+                    addedCount += 1
+                }
+                self.recommendationNextPage = page + 1
+                self.recommendationAllowsAutoLoad = addedCount > 0
+                self.showFollowedCards()
+                // Stop automatic paging on empty/duplicate-only batches, while
+                // leaving explicit Load More available for subsequent raw pages.
+                if self.recommendationAllowsAutoLoad {
+                    Task { @MainActor [weak self] in
+                        guard let self, self.attached, generation == self.recommendationGeneration,
+                              self.isNearBilibiliVideoEnd else { return }
+                        self.loadBilibiliRecommendations()
+                    }
+                }
+            } catch is CancellationError {
+            } catch {
+                guard self.attached, !Task.isCancelled, generation == self.recommendationGeneration else { return }
+                self.recommendationFailure = error.localizedDescription
+                self.recommendationAllowsAutoLoad = false
+            }
+        }
+    }
+
     private var selectedFollowedURL: String? {
         guard followedCards.indices.contains(selectedIndex) else { return nil }
         return "https://www.bilibili.com/video/\(followedCards[selectedIndex].bvid)"
@@ -609,7 +1244,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     }
     private func showFollowedCards() {
         guard attached else { return }
-        rows = followedCards.map { String(localized: "\($0.title) — \($0.name) · \($0.views) views · \(Int($0.duration))s · \($0.videos) parts") }
+        rows = followedCards.map { String(localized: "\($0.title) — \($0.name) · \($0.views) views · \(Int($0.duration))s") }
         destinations = followedCards.map { .address("https://www.bilibili.com/video/\($0.bvid)") }
         coverURLs = followedCards.map(\.picUrl); posters = followedCards.map { _ in false }
         count.stringValue = "\(rows.count)"; reloadRowsPreservingSelection()
@@ -743,7 +1378,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
                 coverURLs.append(item.subject.coverURL); posters.append(true)
             }
             failure = snapshot.recommendations.failure
-        case .continuing, .feed, .followed, .search, .downloads: return
+        case .continuing, .feed, .followed, .bilibiliRecommendations, .youtube, .search, .downloads: return
         }
         count.stringValue = "\(kind == .schedule ? snapshot.weeklyBroadcasts.items.count : rows.count)"
         reloadRowsPreservingSelection()
@@ -1106,6 +1741,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     @objc private func activateSelection() {
         guard !previewOnly else { return }
         if kind == .downloads { openCompletedFile(); return }
+        if kind == .youtube { openYouTubeVideo(); return }
         guard destinations.indices.contains(selectedIndex), let destination = destinations[selectedIndex] else { return }
         if case .resume(let entry) = destination {
             guard operation == nil else { return }
@@ -1155,7 +1791,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     }
 
     private func discoveryLayout() -> NSCollectionViewLayout {
-        if kind == .followed {
+        if isVideoGrid {
             let density = dependencies.sessionState.state(for: instanceID).density
             return NSCollectionViewCompositionalLayout { _, environment in
                 let width = environment.container.effectiveContentSize.width
@@ -1211,7 +1847,13 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     func collectionView(_ collectionView: NSCollectionView, numberOfItemsInSection section: Int) -> Int { rows.count }
 
     func collectionView(_ collectionView: NSCollectionView, itemForRepresentedObjectAt indexPath: IndexPath) -> NSCollectionViewItem {
-        if kind == .followed, followedCards.indices.contains(indexPath.item) {
+        if kind == .youtube, youtubeVideos.indices.contains(indexPath.item) {
+            let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("followed.video"), for: indexPath)
+            (item as? WorkspaceFollowedCard)?.configure(youtubeVideos[indexPath.item],
+                appearance: dependencies.skinAppearance, componentID: componentID, previewOnly: previewOnly)
+            return item
+        }
+        if isBilibiliVideoGrid, followedCards.indices.contains(indexPath.item) {
             let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("followed.video"), for: indexPath)
             (item as? WorkspaceFollowedCard)?.configure(followedCards[indexPath.item],
                 appearance: dependencies.skinAppearance, componentID: componentID, previewOnly: previewOnly)
@@ -1609,7 +2251,15 @@ private final class WorkspacePanelCountBadge: NSTextField {
     override func draw(_ dirtyRect: NSRect) {
         NSColor.secondaryLabelColor.withAlphaComponent(0.08).setFill()
         NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2).fill()
-        super.draw(dirtyRect)
+        // The badge is taller than the native text cell; center the cell rather
+        // than letting NSTextField draw at the top of the padded bounds.
+        let textHeight = min(bounds.height, super.intrinsicContentSize.height)
+        let textRect = NSRect(x: bounds.minX, y: bounds.midY - textHeight / 2,
+                              width: bounds.width, height: textHeight)
+        let alignedRect = backingAlignedRect(textRect, options: [
+            .alignMinXNearest, .alignMinYNearest, .alignMaxXNearest, .alignMaxYNearest,
+        ])
+        cell?.drawInterior(withFrame: alignedRect, in: self)
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -1722,9 +2372,23 @@ private final class WorkspaceFollowedCard: NSCollectionViewItem {
     }
 
     func configure(_ card: BilibiliCard, appearance: SkinAppearance, componentID: String, previewOnly: Bool) {
+        configure(title: card.title, thumbnailURL: card.picUrl, channel: card.name,
+            viewCount: String(localized: "\(card.views) 次觀看"),
+            durationText: card.duration > 0 ? WorkspaceResumeCardView.timestamp(card.duration) : "",
+            appearance: appearance, componentID: componentID, previewOnly: previewOnly)
+    }
+
+    func configure(_ video: YouTubeVideo, appearance: SkinAppearance, componentID: String, previewOnly: Bool) {
+        configure(title: video.title, thumbnailURL: video.thumbnailURL, channel: video.channel,
+            viewCount: video.viewCountText, durationText: video.durationText,
+            appearance: appearance, componentID: componentID, previewOnly: previewOnly)
+    }
+
+    private func configure(title: String, thumbnailURL: String, channel: String, viewCount: String,
+                           durationText: String, appearance: SkinAppearance, componentID: String, previewOnly: Bool) {
         _ = view
         cover.subviews.forEach { $0.removeFromSuperview() }
-        let image = WorkspaceMediaThumbnail(url: card.picUrl, poster: false, appearance: appearance,
+        let image = WorkspaceMediaThumbnail(url: thumbnailURL, poster: false, appearance: appearance,
             componentID: componentID, previewOnly: previewOnly, fixedSize: false)
         cover.addSubview(image)
         NSLayoutConstraint.activate([
@@ -1733,15 +2397,15 @@ private final class WorkspaceFollowedCard: NSCollectionViewItem {
             image.topAnchor.constraint(equalTo: cover.topAnchor),
             image.bottomAnchor.constraint(equalTo: cover.bottomAnchor),
         ])
-        titleLabel.stringValue = card.title
-        author.stringValue = card.name
-        metadata.stringValue = String(localized: "\(card.views.formatted()) 次觀看") + (card.videos > 1 ? String(localized: " · \(card.videos) 分 P") : "")
-        duration.stringValue = " \(WorkspaceResumeCardView.timestamp(card.duration)) "
-        duration.isHidden = card.duration <= 0
+        titleLabel.stringValue = title
+        author.stringValue = channel
+        metadata.stringValue = viewCount
+        duration.stringValue = " \(durationText) "
+        duration.isHidden = durationText.isEmpty
         view.bindSkin(appearance, slot: "row", componentID: componentID)
         view.workspaceSkinBinding?.state = isSelected ? .selected : .normal
-        view.setAccessibilityLabel(card.title)
-        view.setAccessibilityHelp("\(card.name) · \(metadata.stringValue) · \(duration.stringValue)")
+        view.setAccessibilityLabel(title)
+        view.setAccessibilityHelp("\(channel) · \(metadata.stringValue) · \(duration.stringValue)")
     }
 }
 
@@ -1970,7 +2634,6 @@ extension WorkspaceServicePanelController: BilibiliDynamicMangerDelegate {
         followedFailure = message
         status.stringValue = message; status.isHidden = false; status.workspaceSkinBinding?.state = .error
     }
-    func bilibiliDynamicCardsContains(_ bvid: String) -> Bool { followedCards.contains { $0.bvid == bvid } }
     func bilibiliDynamicCards() -> [BilibiliCard] { followedCards }
     func bilibiliDynamicInitCards(_ cards: [BilibiliCard]) {
         guard attached else { return }
@@ -1978,11 +2641,11 @@ extension WorkspaceServicePanelController: BilibiliDynamicMangerDelegate {
     }
     func bilibiliDynamicAppendCards(_ cards: [BilibiliCard]) {
         guard attached else { return }
-        followedCards.append(contentsOf: cards.sorted { $0.dynamicId > $1.dynamicId }); showFollowedCards()
+        followedCards.append(contentsOf: cards); showFollowedCards()
     }
     func bilibiliDynamicInsertCards(_ cards: [BilibiliCard]) {
         guard attached else { return }
-        followedCards.insert(contentsOf: cards.sorted { $0.dynamicId > $1.dynamicId }, at: 0); showFollowedCards()
+        followedCards.insert(contentsOf: cards, at: 0); showFollowedCards()
     }
 }
 

@@ -231,27 +231,30 @@ actor Bilibili {
         return biliWbiSign(param: param, wbiImg: keys.img, wbiSub: keys.sub)
     }
     
-    func dynamicList(_ uid: Int,
-                     _ action: BilibiliDynamicAction = .init😅,
-                     _ dynamicID: Int = -1) async throws -> [BilibiliCard] {
-        
-        var http: DataRequest
-        let headers = HTTPHeaders(["referer": "https://www.bilibili.com/"])
-        
-        
-        switch action {
-        case .init😅:
-            http = AccountHTTP.request("https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/dynamic_new?uid=\(uid)&type=8", headers: headers)
-        case .history:
-            http = AccountHTTP.request("https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/dynamic_history?uid=\(uid)&offset_dynamic_id=\(dynamicID)&type=8", headers: headers)
-        case .new:
-            http = AccountHTTP.request("https://api.vc.bilibili.com/dynamic_svr/v1/dynamic_svr/dynamic_new?uid=\(uid)&current_dynamic_id=\(dynamicID)&type=8", headers: headers)
+    func dynamicList(offset: String? = nil) async throws -> BilibiliDynamicPage {
+        var parameters = ["type": "video"]
+        if let offset { parameters["offset"] = offset }
+        let data = try await AccountHTTP.request(
+            "https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all",
+            parameters: parameters,
+            headers: HTTPHeaders(["referer": "https://t.bilibili.com/"])
+        ).validate().serializingData().value
+        return try BilibiliDynamicPage(data: data)
+    }
+
+    func recommendationList(page: Int) async throws -> [BilibiliCard] {
+        let parameters = "fresh_type=4&ps=12&fresh_idx=\(page)&fresh_idx_1h=\(page)&fetch_row=\((page - 1) * 4)"
+        // Keep the caller's Bilibili account/guest context; wbiSign's unscoped fallback is for live.
+        let signed = try await wbiSignInCurrentSession(parameters)
+        guard !signed.isEmpty else {
+            throw NSError(domain: "BilibiliRecommendations", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "Bilibili WBI signing keys unavailable"])
         }
-        
-        let data = try await http.serializingData().value
-        let json: JSONObject = try JSONParser.JSONObjectWithData(data)
-        let cards: [BilibiliCard]? = try? json.value(for: "data.cards")
-        return cards ?? []
+        let data = try await AccountHTTP.request(
+            "https://api.bilibili.com/x/web-interface/wbi/index/top/feed/rcmd?\(signed)",
+            headers: HTTPHeaders(["referer": "https://www.bilibili.com/", "User-Agent": bilibiliUA])
+        ).validate().serializingData().value
+        return try BilibiliRecommendationPage(data: data).cards
     }
     
     func getPvideo(_ aid: Int) async throws -> BilibiliPvideo {
@@ -261,32 +264,96 @@ actor Bilibili {
     }
 }
 
-struct BilibiliCard: Unmarshaling, Sendable, Hashable {
-    var aid: Int = 0
-    var bvid: String = ""
-    var dynamicId: Int = 0
-    var title: String = ""
-    var picUrl: String = ""
-    var name: String = ""
-    var duration: TimeInterval = 0
-    var views: Int = 0
-    var videos: Int = 0
-    
-    init(object: any Marshal.MarshaledObject) throws {
-        dynamicId = try object.value(for: "desc.dynamic_id")
-        bvid = try object.value(for: "desc.bvid")
-        let jsonStr: String = try object.value(for: "card")
-        if let data = jsonStr.data(using: .utf8) {
-            let json: JSONObject = try JSONParser.JSONObjectWithData(data)
-            aid = try json.value(for: "aid")
-            title = try json.value(for: "title")
-            let picUrl: String = try json.value(for: "pic")
-            self.picUrl = picUrl.https()
-            duration = try json.value(for: "duration")
-            name = try json.value(for: "owner.name")
-            views = try json.value(for: "stat.view")
-            videos = try json.value(for: "videos")
+struct BilibiliDynamicPage: Sendable {
+    let cards: [BilibiliCard]
+    let offset: String
+    let hasMore: Bool
+
+    init(data: Data) throws {
+        let json: JSONObject = try JSONParser.JSONObjectWithData(data)
+        let code: Int = try json.value(for: "code")
+        if code == -101 || code == 4100000 { throw SiteAccountError.expired }
+        guard code == 0 else {
+            let message: String = try json.value(for: "message")
+            throw NSError(domain: "BilibiliDynamicFeed", code: code,
+                          userInfo: [NSLocalizedDescriptionKey: "Bilibili: \(message) (\(code))"])
         }
+        offset = try json.value(for: "data.offset")
+        hasMore = try json.value(for: "data.has_more")
+        let items: [JSONObject] = try json.value(for: "data.items")
+        cards = try items.compactMap { item in
+            let type: String = try item.value(for: "type")
+            guard type == "DYNAMIC_TYPE_AV" else { return nil }
+            let majorType: String? = try? item.value(for: "modules.module_dynamic.major.type")
+            // Deleted/unavailable videos have no playable archive.
+            guard majorType == "MAJOR_TYPE_ARCHIVE" else { return nil }
+            return try BilibiliCard(object: item)
+        }
+    }
+}
+
+struct BilibiliRecommendationPage: Sendable {
+    let cards: [BilibiliCard]
+
+    init(data: Data) throws {
+        let json: JSONObject = try JSONParser.JSONObjectWithData(data)
+        let code: Int = try json.value(for: "code")
+        if code == -101 || code == 4100000 { throw SiteAccountError.expired }
+        guard code == 0 else {
+            let message: String = (try? json.value(for: "message")) ?? "Request failed"
+            throw NSError(domain: "BilibiliRecommendations", code: code,
+                          userInfo: [NSLocalizedDescriptionKey: "Bilibili: \(message) (\(code))"])
+        }
+        let items: [JSONObject] = try json.value(for: "data.item")
+        cards = try items.compactMap { item in
+            let destination: String = try item.value(for: "goto")
+            guard destination == "av" else { return nil }
+            // Promoted entries may still target an archive; they are not recommendations.
+            if let business = item["business_info"], !(business is NSNull) { return nil }
+            return try BilibiliCard(recommendation: item)
+        }
+    }
+}
+
+struct BilibiliCard: Unmarshaling, Sendable, Hashable {
+    let bvid: String
+    let dynamicId: Int?
+    let title: String
+    let picUrl: String
+    let name: String
+    let duration: TimeInterval
+    let views: String
+
+    init(object: any Marshal.MarshaledObject) throws {
+        let id: String = try object.value(for: "id_str")
+        guard let dynamicId = Int(id) else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Invalid Bilibili dynamic ID"))
+        }
+        self.dynamicId = dynamicId
+        name = try object.value(for: "modules.module_author.name")
+        let archive: JSONObject = try object.value(for: "modules.module_dynamic.major.archive")
+        bvid = try archive.value(for: "bvid")
+        title = try archive.value(for: "title")
+        let cover: String = try archive.value(for: "cover")
+        picUrl = cover.https()
+        views = try archive.value(for: "stat.play")
+        let durationText: String = try archive.value(for: "duration_text")
+        duration = durationText.split(separator: ":").reduce(0) { $0 * 60 + (Double($1) ?? 0) }
+    }
+
+    init(recommendation object: any Marshal.MarshaledObject) throws {
+        bvid = try object.value(for: "bvid")
+        guard !bvid.isEmpty else {
+            throw DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "Missing Bilibili video ID"))
+        }
+        dynamicId = nil
+        title = try object.value(for: "title")
+        let cover: String = try object.value(for: "pic")
+        picUrl = cover.https()
+        name = try object.value(for: "owner.name")
+        duration = try object.value(for: "duration")
+        let viewCount: Int = try object.value(for: "stat.view")
+        views = String(viewCount)
     }
 }
 

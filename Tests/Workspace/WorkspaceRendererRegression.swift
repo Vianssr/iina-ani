@@ -85,6 +85,8 @@ struct WorkspaceRendererRegression {
         try lifecycle(dependencies, store: store, favorites: favorites, products: { products })
         tabOrder(dependencies)
         splitDragging()
+        componentSizing(dependencies)
+        multiColumnSizing(dependencies)
         print("PASS: production renderer nested/top-level lifecycle, retained owners, tab reorder/selection/callback suppression, native split dragging and ratio retention")
     }
 
@@ -235,6 +237,144 @@ struct WorkspaceRendererRegression {
         preview.updateNativePreview(layout([a], selected: a.id), pageID: pageID, breakpoint: nil)
         check(retained.selectedTabViewItem === retainedA, "removed user selection falls back to the unchanged configured selection")
         check(selections == [b.root.id], "only genuine user selections emit callbacks across all populations")
+    }
+
+    static func componentSizing(_ dependencies: WorkspaceWindowDependencies) {
+        func node(_ type: WorkspaceComponentID, id: UUID = UUID(), width: Double, height: Double) -> WorkspaceNode {
+            .component(id: id, componentID: type, contractVersion: 1, parameters: [:],
+                       size: WorkspaceSize(width: width, height: height))
+        }
+        func verify(_ nodes: [WorkspaceNode], root: WorkspaceNode, pageID: UUID = UUID()) {
+            let page = WorkspacePage(id: pageID, title: "Sizing", root: root)
+            let preview = WorkspaceWindowController(dependencies: dependencies,
+                previewLayout: WorkspaceLayout(pages: [page]))
+            let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1280, height: 900),
+                                  styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
+            preview.embedLayoutEditorPreview(in: window.contentView!)
+            window.contentView!.layoutSubtreeIfNeeded()
+            defer { preview.close(); window.close() }
+            for node in nodes {
+                guard case .component(_, let type, _, _, let size) = node else { fatalError("expected component") }
+                let title = descendants(window.contentView!, NSButton.self).first {
+                    $0.identifier?.rawValue == "workspace.editor.node.\(node.id.uuidString)"
+                }!
+                let frame = title.superview!.bounds
+                check(abs(frame.width - size.width - 6) < 1,
+                      "\(type): authored width must size the visible selection, not just an invisible request")
+                check(abs(frame.height - size.height - 32) < 1,
+                      "\(type): authored height must override fill and empty-content height")
+            }
+        }
+        for descriptor in WorkspaceRegistry.builtins.descriptors {
+            let component = node(descriptor.id, width: descriptor.minimumSize.width + 64,
+                                 height: descriptor.minimumSize.height + 96)
+            verify([component], root: component)
+        }
+        let a = node("playback.continue", width: 544, height: 256)
+        let b = node("discovery.recommendations", width: 608, height: 288)
+        let feed = node("discovery.feed", width: 672, height: 352)
+        verify([b, a, feed], root: .verticalStack(id: UUID(), children: [b, a, feed]),
+               pageID: WorkspacePageID.discover)
+        verify([a, b], root: .horizontalStack(id: UUID(), children: [a, b]))
+        verify([a, b], root: .grid(id: UUID(), columns: [a, b]))
+        let works = node("favorites.works", width: 352, height: 320)
+        let links = node("favorites.links", width: 384, height: 352)
+        let updates = node("discovery.updates", width: 608, height: 288)
+        verify([updates, works, links], root: .verticalStack(id: UUID(), children: [
+            updates, .split(id: UUID(), first: works, second: links, ratio: 0.5)
+        ]))
+        print("PASS: custom dimensions for every component, discovery empty states, horizontal/grid/split placement")
+    }
+
+    static func multiColumnSizing(_ dependencies: WorkspaceWindowDependencies) {
+        func automatic(_ type: WorkspaceComponentID) -> WorkspaceNode {
+            .component(id: UUID(), componentID: type, contractVersion: 1, parameters: [:],
+                       size: WorkspaceRegistry.builtins.descriptor(for: type)!.defaultSize)
+        }
+        func header(_ type: WorkspaceComponentID, height: Double) -> WorkspaceNode {
+            let size = WorkspaceRegistry.builtins.descriptor(for: type)!.defaultSize
+            return .component(id: UUID(), componentID: type, contractVersion: 1, parameters: [:],
+                              size: .init(width: size.width, height: height))
+        }
+        func columns() -> [WorkspaceNode] {
+            [automatic("downloads.tasks"), automatic("search.results"), automatic("favorites.links")]
+        }
+        func split(_ nodes: [WorkspaceNode]) -> WorkspaceNode {
+            .split(id: UUID(), first: nodes[0], second:
+                .split(id: UUID(), first: nodes[1], second: nodes[2], ratio: 0.5), ratio: 1.0 / 3.0)
+        }
+        func verify(_ root: WorkspaceNode, pageID: UUID = UUID(), internalScroll: Bool = true,
+                    headerHeights: [CGFloat] = [], columnWidths: [CGFloat] = []) {
+            let page = WorkspacePage(id: pageID, title: "Columns", root: root)
+            let preview = WorkspaceWindowController(dependencies: dependencies,
+                previewLayout: WorkspaceLayout(pages: [page]))
+            preview.showWindow(nil)
+            let content = preview.window!.contentView!
+            content.layoutSubtreeIfNeeded()
+            defer { preview.close() }
+            let scroll = descendants(content, NSScrollView.self).first!
+            let document = scroll.documentView!
+            if internalScroll {
+                check(abs(document.bounds.height - scroll.contentView.bounds.height) < 1,
+                      "column pages must give their panels the viewport instead of the requested document height")
+            } else {
+                check(document.bounds.height > scroll.contentView.bounds.height + 1,
+                      "ordinary vertical and discovery feed pages must retain page scrolling")
+            }
+            var body = document.subviews[0]
+            if !headerHeights.isEmpty {
+                let stack = body as! NSStackView
+                for (index, height) in headerHeights.enumerated() {
+                    check(abs(stack.arrangedSubviews[index].bounds.height - height) < 1,
+                          "each header above columns must retain its authored height")
+                }
+                body = stack.arrangedSubviews.last!
+            }
+            if !columnWidths.isEmpty {
+                let panes: [NSView]
+                if let outer = body as? WorkspaceRetainedSplitView {
+                    let inner = outer.arrangedSubviews[1] as! WorkspaceRetainedSplitView
+                    panes = [outer.arrangedSubviews[0]] + inner.arrangedSubviews
+                } else {
+                    panes = (body as! NSStackView).arrangedSubviews
+                }
+                check(panes.count == columnWidths.count, "all authored columns must be simultaneously visible")
+                for (pane, minimum) in zip(panes, columnWidths) {
+                    check(pane.bounds.width >= minimum - 1, "nested and horizontal columns must retain pane minima")
+                }
+            }
+        }
+        let minimumWidths: [CGFloat] = [480, 480, 280]
+        verify(split(columns()), columnWidths: minimumWidths)
+        verify(.horizontalStack(id: UUID(), children: columns()), pageID: WorkspacePageID.discover,
+               columnWidths: minimumWidths)
+        verify(.verticalStack(id: UUID(), children: [
+            header("playback.continue", height: 192), header("playback.continue", height: 224), split(columns())
+        ]), headerHeights: [192, 224], columnWidths: minimumWidths)
+        verify(.verticalStack(id: UUID(), children: [
+            header("discovery.updates", height: 256), .horizontalStack(id: UUID(), children: columns())
+        ]), headerHeights: [256], columnWidths: minimumWidths)
+        verify(.verticalStack(id: UUID(), children: [
+            automatic("playback.continue"), automatic("playback.continue"), automatic("downloads.tasks")
+        ]), internalScroll: false)
+        verify(.verticalStack(id: UUID(), children: [
+            automatic("discovery.recommendations"), automatic("playback.continue"), automatic("discovery.feed")
+        ]), pageID: WorkspacePageID.discover, internalScroll: false)
+        let insertionPage = WorkspacePage(title: "Search with added columns", root:
+            .verticalStack(id: UUID(), children: [
+                automatic("search.results"),
+                .split(id: UUID(), first: .empty(id: UUID()), second: .empty(id: UUID()), ratio: 0.5),
+            ]))
+        let inserted = WorkspaceWindowController(dependencies: dependencies,
+            previewLayout: WorkspaceLayout(pages: [insertionPage]))
+        inserted.showWindow(nil)
+        inserted.window!.contentView!.layoutSubtreeIfNeeded()
+        let emptyColumns = descendants(inserted.window!.contentView!, WorkspaceRetainedSplitView.self).first!
+        check(emptyColumns.arrangedSubviews.allSatisfy { $0.bounds.height >= 180 },
+              "new empty columns below existing page content must remain visible and usable")
+        inserted.close()
+        print("PASS: structural nested/horizontal columns, authored header heights, pane minima and normal/discovery page scrolling")
     }
 
     static func splitDragging() {

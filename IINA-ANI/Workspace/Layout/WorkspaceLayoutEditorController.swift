@@ -22,11 +22,15 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
     private let previewHost = NSView()
     private let inspector = NSStackView()
     private let inspectorTabs = NSSegmentedControl(labels: [String(localized: "編輯"), String(localized: "新增"), String(localized: "編排"), String(localized: "進階")], trackingMode: .selectOne, target: nil, action: nil)
-    private enum SectionScope { case any, page, component, split }
+    private enum SectionScope { case any, selection, page, component, split, arrangement }
     private var inspectorSections: [(view: NSView, tab: Int, scope: SectionScope)] = []
     private let widthStepper = NSStepper()
     private let heightStepper = NSStepper()
+    private let paneCountStepper = NSStepper()
+    private let paneScope = NSTextField(wrappingLabelWithString: "")
     private let ratioSlider = NSSlider(value: 0.5, minValue: 0.05, maxValue: 0.95, target: nil, action: nil)
+    private let sizePresets = NSSegmentedControl(labels: [String(localized: "最小尺寸"), String(localized: "預設尺寸"), String(localized: "寬大尺寸")], trackingMode: .momentary, target: nil, action: nil)
+    private let orientation = NSSegmentedControl(labels: [String(localized: "水平排列"), String(localized: "垂直排列")], trackingMode: .selectOne, target: nil, action: nil)
     private let selectedHeading = NSTextField(wrappingLabelWithString: String(localized: "尚未選取項目"))
     private let selectedDetail = NSTextField(wrappingLabelWithString: String(localized: "在畫布或編排樹中選取項目。"))
     private let canvasCaption = NSTextField(labelWithString: String(localized: "原生畫布"))
@@ -43,6 +47,7 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
     private let width = NSTextField(string: "760")
     private let height = NSTextField(string: "480")
     private let ratio = NSTextField(string: "0.5")
+    private let paneCount = NSTextField(string: "1")
     private let breakpointWidth = NSTextField(string: "1280")
     private let motionPresets = NSPopUpButton()
     private let motionDuration = NSTextField(string: "0")
@@ -87,6 +92,15 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
                 }
             }
         }
+        preview.onEditorResize = { [weak self] id, size in
+            self?.resize(nodeID: id, requested: size)
+        }
+        preview.onEditorMove = { [weak self] source, target, after in
+            guard let self else { return }
+            self.perform(selecting: source) {
+                try self.draft.move(nodeID: source, relativeTo: target, after: after)
+            }
+        }
         preview.onEditorSelection = { [weak self] id in
             guard let self else { return }
             self.previewPageID = self.pageID(containing: id)
@@ -112,6 +126,8 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         NotificationCenter.default.removeObserver(self, name: NSView.frameDidChangeNotification, object: previewHost)
         preview.onEditorSelection = nil
         preview.onEditorSplitChange = nil
+        preview.onEditorResize = nil
+        preview.onEditorMove = nil
         preview.close()
     }
 
@@ -162,11 +178,16 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
             let matches: Bool
             switch section.scope {
             case .any: matches = true
+            case .selection: matches = selection != nil
             case .page: matches = selectedPage != nil
             case .component:
                 if case .component? = selection?.node { matches = true } else { matches = false }
             case .split:
                 if case .split? = selection?.node { matches = true } else { matches = false }
+            case .arrangement:
+                if let node = selection?.node, WorkspaceEditorTree.isContainer(node) {
+                    if case .tabs = node { matches = false } else { matches = true }
+                } else { matches = false }
             }
             section.view.isHidden = section.tab != inspectorTabs.selectedSegment || !matches
         }
@@ -201,7 +222,7 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         canvas.translatesAutoresizingMaskIntoConstraints = false
         canvasCaption.font = .boldSystemFont(ofSize: 14)
         let canvasHeader = NSStackView(views: [
-            canvasCaption, guidance(String(localized: "點選組件以編輯；拖曳分隔線調整比例。預覽不執行業務命令。"))
+            canvasCaption, guidance(String(localized: "選取後拖曳標題移動，拖曳右側、底部或角落調整尺寸；分隔線可調比例。預覽不執行業務命令。"))
         ])
         canvasHeader.orientation = .vertical
         canvasHeader.alignment = .leading
@@ -327,21 +348,22 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
             field.setAccessibilityLabel(title)
             field.target = self; field.action = #selector(motionParameterAction)
         }
-        let applyMotion = button(String(localized: "套用參數"), #selector(applyMotionAction))
+        let motionGuidance = guidance(String(localized: "選擇預設即更新草稿；精確參數與 XML 匯入位於「進階」。"))
         let importMotion = button(String(localized: "從 XML 載入…"), #selector(importMotionAction))
         let replayMotion = button(String(localized: "重播已套用動效"), #selector(replayMotionAction))
-        applyMotion.setAccessibilityLabel(String(localized: "將動效參數套用至選取頁面的草稿"))
         importMotion.setAccessibilityLabel(String(localized: "從 XML 載入選取頁面的進場動效"))
         replayMotion.setAccessibilityLabel(String(localized: "在畫布重播選取頁面已套用的進場動效"))
         section(String(localized: "頁面進場動效"), scope: .page, views: [
-            guidance(String(localized: "先選取主頁或分頁容器內的頁面。預設與 XML 會直接更新草稿；手動參數需按「套用參數」。")),
-            motionPresets,
+            motionGuidance, motionPresets, replayMotion,
+        ])
+        section(String(localized: "進階頁面動效"), tab: 3, scope: .page, views: [
+            guidance(String(localized: "輸入數值後按 Return，或選擇時間曲線，即更新此頁面的草稿。")),
             row([label(String(localized: "時間")), motionDuration, label(String(localized: "秒"))]),
             row([label(String(localized: "起始不透明度")), motionOpacity]),
             row([label(String(localized: "水平位移")), motionOffsetX, label("pt")]),
             row([label(String(localized: "垂直位移")), motionOffsetY, label("pt")]),
             row([label(String(localized: "起始縮放")), motionScale, label(String(localized: "倍"))]),
-            motionCurve, applyMotion, importMotion, replayMotion,
+            motionCurve, importMotion,
             guidance(String(localized: "「無」沿用 Skin 動效；Skin 未配置則不播放。其他自訂動效優先於 Skin。不透明度 0–1、位移 ±2048 pt、縮放 0.1–4 倍；播放後恢復正常位置與大小。")),
         ])
 
@@ -354,10 +376,20 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         }
         for kind in containerKinds { containers.addItem(withTitle: containerName(kind)) }
         containers.setAccessibilityLabel(String(localized: "容器類型"))
+        section(String(localized: "多欄佈局"), scope: .page, views: [
+            button(String(localized: "加入分欄容器"), #selector(addPageColumnsAction), icon: .add),
+        ])
+        let addPageColumns = button(String(localized: "加入分欄容器"), #selector(addPageColumnsAction), icon: .add)
+        addPageColumns.setAccessibilityIdentifier("workspace.layout.addPageColumns")
+        section(String(localized: "多欄佈局"), tab: 1, views: [
+            addPageColumns,
+            guidance(String(localized: "在目前頁面加入分欄容器，保留既有內容；加入後可調整欄數，再選取空白欄位加入組件。")),
+        ])
         section(String(localized: "加入組件"), tab: 1, views: [
             guidance(String(localized: "先在畫布選取放置位置，再點選組件直接加入；新組件會自動選取。"))
         ] + componentButtons)
-        section(String(localized: "容器"), tab: 1, views: [
+        section(String(localized: "容器與包裝"), tab: 3, views: [
+            guidance(String(localized: "新增容器至選取位置，或將選取項目改為指定容器；組件會被包入新容器，子項目保留。")),
             containers,
             row([button(String(localized: "新增容器"), #selector(addContainerAction), icon: .add),
                  button(String(localized: "改容器類型"), #selector(convertContainerAction))]),
@@ -366,9 +398,12 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         selectedHeading.setAccessibilityLabel(String(localized: "目前選取項目"))
         selectedDetail.font = .systemFont(ofSize: 11)
         selectedDetail.textColor = .secondaryLabelColor
-        section(String(localized: "選取項目"), views: [
-            row([button(String(localized: "折疊／展開"), #selector(collapseAction)), button(String(localized: "刪除"), #selector(deleteAction), icon: .delete)]),
-            guidance(String(localized: "折疊或隱藏導覽不會刪除資料；取消編輯會捨棄整份草稿。")),
+        section(String(localized: "選取項目"), scope: .selection, views: [
+            button(String(localized: "刪除"), #selector(deleteAction), icon: .delete),
+            guidance(String(localized: "刪除只移除佈局項目，不刪除收藏或停止已提交任務；取消編輯會捨棄草稿。")),
+        ])
+        section(String(localized: "組件顯示"), scope: .component, views: [
+            button(String(localized: "折疊／展開"), #selector(collapseAction)),
         ])
 
         destinations.setAccessibilityLabel(String(localized: "鍵盤移動目的頁面或容器"))
@@ -399,12 +434,20 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         ratioSlider.action = #selector(ratioSliderAction)
         ratioSlider.isContinuous = false
         ratioSlider.setAccessibilityLabel(String(localized: "第一欄空間比例"))
-        section(String(localized: "移動"), views: [
+        section(String(localized: "移動"), scope: .selection, views: [
             row([button(String(localized: "上移"), #selector(upAction), key: "\u{F700}"),
                  button(String(localized: "下移"), #selector(downAction), key: "\u{F701}")]),
+            guidance(String(localized: "上移／下移調整同層順序；跨容器移動可拖曳標題，或使用「進階」的目的位置。")),
+        ])
+        section(String(localized: "跨容器移動"), tab: 3, scope: .selection, views: [
+            guidance(String(localized: "明確選擇目的頁面或容器，再按「移至」。")),
             destinations, button(String(localized: "移至"), #selector(moveAction)),
         ])
+        sizePresets.target = self
+        sizePresets.action = #selector(sizePresetAction)
+        sizePresets.setAccessibilityLabel(String(localized: "組件尺寸預設"))
         section(String(localized: "組件尺寸"), scope: .component, views: [
+            sizePresets,
             row([label(String(localized: "寬")), width, widthStepper, label("pt")]),
             row([label(String(localized: "高")), height, heightStepper, label("pt")]),
             guidance(String(localized: "按步進器立即調整；輸入精確尺寸後按 Return。尺寸吸附至 32 pt 網格，不小於組件最小尺寸。")),
@@ -413,6 +456,34 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
             row([label(String(localized: "分隔比例")), ratio]),
             ratioSlider,
             guidance(String(localized: "拖動滑桿後放開即更新，或直接拖曳畫布分隔線；精確比例輸入後按 Return。")),
+        ])
+        paneCount.widthAnchor.constraint(equalToConstant: 70).isActive = true
+        paneCount.setAccessibilityLabel(String(localized: "同時顯示的面板欄數，至少 1 欄"))
+        paneCount.setAccessibilityIdentifier("workspace.layout.paneCount")
+        paneCount.target = self; paneCount.action = #selector(paneCountAction)
+        paneCountStepper.minValue = 1
+        paneCountStepper.maxValue = Double(WorkspaceValidator(registry: registry).maximumDepth)
+        paneCountStepper.increment = 1
+        paneCountStepper.valueWraps = false
+        paneCountStepper.target = self; paneCountStepper.action = #selector(paneCountStepAction)
+        paneCountStepper.setAccessibilityLabel(String(localized: "調整同時顯示的面板欄數"))
+        paneCountStepper.setAccessibilityIdentifier("workspace.layout.paneCountStepper")
+        paneScope.font = .systemFont(ofSize: 11)
+        paneScope.textColor = .secondaryLabelColor
+        let applyPaneCount = button(String(localized: "套用多欄佈局"), #selector(paneCountAction))
+        applyPaneCount.setAccessibilityIdentifier("workspace.layout.applyPaneCount")
+        section(String(localized: "多欄佈局"), scope: .arrangement, views: [
+            row([label(String(localized: "欄數")), paneCount, paneCountStepper]),
+            applyPaneCount,
+            guidance(String(localized: "按步進器立即調整，或輸入欄數後按 Return／套用。新增欄位為空白放置區；減少欄數時，多出的內容會保留並垂直排列於最後一欄，不會刪除。")),
+            paneScope,
+        ])
+        orientation.target = self
+        orientation.action = #selector(orientationAction)
+        orientation.setAccessibilityLabel(String(localized: "容器排列方向"))
+        section(String(localized: "排列方向"), scope: .arrangement, views: [
+            orientation,
+            guidance(String(localized: "立即改為水平或垂直排列，保留容器與所有子項目的識別及順序。其他容器類型位於「進階」。")),
         ])
         variants.target = self; variants.action = #selector(variantAction)
         variants.setAccessibilityLabel(String(localized: "編輯視窗寬度斷點"))
@@ -463,6 +534,8 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         case "torrent.import": return String(localized: "種子匯入")
         case "discovery.schedule": return String(localized: "播出時間表")
         case "discovery.followed": return String(localized: "關注動態")
+        case "discovery.bilibiliRecommendations": return String(localized: "Bilibili 推薦影片")
+        case "discovery.youtube": return "YouTube"
         case "discovery.updates": return String(localized: "收藏更新")
         case "discovery.recommendations": return String(localized: "熱門趨勢")
         case "discovery.feed": return String(localized: "推薦")
@@ -480,7 +553,7 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         case .grid: return String(localized: "網格容器")
         case .horizontalStack: return String(localized: "水平排列")
         case .verticalStack: return String(localized: "垂直排列")
-        case .split: return String(localized: "雙欄分隔")
+        case .split: return String(localized: "分割容器")
         case .group: return String(localized: "群組容器")
         case .tabs: return String(localized: "分頁容器")
         }
@@ -494,8 +567,8 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         }
     }
     private var selection: Item? { outline.item(atRow: outline.selectedRow) as? Item }
-    private func perform(_ action: () throws -> Void) {
-        let selected = selection?.id
+    private func perform(selecting selectedID: UUID? = nil, _ action: () throws -> Void) {
+        let selected = selectedID ?? selection?.id
         do { try action(); setStatus(String(localized: "草稿已更新；尚未保存。")); reload(selecting: selected) }
         catch { setStatus(error.localizedDescription, isError: true); NSSound.beep() }
     }
@@ -606,6 +679,22 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         updateSelection()
     }
     private func updateSelection() {
+        switch selection?.node {
+        case .horizontalStack?: orientation.selectedSegment = 0
+        case .verticalStack?: orientation.selectedSegment = 1
+        default: orientation.selectedSegment = -1
+        }
+        if let node = selection?.node {
+            let count: Int
+            switch node {
+            case .split, .horizontalStack: count = WorkspaceEditorTree.panes(node).count
+            default: count = 1
+            }
+            paneCount.integerValue = count
+            paneCountStepper.integerValue = count
+        }
+        let version = draft.breakpoint.map { "≥ \(Int($0.minimumWidth)) pt" } ?? String(localized: "基礎排列")
+        paneScope.stringValue = String(localized: "目前編輯：\(version)。只變更此寬度版本，不影響其他斷點。")
         if let item = selection {
             selectedHeading.stringValue = item.title
             selectedHeading.toolTip = item.id.uuidString
@@ -619,6 +708,10 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
             }
             if case .component(_, let type, _, _, let size)? = item.node {
                 width.doubleValue = size.width; height.doubleValue = size.height
+                if let minimum = registry.descriptor(for: type)?.minimumSize {
+                    widthStepper.minValue = minimum.width
+                    heightStepper.minValue = minimum.height
+                }
                 widthStepper.doubleValue = size.width
                 heightStepper.doubleValue = size.height
                 let minimum = registry.descriptor(for: type)?.minimumSize
@@ -691,7 +784,7 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
                 switch action {
                 case #selector(renamePageAction), #selector(homeAction), #selector(hiddenAction):
                     button.isEnabled = isTopLevelPage
-                case #selector(applyMotionAction), #selector(importMotionAction), #selector(replayMotionAction):
+                case #selector(importMotionAction), #selector(replayMotionAction):
                     button.isEnabled = selectedPage != nil
                 case #selector(collapseAction), #selector(resizeAction):
                     button.isEnabled = isComponent
@@ -721,6 +814,7 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         widthStepper.isEnabled = isComponent
         heightStepper.isEnabled = isComponent
         ratioSlider.isEnabled = isSplit
+        sizePresets.isEnabled = isComponent
     }
     func outlineView(_ outlineView: NSOutlineView, numberOfChildrenOfItem item: Any?) -> Int {
         (item as? Item)?.children.count ?? roots.count
@@ -800,7 +894,7 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         }
         if let applied { preview.previewPageMotion(applied, pageID: pageID) }
     }
-    @objc private func motionParameterAction() { motionPresets.selectItem(at: 0) }
+    @objc private func motionParameterAction() { applyMotionAction() }
     @objc private func motionPresetAction() {
         guard let page = selectedPage else { return }
         let index = motionPresets.indexOfSelectedItem - 1
@@ -883,17 +977,66 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
     }
     @objc private func addContainerAction() {
         guard let target = insertionDestination, let kind = selectedContainerKind else { return }
-        perform { try draft.insert(WorkspaceEditorTree.container(kind, children: []), to: target) }
+        let node = WorkspaceEditorTree.container(kind, children: [])
+        perform(selecting: node.id) { try draft.insert(node, to: target) }
     }
-    @objc private func convertContainerAction() {
-        guard let item = selection, let node = item.node, let kind = selectedContainerKind else { return }
-        perform {
-            if case .tabs = node, kind == .tabs { return }
+    @objc private func addPageColumnsAction() {
+        guard let pageID = selectedPage?.id ?? previewPageID else { return }
+        let node = WorkspaceEditorTree.paneContainer(id: UUID(), children: [
+            .empty(id: UUID()), .empty(id: UUID()),
+        ])
+        do {
+            try draft.insert(node, to: pageID)
+            inspectorTabs.selectedSegment = 0
+            setStatus(String(localized: "草稿已更新；尚未保存。"))
+            reload(selecting: node.id)
+        } catch { setStatus(error.localizedDescription, isError: true); NSSound.beep() }
+    }
+    private func containerKind(of node: WorkspaceNode) -> WorkspaceContainerKind? {
+        switch node {
+        case .grid: return .grid
+        case .horizontalStack: return .horizontalStack
+        case .verticalStack: return .verticalStack
+        case .split: return .split
+        case .group: return .group
+        case .tabs: return .tabs
+        case .component, .empty: return nil
+        }
+    }
+    private func convertSelection(to kind: WorkspaceContainerKind) {
+        guard let item = selection, let node = item.node, containerKind(of: node) != kind else { return }
+        let id = WorkspaceEditorTree.isContainer(node) ? node.id : UUID()
+        perform(selecting: id) {
             try draft.replace(nodeID: item.id) { _ in
-                WorkspaceEditorTree.container(kind, id: WorkspaceEditorTree.isContainer(node) ? node.id : UUID(),
+                WorkspaceEditorTree.container(kind, id: id,
                     children: WorkspaceEditorTree.isContainer(node) ? WorkspaceEditorTree.children(node) : [node])
             }
         }
+    }
+    @objc private func convertContainerAction() {
+        guard let kind = selectedContainerKind else { return }
+        convertSelection(to: kind)
+    }
+    @objc private func orientationAction() {
+        guard let node = selection?.node, WorkspaceEditorTree.isContainer(node) else { return }
+        if case .tabs = node { return }
+        guard orientation.selectedSegment == 0 || orientation.selectedSegment == 1 else { return }
+        convertSelection(to: orientation.selectedSegment == 0 ? .horizontalStack : .verticalStack)
+    }
+    @objc private func paneCountStepAction() {
+        paneCount.integerValue = paneCountStepper.integerValue
+        paneCountAction()
+    }
+    @objc private func paneCountAction() {
+        guard let item = selection, let node = item.node, WorkspaceEditorTree.isContainer(node) else { return }
+        if case .tabs = node { return }
+        guard let count = Int(paneCount.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)),
+              count >= 1 else {
+            setStatus(String(localized: "欄數必須是至少 1 的整數。"), isError: true)
+            NSSound.beep()
+            return
+        }
+        perform(selecting: item.id) { try draft.setPaneCount(nodeID: item.id, count: count) }
     }
     private func reorder(_ delta: Int) {
         guard let item = selection else { return }
@@ -926,15 +1069,51 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         ratio.doubleValue = ratioSlider.doubleValue
         ratioAction()
     }
-    @objc private func resizeAction() {
+    @objc private func sizePresetAction() {
         guard let item = selection, case .component(_, let type, _, _, _)? = item.node,
               let descriptor = registry.descriptor(for: type) else { return }
-        let size = WorkspaceSize(width: max(descriptor.minimumSize.width, (width.doubleValue / 32).rounded() * 32),
-                                 height: max(descriptor.minimumSize.height, (height.doubleValue / 32).rounded() * 32))
-        perform { try draft.replace(nodeID: item.id) { node in
-            guard case .component(let id, let type, let version, let parameters, _) = node else { return node }
-            return .component(id: id, componentID: type, contractVersion: version, parameters: parameters, size: size)
-        } }
+        let requested: WorkspaceSize
+        switch sizePresets.selectedSegment {
+        case 0: requested = descriptor.minimumSize
+        case 1: requested = descriptor.defaultSize
+        case 2:
+            requested = WorkspaceSize(width: descriptor.defaultSize.width * 1.25,
+                                      height: descriptor.defaultSize.height * 1.25)
+        default: return
+        }
+        resize(nodeID: item.id, requested: requested, snapToGrid: sizePresets.selectedSegment == 2)
+    }
+    @objc private func resizeAction() {
+        guard let item = selection else { return }
+        guard let requestedWidth = Double(width.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let requestedHeight = Double(height.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            setStatus(String(localized: "尺寸必須是有限的數字。"), isError: true)
+            NSSound.beep()
+            return
+        }
+        resize(nodeID: item.id, requested: WorkspaceSize(width: requestedWidth, height: requestedHeight))
+    }
+    private func resize(nodeID: UUID, requested: WorkspaceSize, snapToGrid: Bool = true) {
+        perform(selecting: nodeID) {
+            guard requested.width.isFinite, requested.height.isFinite else {
+                throw NSError(domain: "WorkspaceLayoutEditor", code: 1,
+                              userInfo: [NSLocalizedDescriptionKey: String(localized: "尺寸必須是有限的數字。")])
+            }
+            try draft.replace(nodeID: nodeID) { node in
+                guard case .component(let id, let type, let version, let parameters, let original) = node,
+                      let descriptor = registry.descriptor(for: type) else {
+                    throw WorkspaceTransactionError.invalidDestination
+                }
+                func dimension(_ value: Double, original: Double, minimum: Double) -> Double {
+                    guard value != original else { return original }
+                    return max(minimum, snapToGrid ? (value / 32).rounded() * 32 : value)
+                }
+                let size = WorkspaceSize(
+                    width: dimension(requested.width, original: original.width, minimum: descriptor.minimumSize.width),
+                    height: dimension(requested.height, original: original.height, minimum: descriptor.minimumSize.height))
+                return .component(id: id, componentID: type, contractVersion: version, parameters: parameters, size: size)
+            }
+        }
     }
     @objc private func ratioAction() {
         guard let item = selection else { return }

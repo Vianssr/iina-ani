@@ -13,8 +13,6 @@ protocol BilibiliDynamicMangerDelegate: AnyObject, Sendable {
 	func bilibiliDynamicStatusChanged(_ isLoading: Bool)
     func bilibiliDynamicFailed(_ message: String)
 	
-	func bilibiliDynamicCardsContains(_ bvid: String) -> Bool
-	
 	func bilibiliDynamicInitCards(_ cards: [BilibiliCard])
 	func bilibiliDynamicAppendCards(_ cards: [BilibiliCard])
 	func bilibiliDynamicInsertCards(_ cards: [BilibiliCard])
@@ -29,6 +27,8 @@ actor BilibiliDynamicManger {
     private var initDate: Date?
     private var newDate: Date?
     private var historyDate: Date?
+    private var historyOffset: String?
+    private var hasMoreHistory = true
 	
     private weak var delegate: (any BilibiliDynamicMangerDelegate)?
     private var loadTask: Task<Void, Never>?
@@ -54,117 +54,56 @@ actor BilibiliDynamicManger {
         delegate = nil
     }
     
-	private func loadCards(_ action: BilibiliDynamicAction = .init😅) async {
-        
-        guard let delegate = delegate else { return }
-		
-		let uuid = UUID().uuidString
-		
-        await delegate.bilibiliDynamicStatusChanged(true)
-		
-        defer {
-            let cancelled = Task.isCancelled
-            Task {
-                guard !cancelled, self.delegate === delegate else { return }
-                await delegate.bilibiliDynamicStatusChanged(false)
-            }
-        }
-        
-		var dynamicID = -1
-		
-        let bilibiliCards = await delegate.bilibiliDynamicCards()
-		
-		switch action {
-		case .history:
-            if historyDate != nil, historyDate!.secondsSinceNow < 1 {
-//                Log("\(uuid), ignore, \(action)")
-                return
-            }
-			dynamicID = bilibiliCards.last?.dynamicId ?? -1
-		case .new:
-            if newDate != nil, newDate!.secondsSinceNow < 5 {
-//                Log("\(uuid), ignore, \(action)")
-                return
-            }
-			dynamicID = bilibiliCards.first?.dynamicId ?? -1
+    private func loadCards(_ action: BilibiliDynamicAction = .init😅) async {
+        guard let delegate else { return }
+        switch action {
+        case .history:
+            guard hasMoreHistory else { return }
+            if let historyDate, historyDate.secondsSinceNow < 1 { return }
+        case .new:
+            if let newDate, newDate.secondsSinceNow < 5 { return }
         case .init😅:
-            if initDate != nil, initDate!.secondsSinceNow < 15 {
-//                Log("\(uuid), ignore, \(action)")
-                return
-            }
-		}
-		
-		Log("\(uuid), start, \(action), \(dynamicID)")
-		
-        let requestedDynamicID = dynamicID
-		do {
-            let cards = try await SiteAccounts.shared.withSource(sourceID: "bilibili") {
-                let uid = try await Bilibili.shared.getUid()
-                return try await Bilibili.shared.dynamicList(uid, action, requestedDynamicID)
+            if let initDate, initDate.secondsSinceNow < 15 { return }
+        }
+
+        await delegate.bilibiliDynamicStatusChanged(true)
+        do {
+            let offset = action == .history ? historyOffset : nil
+            let page = try await SiteAccounts.shared.withSource(sourceID: "bilibili") {
+                try await Bilibili.shared.dynamicList(offset: offset)
             }
             try Task.checkCancellation()
-			
-			switch action {
-			case .init😅:
-                await delegate.bilibiliDynamicInitCards(cards)
-                self.initDate = Date()
-			case .history:
-				let appends = await withTaskGroup(of: BilibiliCard?.self) { group -> [BilibiliCard] in
-					for card in cards {
-						group.addTask {
-                            if await delegate.bilibiliDynamicCardsContains(card.bvid) {
-								return nil
-							} else {
-								return card
-							}
-						}
-					}
-					
-					var results = [BilibiliCard]()
-					for await result in group {
-						if let result {
-							results.append(result)
-						}
-					}
-					return results
-				}
-                try Task.checkCancellation()
-                await delegate.bilibiliDynamicAppendCards(appends)
-                self.historyDate = Date()
-			case .new:
-                
-				let appends = await withTaskGroup(of: BilibiliCard?.self) { group -> [BilibiliCard] in
-					for card in cards {
-						group.addTask {
-                            if await delegate.bilibiliDynamicCardsContains(card.bvid) {
-								return nil
-							} else {
-								return card
-							}
-						}
-					}
-					
-					var results = [BilibiliCard]()
-					for await result in group {
-						if let result {
-							results.append(result)
-						}
-					}
-					return results
-				}
-                try Task.checkCancellation()
-				if appends.count > 0 {
-                    await delegate.bilibiliDynamicInsertCards(appends)
-				}
-                self.newDate = Date()
-			}
+            guard self.delegate === delegate else { return }
+
+            switch action {
+            case .init😅:
+                await delegate.bilibiliDynamicInitCards(page.cards)
+                historyOffset = page.offset
+                hasMoreHistory = page.hasMore && !page.offset.isEmpty
+                initDate = Date()
+            case .history, .new:
+                let existing = await delegate.bilibiliDynamicCards()
+                var seen = Set(existing.map(\.bvid))
+                let additions = page.cards.filter { seen.insert($0.bvid).inserted }
+                if action == .history {
+                    await delegate.bilibiliDynamicAppendCards(additions)
+                    historyOffset = page.offset
+                    hasMoreHistory = page.hasMore && !page.offset.isEmpty
+                    historyDate = Date()
+                } else {
+                    await delegate.bilibiliDynamicInsertCards(additions)
+                    // Refreshing the newest page must not reset the history cursor.
+                    newDate = Date()
+                }
+            }
         } catch is CancellationError {
-        } catch let error {
+        } catch {
+            guard self.delegate === delegate, !Task.isCancelled else { return }
             await delegate.bilibiliDynamicFailed(error.localizedDescription)
             Log("Get bilibili dynamicList error: \(error)")
-		}
-		
-		Log("\(uuid), finish, \(dynamicID)")
-	}
+        }
+        guard self.delegate === delegate, !Task.isCancelled else { return }
+        await delegate.bilibiliDynamicStatusChanged(false)
+    }
 	
 }

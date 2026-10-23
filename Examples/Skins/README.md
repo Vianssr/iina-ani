@@ -78,6 +78,8 @@ components 為 `{ "slots": { "槽名": { "values": {}, "states": { "normal": {} 
 | `playback.continue` | panel, header, row, progress, emptyState | 480 × 72 |
 | `discovery.feed` | panel, header, row, primaryAction, emptyState | 480 × 240 |
 | `discovery.followed` | panel, header, row, primaryAction, emptyState | 480 × 240 |
+| `discovery.bilibiliRecommendations` | panel, header, row, primaryAction, emptyState | 480 × 240 |
+| `discovery.youtube` | panel, header, row, search, primaryAction, emptyState | 480 × 320 |
 | `search.results` | panel, header, result, emptyState | 480 × 320 |
 | `downloads.tasks` | panel, header, task, emptyState | 480 × 320 |
 | `favorites.works` | panel, header, workRow, emptyState | 280 × 200 |
@@ -92,7 +94,7 @@ components 為 `{ "slots": { "槽名": { "values": {}, "states": { "normal": {} 
 
 ## Layout v1
 
-`layout` 包含 `schemaVersion: 1`、`pages`、可選 `breakpointLayouts`。page 是 `{id: UUID, title: string, root: node, motion?: object}`；node `id` 是 UUID，component 使用字串 `componentID`、整數 `contractVersion: 1`、`parameters: {}` 和 `size: {width, height}`。不是 `typeID`／`instanceID` 欄位。目前十三種組件不接受 parameters；收藏排序／來源及直播篩選、列表密度屬實例私有呈現狀態，不寫入分享 Layout。詳情／設定／Torrent、關注動態、繼續觀看與垂直推薦流均可加入作者 Layout；舊包仍有效，固定命令不覆寫作者佈局。
+`layout` 包含 `schemaVersion: 1`、`pages`、可選 `breakpointLayouts`。page 是 `{id: UUID, title: string, root: node, motion?: object}`；node `id` 是 UUID，component 使用字串 `componentID`、整數 `contractVersion: 1`、`parameters: {}` 和 `size: {width, height}`。不是 `typeID`／`instanceID` 欄位。目前十五種組件不接受 parameters；收藏排序／來源及直播篩選、列表密度屬實例私有呈現狀態，不寫入分享 Layout。詳情／設定／Torrent、關注動態、Bilibili 推薦影片、YouTube 瀏覽、繼續觀看與垂直推薦流均可加入作者 Layout；舊包仍有效，固定命令不覆寫作者佈局。
 
 `page.motion` 使用 JSON 物件，例如 `"motion": {"duration": 0.25, "opacity": 0, "offsetX": 0, "offsetY": 16, "scale": 1, "curve": "easeOut"}`。這六欄都必需，數值／曲線限制與上述 XML 相同，但 **JSON 不含 `version`**；未知欄位、null、錯誤型別及超限值會拒絕。整個 `motion` 欄位可省略，舊 Layout 解碼為 none（`duration: 0, opacity: 1, offsetX: 0, offsetY: 0, scale: 1, curve: "easeOut"`）；此時可繼承 Skin 預設。基礎 pages、斷點 pages 與 tabs 內頁都使用同一格式，分享保存它們的自訂動效；範例作者 Layout 省略 motion，讓 Skin XML 生效而不將預設烘焙回 Layout。
 

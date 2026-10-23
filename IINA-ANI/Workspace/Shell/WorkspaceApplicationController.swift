@@ -38,6 +38,8 @@ final class WorkspaceApplicationController: NSObject {
             (String(localized: "顯示主視窗"), #selector(showWorkspace), "1", [.command, .shift]),
             (String(localized: "搜尋"), #selector(searchWorkspace), "f", [.command]),
             (String(localized: "Bilibili 關注動態"), #selector(showFollowed), "", [.command]),
+            (String(localized: "Bilibili 推薦影片"), #selector(showBilibiliRecommendations), "", [.command]),
+            ("YouTube", #selector(showYouTube), "", [.command]),
             (String(localized: "開啟網址…"), #selector(openAddress), "o", [.command, .shift]),
             (String(localized: "開啟 Torrent 檔案…"), #selector(chooseTorrent), "t", [.command, .shift]),
             (String(localized: "活動任務"), #selector(showTasks), "d", [.command, .shift]),
@@ -188,6 +190,8 @@ final class WorkspaceApplicationController: NSObject {
 
     @objc func showWorkspace() { perform { _ in } }
     @objc private func showFollowed() { perform { $0.showFollowedVideos() } }
+    @objc private func showBilibiliRecommendations() { perform { $0.showBilibiliRecommendations() } }
+    @objc private func showYouTube() { perform { $0.showYouTube() } }
     @objc private func searchWorkspace() { perform { $0.focusSearch() } }
     @objc private func showTasks() { perform { $0.showTasks() } }
     @objc private func restoreWorkspace() {

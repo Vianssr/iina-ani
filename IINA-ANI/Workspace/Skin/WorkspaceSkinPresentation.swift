@@ -230,6 +230,9 @@ class WorkspaceNavigationButton: WorkspaceSkinButton {
             if style.values["foreground"] == nil { contentTintColor = selected.foreground }
             if style.values["fontSize"] == nil, style.values["fontFamily"] == nil { font = selected.font }
         }
+        if functionIconPosition == .imageAbove, style.values["fontSize"] == nil {
+            font = NSFont(descriptor: (font ?? style.font).fontDescriptor, size: 11)
+        }
         CATransaction.commit()
     }
 }

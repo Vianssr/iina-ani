@@ -1198,3 +1198,85 @@
 - 建置與回歸：README Debug macOS 未簽署建置成功。detail episode、Skin appearance、Workspace renderer 回歸通過；InfoPreview 離線檢查覆蓋 Unicode、180 字界線、七行、寬窄高度、空白正規化及實際 glyph alpha 淡出。建置／回歸記錄位於 .build/detail-info-popup/，預覽檢查位於 .build/info-preview-check/。
 - 正式 App 驗證：從本次 build 產物啟動實際 AppDelegate，以「FX战士久留美」檢查 1280 pt 右欄與約 1192 pt 縱排，最終版沒有多餘空行；箭頭可打開全文，Escape 返回並恢復焦點。管理窗口開關、Escape、未提交網址／分類／ID 重開保留、無效 ID 本地驗證即時提示均確認；沒有提交有效 ID 關聯或分類寫入。測試欄位已還原、搜尋字串清空、視窗尺寸恢復，App 留在作品詳情頁。截圖 detail-final.png、narrow-final.png、manage-popup.png。
 - 限制：本輪未重驗播放／彈幕／下載或實際收藏／關聯寫入，未實測完整 VoiceOver、所有 Skin、系統輔助使用切換及最低 macOS／Intel。既有 Bangumi 未登入提示仍如實保留，未改帳號、收藏或作品關聯。
+
+## 2026-10-23 — 可調導覽側欄與窄版圖示
+
+- 主殼側欄改用原生 NSSplitView 分隔線，限制 96–320 pt，初始 188 pt；視窗縮放保留側欄點數寬度，切換頁面不重設。寬度小於 140 pt 時使用 32 pt 圖示在上、置中文字在下與至少 68 pt 列高；拉寬恢復 18 pt 圖示文字橫排。窄版收起導覽小標與標語，側欄內容可獨立捲動。
+- 保留原導航 action、選取／焦點狀態、提示與 Skin binding；寬度僅屬目前視窗，不改 Layout／Skin 格式或偏好。更新使用指南與架構描述。
+- 驗證：README Debug macOS／CODE_SIGNING_ALLOWED=NO 建置成功。正常退出既有 App 後啟動本次 `.build/xcode` 產物，實際拖曳至 112 pt，截圖確認大圖示上置／文字下置；點選 Search 後 AX 仍回報 112 pt。拖過兩端分別限制在 96／320 pt，320 pt 截圖確認橫排恢復；縮放視窗後 AX 確認側欄仍為 320 pt。最後恢復 1280×832 視窗、128 pt 側欄並返回 Discover，保留 App 開啟供檢視。
+- 截圖：`.build/sidebar-resize/compact.png`、`expanded.png`。未重驗全部作者 Skin、完整 VoiceOver、最低 macOS／Intel、播放或下載；未修改收藏、帳號、外觀偏好或儲存佈局。未新增永久測試，臨時拖曳工具已移除。
+
+## 2026-10-23 — 窄版側欄小字
+
+- 壓縮側欄的圖示下方文字預設改為 11 pt，維持原字型與選取字重；展開時恢復正常字級。Skin／個人明確 fontSize 覆寫仍優先，32 pt 圖示不變。
+- 驗證：Debug macOS 未簽署建置成功；啟動本次正式 App 產物並實際拖曳至窄版，截圖確認小字及完整 Downloads 標籤，證據 `.build/sidebar-resize/compact-small-text.png`。未重驗全部 Skin、VoiceOver 或最低系統；未變更使用者偏好或資料。
+
+## 2026-10-23 — Layout 選區拖曳與基本／進階操作整理
+
+- 畫布組件選取後提供右側、底部、右下角尺寸把手；拖曳顯示要求尺寸，放開才寫入一筆草稿交易，Escape 可取消。標題支援原生拖放至區域前／後，顯示插入線；保留編排樹及上移／下移替代操作。尺寸以原要求值加位移計算，不因容器填滿而跳值，未調整的軸保持原值。選取以單一組件／容器為單位，不新增自由定位或多選框選。
+- 基本側欄新增最小／預設／寬大尺寸與水平／垂直排列快捷操作；容器包裝、跨容器目的位置、精確頁面動效／XML 及寬度斷點收進進階。動效數值按 Return、時間曲線選取即更新草稿；保留預設與重播。新增 25 個英文／簡中／繁中字串，更新使用指南，不改 Layout 格式或服務 owner。
+- 修正實際操作發現的手勢競爭：尺寸把手改為 NSControl，沿用共同內容捲動器對原生控制項的排除規則，不再被拖動捲動攔截。相對分割落點先換算移除來源後的位置，避免「第一項放在第二項之前」意外交換；新增無效循環／無操作歷史／單筆撤銷回歸。
+- 建置：README Debug macOS／CODE_SIGNING_ALLOWED=NO 正式 App 建置成功；layout 與 renderer 回歸通過。未改工程引用或套件，未另宣稱全新依賴安裝、Intel／最低系統驗證。
+- 正式 AppDelegate／實際視窗驗證：標題拖曳交換 Trends／續看順序及單步撤銷／重做；三個尺寸把手、單軸保持、Escape 取消；最小／預設／寬大尺寸；水平／垂直轉換保持容器及組件 UUID；精確動效 Return 更新與撤銷。最終版底部拖曳由 760×210 變為 760×288，右側拖曳為 704×210，角落拖曳為 704×256，預設恢復 760×210。
+- 截圖與 AX 觀察保留於 `.build/layout-adjustment/`（basic.png、advanced.png 及各操作文字記錄）。最後取消草稿並確認已保存 layout-v1.json 的 SHA-256 與操作前完全相同，沒有套用測試排列；App 返回主視窗。臨時互動工具移除。
+- 限制：正式 GUI 未點「保存並結束」覆寫使用者布局；保存／重開由既有 layout 回歸驗證。未完整重驗跨頁拖放、所有 Skin、VoiceOver、播放／下載或最低 macOS。尺寸仍是容器約束下的要求值，不代表任意像素定位。
+
+## 2026-10-23 — 修正部分組件尺寸被容器覆蓋
+
+- 依使用者回報修正組件數值已變、畫面無法調整：續看／收藏更新的內容高度上限只套用於預設高度，明確自訂高度不再被空態或資料刷新壓回。一般 stack 移除強制均分，自訂組件放入獨立尺寸區域，頁面／網格／分割槽位可填滿，但不再強制拉伸其內的自訂組件。
+- 每軸以 registry 預設值判斷自適應／自訂，不增加 Layout 欄位或改寫保存檔。自訂軸同時參與最小內容範圍，空間不足採捲動；推薦自訂高度時保留面板內捲動，避免共同文件的資料高度覆蓋指定尺寸。預覽與普通工作區共用相同放置規則；拖曳從實際可見邊界起算，未拖動軸保持原值。
+- 驗證：正式 Debug macOS 未簽署建置成功；renderer 回歸新增十三種組件實際選區寬高斷言，以及發現頁、水平排列、網格與收藏分割排列，全部通過；既有生命週期／分頁／分隔線回歸亦通過。
+- 正式 AppDelegate 操作：續看 768×224 → 768×288 時底部實際下移 64 pt；獨立搜尋由填滿頁面縮為 768×576，選區右側與底部同步縮小；收藏更新 760×288 → 760×352 時底部下移 64 pt。操作撤銷後取消草稿，本輪開始時既有保存檔 SHA-256 保持一致，保留使用者在前輪之後已調整的布局。普通工作區確認原已保存的續看 768×224 實際呈現，未替使用者保存測試尺寸。
+- 截圖／AX 記錄：`.build/layout-adjustment/standalone-fixed.png`、`saved-layout-fixed.png`、continue-resized.txt、standalone-resized.txt、updates-resized.txt。臨時互動工具移除，App 留在原保存布局首頁。未重驗完整 VoiceOver、所有 Skin、最低 macOS／Intel 或播放下載。
+
+## 2026-10-23 — 修復 Bilibili 關注動態歷史載入
+
+- 原因：App 日誌顯示較舊影片請求發生 JSON 3840；舊 `dynamic_history` 接口實測 HTTP 404、正文「老动态下线」，初始／刷新仍能載入，並非使用者登入資料格式錯誤。
+- 改動：統一改用 `/x/polymer/web-dynamic/v1/feed/all?type=video`，解析 archive、時長與站方觀看數，使用回應的 opaque offset／has_more 管理歷史；刷新不重設歷史游標，維持回應順序與 BV 去重。非影片／失效 archive 不顯示；HTTP 與 API 錯誤不再當作空列表成功。新接口沒有分 P 數，卡片移除該提示，播放選集不變。
+- 驗證：Debug App 建置成功；`BilibiliFeedRegression` App-linked 回歸通過，覆蓋 archive 映射、游標與空／過濾頁、末頁、登入過期及 API 拒絕。啟動本次來源正式 App，既有登入下初始 20 筆 →「Older Videos」40 筆 → Refresh 維持 40 筆 →「Older Videos」60 筆，無格式錯誤；實際畫面顯示封面、標題、作者、時長及觀看數。截圖 `.build/bilibili-feed-fixed.png`。
+- 限制：未重驗播放、最低 macOS／Intel 或完整回歸套件；末頁與 API 錯誤以離線 fixture 驗證，未耗盡帳號全部歷史。
+
+## 2026-10-23 — Bilibili 推薦影片獨立頁面
+
+- 新增可選 `discovery.bilibiliRecommendations` 組件；「功能」及「導覽」提供固定入口，使用關注動態的影片網格與既有播放／複製網址／原始頁面操作，不修改使用者保存的 Layout 或取代 Bangumi 主頁。
+- 資料使用 WBI 簽名的 Bilibili 首頁推薦接口，沿用預設帳號／訪客請求隔離；只接納普通影片並排除廣告／直播。刷新成功才替換列表，更多／捲動按順序 BV 去重，空／重複批次停止自動連載但保留手動載入，失敗保留內容；切頁與帳號變更取消查詢並阻止過期結果回寫。
+- 驗證：Debug macOS App 建置成功；Following 與 Recommendations 的 App-linked 解碼回歸通過。真實訪客請求兩頁各 12 筆、合計 24 個不同 BV。正式 AppDelegate UI 初始 12 筆 → Load More 24 筆 → Refresh 12 筆 → 捲到底自動 24 筆；切至 Following 顯示 20 筆，切回 Recommendations 保留 24 筆。畫面確認封面、標題、作者、時長、觀看數與按鈕；截圖 `.build/bilibili-recommendations.png`。
+- 限制：未重新播放影片、驗證最低 macOS／Intel 或跑完整回歸套件；服務錯誤／非影片回應由離線 fixtures 驗證，未宣稱站方推薦跨請求固定不變。
+
+## 2026-10-23 — YouTube 瀏覽頁與明確 Cookie 匯入
+
+- 新增 `discovery.youtube`、功能／導覽固定入口與三語文案；沿用 16:9 影片卡，提供 Home、搜尋、刷新、分頁、複製網址及瀏覽器開啟，不宣告 App 內 YouTube 播放能力。
+- 新服務解析首頁／搜尋 bootstrap 與站方 continuation；忽略非 JSON 的 ytcfg JavaScript，不執行腳本。實網發現分頁需要 bootstrap visitor identity，已隨 continuation 傳送。只接納影片卡，排除廣告／旁欄，去重並隔離帳號游標；失敗保留現有列表，帳號切換清空舊內容。
+- 登入使用明確選檔匯入 YouTube Netscape cookies，先隔離驗證再寫 Keychain；限制網域、有效期、Secure、大小與普通檔案，保留 HttpOnly／session 語義。修正 CRLF 匯出檔的 Swift 換行切割；無自動瀏覽器資料庫掃描、密碼收集或嵌入 Google 登入。
+- 驗證：Debug macOS App 建置成功；YouTube parser、cookies／Keychain／帳號 lease／登出回歸及兩項 Bilibili 回歸通過。實網隔離訪客搜尋 15 筆、下一頁 11 筆；首頁正確呈現站方訪客提示；假登入憑證遭拒，未發布帳號。
+- 正式 App 視窗：搜尋 15 筆 → Load More 27 筆；圖片、標題、作者、時長與觀看數正常。選檔匯入無效檔案顯示驗證錯誤，保留 15 張既有卡片；選中影片按 Open in Browser 開啟實際 YouTube watch URL。截圖 `.build/youtube-browsing.png`。
+- 限制：沒有使用者提供的真實 YouTube cookies，未驗證成功登入後的個人推薦；未跑完整回歸套件、最低 macOS／Intel 或原生 YouTube 播放。匯出檔須由使用者自行安全刪除；App 登出不影響瀏覽器登入。
+
+## 2026-10-23 — 經同意直接匯入 Chrome／Safari YouTube Cookies
+
+- 「匯入瀏覽器 Cookies…」改為原生同意彈窗，提供 Chrome／Safari、「允許匯入」、「取消」及手動 cookies.txt 替代入口。允許後才查找設定檔，多設定檔再明選；不定時同步，不繞過 macOS 鑰匙圈／TCC 權限。取消／卸載使用原有 generation 與 task 邊界，失敗保留帳號及列表。
+- Chrome 採唯讀 SQLite／WAL、有限忙碌等待與 SQL 網域／分區限制；正常 Security API 讀 Chrome Safe Storage，支援 v10 PBKDF2／AES-CBC、嚴格 padding 及 schema24 網域摘要。Safari 支援標準位置與可發現 UUID binarycookies，限制檔案大小、偏移、有效期與旗標；僅解讀 YouTube 憑證，不落盤明文或複製整份資料庫。共同匯入服務仍先隔離驗證再保存 Keychain。
+- 驗證：最終 Debug macOS App 建置成功；合成磁碟 Chrome／Safari 回歸通過，含獨立已知加密向量、即時 WAL、檔案唯讀、分區／其他網域排除、過期／session／HttpOnly、錯誤密鑰／格式／偏移、拒絕及取消。既有 YouTube cookies／Keychain 帳號與頁面解碼回歸亦通過。
+- 正式 App UI 驗證：Chrome／Safari 選擇、取消、cookies.txt 替代選檔及取消後控制項恢復；最終版本搜尋 16 張卡片，開啟同意窗並取消後仍為 16 張。截圖 `.build/youtube-browser-consent.png`；同意窗留給使用者自行允許，沒有代按允許讀真實瀏覽器或觸發真實 Chrome 鑰匙圈請求。
+- 限制：真實帳號匯入／個人推薦與系統授權互動尚未驗證；沒有授予 App 完整磁碟存取。Safari 未持久化的 session、未知儲存／加密格式需使用手動匯出；未重驗 Intel／最低 macOS 或完整回歸套件。
+
+## 2026-10-24 — 主頁數量徽章對齊
+
+- 修正 `WorkspacePanelCountBadge` 加高背景後仍由 NSTextField 頂部繪製數字的偏移：以原生文字高度垂直置中，繪製矩形對齊 backing pixels；保留字體、徽章尺寸、計數與輔助使用標籤。
+- 驗證：Debug macOS App 建置成功，重新啟動本次來源正式 App 並操作 Discover，確認熱度趨勢 24、繼續觀看 2、推薦 24 的單／雙位數徽章置中。實際畫面證據：`.build/home-count-before.png`、`.build/home-count-after.png`。
+- 限制：本機 Retina 深色外觀驗證；未實測非 Retina、其他外觀、最低 macOS／Intel 或完整回歸套件。
+
+## 2026-10-24 — 收藏雙欄泛化為跨頁多欄排列
+
+- 使用既有巢狀 split 表達可變數量的同時顯示面板，不變更 Layout／Skin schema。共用編輯器提供欄數輸入、步進器與套用；增加空白槽位，縮減時把超出內容垂直合併到末欄，保留組件識別／內容。相同欄數保留既有比例；交易支援撤銷／重做、斷點隔離及超限拒絕。
+- Renderer 移除收藏作品／連結固定雙欄判斷，以容器結構識別獨立多欄或標頭＋多欄頁面，保留面板內捲動、最小尺寸與既有首頁共同捲動。新增三語操作文案，更新使用指南；多欄仍受既有節點／深度上限限制，窄視窗可橫向捲動。
+- 驗證：最終 arm64 Debug macOS 未簽署 App 建置成功。layout 回歸涵蓋 1–8 欄、溢出保留、身份、等比分隔、格式往返、撤銷／重做、斷點與 Int.max／深度拒絕；renderer 回歸涵蓋三欄、水平容器、明確自訂標頭高度、最小寬度及普通／發現頁捲動，全部通過。首輪 renderer 的空態固定高度斷言失敗；移除對內部預設值的假設，改測明確自訂高度，未以調整生產尺寸迎合測試。
+- 正式 AppDelegate／實際視窗：在隔離 HOME 啟動本次產物，收藏 2→3→1 欄確認內容仍存在，撤銷恢復 3 欄後保存；最終產物重啟確認保存欄數 3。另將 Discover 原垂直容器改為 3 欄，確認三個組件保留及窄畫布捲動，取消後收藏配置仍為 3 欄。最終截圖 `.build/pane-favorites-final.png`、`.build/pane-discover-final.png`。
+- 未關閉或修改使用者原本已開啟的編排草稿，未向使用者資料保存測試佈局。隔離程序正常退出；與既有程序共用本機播放埠的啟動錯誤不涉及本輪佈局驗證。未重驗播放／下載、完整 VoiceOver、所有 Skin、Intel 或最低系統。
+
+## 2026-10-24 — 頁面直接加入分欄容器
+
+- 「新增」提供「加入分欄容器」，頁面選取狀態的「編輯」亦提供同入口；使用目前頁面或明選的巢狀頁面作為目的位置。透過原有交易插入雙欄空白容器，保留原內容，並自動選取新容器、切回欄數編輯。補齊三語文案與使用指南。
+- 正式 UI 發現搜尋組件下方的新空白 split 會被垂直 stack 壓縮到不可見；補上分欄子容器的最小高度約束。新增「既有搜尋＋空白雙欄」回歸，修正前失敗、修正後通過；完整 renderer 回歸亦通過。
+- 驗證：最終 arm64 Debug macOS 未簽署建置成功；隔離 HOME 啟動正式 AppDelegate，搜尋頁直接新增雙欄且原搜尋保留，調成三欄、兩次撤銷恢復原頁、重做恢復雙欄；選中其中空白欄並加入收藏連結，另一空白欄及原搜尋仍保留。實際捲動畫布確認新增內容可見，截圖 `.build/page-add-columns-final.png`。
+- 未覆寫使用者資料或原本開啟的草稿；測試草稿取消，隔離程序正常退出。未重驗最低系統／Intel、全部 Skin、播放／下載或巢狀頁面的正式 UI 操作。

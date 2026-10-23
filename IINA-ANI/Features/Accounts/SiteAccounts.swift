@@ -67,6 +67,7 @@ actor SiteAccounts {
     private var records: [UUID: SiteAccount]
     private var leases: [UUID: UUID] = [:]
     private var bangumiAccountID: UUID
+    private var importingYouTubeCookies = false
 
     init(preferences: Preferences = .shared,
          keychainService: String = "\(Bundle.main.bundleIdentifier ?? "IINA-ANI").site-accounts",
@@ -125,7 +126,7 @@ actor SiteAccounts {
 
     func add(sourceID: String, displayName: String) throws -> SiteAccount {
         let source = Self.canonicalSource(sourceID)
-        guard source == "bilibili" || source == "douyu" else { throw SiteAccountError.unsupportedLogin(sourceID) }
+        guard ["bilibili", "douyu", "youtube"].contains(source) else { throw SiteAccountError.unsupportedLogin(sourceID) }
         let account = SiteAccount(id: UUID(), sourceID: source,
                                   displayName: displayName.trimmingCharacters(in: .whitespacesAndNewlines),
                                   enabled: true, status: .needsLogin)
@@ -181,7 +182,7 @@ actor SiteAccounts {
             records[accountID] = account
         }
         // A subsequent guest operation must not silently pick another account.
-        for source in ["bilibili", "bilibili-live", "douyu", "bangumi"] where defaultID(source) == accountID {
+        for source in ["bilibili", "bilibili-live", "douyu", "bangumi", "youtube"] where defaultID(source) == accountID {
             setDefaultID(nil, source)
         }
         persist()
@@ -191,7 +192,7 @@ actor SiteAccounts {
         _ = try account(accountID: accountID)
         try ensureUnused(accountID)
         try deleteCredentials(accountID)
-        for source in ["bilibili", "bilibili-live", "douyu", "bangumi"] where defaultID(source) == accountID {
+        for source in ["bilibili", "bilibili-live", "douyu", "bangumi", "youtube"] where defaultID(source) == accountID {
             setDefaultID(nil, source)
         }
         records.removeValue(forKey: accountID)
@@ -202,6 +203,7 @@ actor SiteAccounts {
         var account = try self.account(accountID: accountID)
         guard account.sourceID != "bangumi" else { throw SiteAccountError.unsupportedLogin(account.sourceID) }
         guard account.enabled else { throw SiteAccountError.disabled }
+        if account.sourceID == "youtube", !sourceEnabled("youtube") { throw SiteAccountError.disabled }
         try ensureUnused(accountID)
         let supported = cookies.filter { Self.belongs($0, to: account.sourceID) }
         guard Self.hasCredential(supported, source: account.sourceID) else { throw SiteAccountError.invalidCookies }
@@ -215,7 +217,8 @@ actor SiteAccounts {
         #if DEBUG
         if account.sourceID == "douyu" { Log("[DouyuLogin] stage=keychain.store") }
         #endif
-        try Self.store(context.cookieStorage.cookies ?? [], accountID: accountID, service: keychainService)
+        let validatedCookies = (context.cookieStorage.cookies ?? []).filter { Self.belongs($0, to: account.sourceID) }
+        try Self.store(validatedCookies, accountID: accountID, service: keychainService)
         account.status = .valid
         account.displayName = name
         records[accountID] = account
@@ -224,6 +227,39 @@ actor SiteAccounts {
         #if DEBUG
         if account.sourceID == "douyu" { Log("[DouyuLogin] stage=account.saved") }
         #endif
+        return account
+    }
+
+    /// Validates in an isolated, temporary jar before replacing any saved login.
+    /// A new profile is not published at all until its credentials are accepted.
+    func importYouTubeCookies(_ data: Data) async throws -> SiteAccount {
+        guard sourceEnabled("youtube") else { throw SiteAccountError.disabled }
+        guard !importingYouTubeCookies else { throw SiteAccountError.accountInUse }
+        let cookies = try YouTubeCookieImport.parse(data)
+        var account = try defaultAccount(sourceID: "youtube") ??
+            SiteAccount(id: UUID(), sourceID: "youtube", displayName: "YouTube",
+                        enabled: true, status: .needsLogin)
+        guard account.enabled else { throw SiteAccountError.disabled }
+        try ensureUnused(account.id)
+        let context = try Self.makeContext(accountID: account.id, source: "youtube", cookies: cookies)
+        importingYouTubeCookies = true
+        let lease = beginUse(account.id)
+        defer {
+            releaseUse(lease)
+            importingYouTubeCookies = false
+        }
+        let name = try await validatedName("youtube", context: context)
+        try Task.checkCancellation()
+        guard sourceEnabled("youtube") else { throw SiteAccountError.disabled }
+        try ensureUnused(account.id, excluding: lease)
+        let validatedCookies = (context.cookieStorage.cookies ?? []).filter { Self.belongs($0, to: "youtube") }
+        guard Self.hasCredential(validatedCookies, source: "youtube") else { throw SiteAccountError.invalidCookies }
+        try Self.store(validatedCookies, accountID: account.id, service: keychainService)
+        account.status = .valid
+        account.displayName = name
+        records[account.id] = account
+        setDefaultID(account.id, "youtube")
+        persist()
         return account
     }
 
@@ -418,7 +454,8 @@ actor SiteAccounts {
             let name = try await validatedName(account.sourceID, context: context)
             try Task.checkCancellation()
             if account.sourceID != "bangumi" {
-                try Self.store(context.cookieStorage.cookies ?? [], accountID: account.id, service: keychainService)
+                let cookies = (context.cookieStorage.cookies ?? []).filter { Self.belongs($0, to: account.sourceID) }
+                try Self.store(cookies, accountID: account.id, service: keychainService)
             }
             var updated = account
             updated.status = .valid
@@ -463,6 +500,11 @@ actor SiteAccounts {
         return username
     }
     private func readValidatedName(_ source: String, context: AccountHTTP.Context) async throws -> String {
+        if source == "youtube" {
+            return try await AccountHTTP.$context.withValue(context) {
+                try await YouTubeBrowseService.shared.accountName()
+            }
+        }
         if source == "bangumi" {
             let response = await context.session.request(
                 "https://api.bgm.tv/v0/me",
@@ -534,12 +576,18 @@ actor SiteAccounts {
     }
 
     private static func belongs(_ cookie: HTTPCookie, to source: String) -> Bool {
+        if source == "youtube" {
+            let domain = cookie.domain.lowercased()
+            let host = domain.hasPrefix(".") ? String(domain.dropFirst()) : domain
+            return YouTubeCookieImport.isYouTubeDomain(host) && cookie.isSecure
+        }
         let domain = cookie.domain.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "."))
         let root = source == "bilibili" ? "bilibili.com" : source == "douyu" ? "douyu.com" : ""
         return !root.isEmpty && (domain == root || domain.hasSuffix("." + root))
     }
     private static func hasCredential(_ cookies: [HTTPCookie], source: String) -> Bool {
-        cookies.contains { !$0.value.isEmpty && (source == "bilibili" ? $0.name == "SESSDATA" : ["dy_auth", "acf_auth"].contains($0.name)) }
+        if source == "youtube" { return YouTubeCookieImport.hasAuthenticationCookies(cookies) }
+        return cookies.contains { !$0.value.isEmpty && (source == "bilibili" ? $0.name == "SESSDATA" : ["dy_auth", "acf_auth"].contains($0.name)) }
     }
     private static func makeContext(accountID: UUID?, source: String, cookies: [HTTPCookie], bearerToken: String? = nil) throws -> AccountHTTP.Context {
         let configuration = URLSessionConfiguration.ephemeral
@@ -547,8 +595,23 @@ actor SiteAccounts {
         cookies.compactMap { StoredCookie($0).cookie() }.forEach(jar.setCookie)
         configuration.httpShouldSetCookies = true
         configuration.httpCookieAcceptPolicy = .always
-        let redirector = Redirector.modify { _, request, _ in
+        let redirector = Redirector.modify { _, request, response in
             var redirected = request
+            if source == "youtube" {
+                guard let target = redirected.url, target.scheme?.lowercased() == "https",
+                      target.host?.lowercased() == "www.youtube.com",
+                      target.port == nil || target.port == 443,
+                      target.user == nil, target.password == nil else { return nil }
+                redirected.setValue(nil, forHTTPHeaderField: "Cookie")
+                let origin = response.url
+                if origin?.scheme?.lowercased() != "https" ||
+                    origin?.host?.lowercased() != "www.youtube.com" ||
+                    (origin?.port != nil && origin?.port != 443) {
+                    for header in ["Authorization", "X-Goog-AuthUser", "X-Goog-PageId", "X-Origin", "Origin"] {
+                        redirected.setValue(nil, forHTTPHeaderField: header)
+                    }
+                }
+            }
             if accountID != nil {
                 guard redirected.url?.scheme?.lowercased() == "https" else { return nil }
                 redirected.setValue(nil, forHTTPHeaderField: "Cookie")

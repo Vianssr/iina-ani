@@ -91,8 +91,8 @@ final class SourceRegistry: @unchecked Sendable {
         }
 
         let nativeSites = SupportSites.nativeSites
-        var nativeIDs: Set<String> = ["torrent"]
-        var nativeHosts: Set<String> = []
+        var nativeIDs: Set<String> = ["torrent", "youtube"]
+        var nativeHosts: Set<String> = ["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"]
         for site in nativeSites {
             nativeIDs.insert(site.sourceID)
             nativeHosts.formUnion(site.hosts.map { $0.lowercased() })
@@ -180,6 +180,8 @@ final class SourceRegistry: @unchecked Sendable {
         }
         nativeDescriptors["torrent"] = SourceDescriptor(id: "torrent", name: "BitTorrent", version: 1,
             capabilities: [.information, .episodes, .download])
+        nativeDescriptors["youtube"] = SourceDescriptor(id: "youtube", name: "YouTube", version: 1,
+            capabilities: [.browse])
         let descriptors = (Array(nativeDescriptors.values) + configurations.values.map(\.descriptor)).sorted { $0.id < $1.id }
         let matchers = configurations.values.sorted { $0.id < $1.id }
         let base = Snapshot(configurations: configurations, nativeSearch: nativeSearch, matchers: matchers,

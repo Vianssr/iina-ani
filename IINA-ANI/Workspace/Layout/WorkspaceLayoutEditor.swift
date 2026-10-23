@@ -103,6 +103,45 @@ final class WorkspaceLayoutEditor {
             try WorkspaceEditorTree.insert(source, to: destinationID, index: insertion, pages: &pages)
         }
     }
+    func move(nodeID: UUID, relativeTo targetID: UUID, after: Bool) throws {
+        guard nodeID != targetID,
+              let source = WorkspaceEditorTree.find(nodeID, in: pages),
+              !WorkspaceEditorTree.contains(targetID, in: source) else {
+            throw WorkspaceTransactionError.invalidDestination
+        }
+        func location(in node: WorkspaceNode) -> (parent: UUID, index: Int)? {
+            if case .tabs(_, _, let tabs) = node {
+                for tab in tabs {
+                    if tab.root.id == targetID { return (tab.id, 0) }
+                    if let found = location(in: tab.root) { return found }
+                }
+                return nil
+            }
+            let children = WorkspaceEditorTree.children(node)
+            if let index = children.firstIndex(where: { $0.id == targetID }) {
+                // A split has two fixed slots, not an insertion boundary for a third child.
+                if case .split = node, !children.contains(where: { $0.id == nodeID }) { return nil }
+                return (node.id, index)
+            }
+            for child in children {
+                if let found = location(in: child) { return found }
+            }
+            return nil
+        }
+        for page in pages {
+            let target = page.root.id == targetID ? (parent: page.id, index: 0) : location(in: page.root)
+            if let target {
+                var insertion = target.index + (after ? 1 : 0)
+                if case .split(_, let first, _, _)? = WorkspaceEditorTree.find(target.parent, in: pages) {
+                    let oldIndex = first.id == nodeID ? 0 : 1
+                    insertion = max(0, min(1, insertion - (oldIndex < insertion ? 1 : 0)))
+                }
+                try move(nodeID: nodeID, to: target.parent, index: insertion)
+                return
+            }
+        }
+        throw WorkspaceTransactionError.invalidDestination
+    }
     func insert(_ node: WorkspaceNode, to destinationID: UUID, index: Int = Int.max) throws {
         try editPages { try WorkspaceEditorTree.insert(node, to: destinationID, index: index, pages: &$0) }
     }
@@ -130,6 +169,33 @@ final class WorkspaceLayoutEditor {
             }
         }
     }
+    func setPaneCount(nodeID: UUID, count: Int) throws {
+        guard count >= 1 else { throw WorkspaceTransactionError.invalidDestination }
+        guard count <= validator.maximumNodes else { throw WorkspaceValidationError.tooManyNodes }
+        try replace(nodeID: nodeID) { node in
+            var panes: [WorkspaceNode]
+            switch node {
+            case .split, .horizontalStack:
+                panes = WorkspaceEditorTree.panes(node)
+                guard panes.count != count else { return node }
+            case .verticalStack, .group, .grid:
+                panes = WorkspaceEditorTree.children(node)
+            case .tabs, .component, .empty:
+                throw WorkspaceTransactionError.invalidDestination
+            }
+            // A right-associated count-column split needs at least count levels, even at the root.
+            guard count <= validator.maximumDepth else { throw WorkspaceValidationError.excessiveDepth }
+            if panes.count > count {
+                let overflow = WorkspaceNode.verticalStack(id: UUID(), children: Array(panes[(count - 1)...]))
+                panes.removeSubrange((count - 1)...)
+                panes.append(overflow)
+            } else {
+                while panes.count < count { panes.append(.empty(id: UUID())) }
+            }
+            return WorkspaceEditorTree.paneContainer(id: node.id, children: panes)
+        }
+    }
+
     func reorderPage(_ id: UUID, to index: Int) throws {
         try editPages { pages in
             guard let old = pages.firstIndex(where: { $0.id == id }) else {
@@ -211,6 +277,29 @@ enum WorkspaceEditorTree {
         case .tabs(_, _, let pages): return pages.map(\.root)
         default: return []
         }
+    }
+    /// Split dividers describe adjacent panes; vertical content remains together in its pane.
+    static func panes(_ node: WorkspaceNode) -> [WorkspaceNode] {
+        var result: [WorkspaceNode] = []
+        func append(_ node: WorkspaceNode) {
+            switch node {
+            case .split(_, let first, let second, _): append(first); append(second)
+            case .horizontalStack(_, let children): result.append(contentsOf: children)
+            default: result.append(node)
+            }
+        }
+        append(node)
+        return result
+    }
+    /// Existing binary splits encode any number of equally sized, independently resizable columns.
+    static func paneContainer(id: UUID, children: [WorkspaceNode]) -> WorkspaceNode {
+        guard children.count > 1 else { return .horizontalStack(id: id, children: children) }
+        var remainder = children[children.count - 1]
+        for index in stride(from: children.count - 2, through: 0, by: -1) {
+            remainder = .split(id: index == 0 ? id : UUID(), first: children[index], second: remainder,
+                               ratio: 1 / Double(children.count - index))
+        }
+        return remainder
     }
     static func isContainer(_ node: WorkspaceNode) -> Bool {
         switch node { case .component, .empty: return false; default: return true }

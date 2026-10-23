@@ -65,6 +65,14 @@ public struct WorkspaceRegistry: WorkspaceComponentRegistry, Sendable {
             minimumSize: .init(width: 480, height: 240),
             styleSlots: ["panel", "header", "row", "primaryAction", "emptyState"]),
         WorkspaceComponentDescriptor(
+            id: "discovery.bilibiliRecommendations", defaultSize: .init(width: 760, height: 360),
+            minimumSize: .init(width: 480, height: 240),
+            styleSlots: ["panel", "header", "row", "primaryAction", "emptyState"]),
+        WorkspaceComponentDescriptor(
+            id: "discovery.youtube", defaultSize: .init(width: 760, height: 640),
+            minimumSize: .init(width: 480, height: 320),
+            styleSlots: ["panel", "header", "row", "search", "primaryAction", "emptyState"]),
+        WorkspaceComponentDescriptor(
             id: "discovery.updates", defaultSize: .init(width: 760, height: 280),
             minimumSize: .init(width: 480, height: 180), dependencies: [.favoriteUpdates],
             styleSlots: ["panel", "header", "row", "emptyState"]),

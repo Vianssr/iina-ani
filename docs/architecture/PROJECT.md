@@ -21,13 +21,19 @@ IINA-ANI 是 [xjbeta/iina-plus](https://github.com/xjbeta/iina-plus) 的非官�
 
 目前日常推薦源為 Bangumi：右上角日曆按鈕開啟全週放送（官方 calendar API），採七欄網格。發現頁依序為 Trends → 繼續觀看 → 推薦；Trends 保留 210 pt，橫向海報以獨立間距呈現，推薦使用自適應有效欄數。主殼採 188 pt 文字側欄與搜尋優先工具列；首頁增加隨共同文件捲動的標題／日期，續看以封面、集數、實際播放時間與進度分層。內建外觀使用暖白／墨藍底色、琥珀導覽與青綠進度；作者 Skin 與個人覆寫仍優先。續看是獨立 playback.continue 組件，一行橫向展示作品／集數、實際播放秒數及進度，無資料收為緊湊提示；通知驅動更新。播放歷史 owner 是 AppServices.playbackHistory()，獨立保存在 Playback/history-v1.json，不屬快取／分享佈局；只存原選擇身份與實際觀察秒數，不存短效串流或憑證。resumePlayback 重新解析來源再定位，不以開URL成功當作實播。Bangumi 推薦按 anime/browser/?sort=trends&page=N 延續熱度順序與去重，排期／熱度仍不代表可播放。收藏更新在收藏頁，原作品／連結雙欄保留；全部斷點仍符合舊三／四區或兩區內建形狀者才遷移，自訂 Layout 不覆寫。
 
+側欄的 188 pt 是初始寬度，原生分隔線可調整為 96–320 pt；小於 140 pt 改為 32 pt 圖示上置、文字下置，寬版沿用 18 pt 圖示文字橫排。側欄可獨立捲動，寬度由視窗 controller 持有，切頁保留但不寫入 Layout／Skin 或持久偏好。
+
 主頁三區共用同一個縱向交互容器，Trends／續看不固定在頂部；推薦網格直接納入共同文件，橫向卡片保留各自的左右捲動。編排及 Skin 的原組件身份不變，自訂頁面的獨立推薦組件仍使用原本的面板捲動。
 
 推薦網格使用 WorkspaceFeedGridLayout，欄數、卡寬與水平座標只依 collection 自身寬度計算並快取；不使用外層 clip 寬度重新分配欄間距。捲動、資料刷新及載入更多保持既有欄位座標，只更新內容高度；真正改變可用寬度才重新計算。手動切換組件密度會重建 layout，立即套用新密度；零寬度的切頁暫態不覆寫快取。
 推薦網格只在整列換行邊界保留右側 15 pt，可用寬度一次扣除，不逐卡片增加內距；卡片最小間距仍為 4 pt，取整餘量按固定欄位分配。推薦面板使用 16 pt 外層邊距；網格內的 4 pt 間距、15 pt 右側保留及依 collection 寬度計算的契約維持不變，與 Trends／繼續觀看的橫向卡片排版分開。
 推薦載入／錯誤／末頁提示位於網格下方，頁尾保留至少 32 pt；一般載入提示顯示或收起不再改變網格起點。主頁共同捲動與自訂獨立面板切換時，內容維持在頁尾之前。
 
-`IINA-ANI/Workspace/` 現為唯一主 UI，提供十三種組件、草稿編排、Skin 管理及五組設定；W10 補回 Bilibili 關注動態及直播收藏操作。Layout／Skin／私有呈現狀態独立於作品、來源、下載與播放器 owner。固定選單在作者佈局刪除入口後仍可開啟恢復頁，不覆寫原 Layout。移除面板只取消其查詢，不刪收藏、播放歷史或停止已提交任務。Layout 原子保存於 `Workspace/layout-v1.json`，Skin 保存於 `Skins/`，純換皮不換 Layout。舊主視窗／側欄／AppKit 與 SwiftUI 設定頁已移除；JSPlayer、影片＋XML 開啟、登入容器與外掛安裝保留。格式見 [Skin 範例](../../Examples/Skins/README.md)。
+`IINA-ANI/Workspace/` 現為唯一主 UI，提供十五種組件、草稿編排、Skin 管理及五組設定；W10 補回 Bilibili 關注動態及直播收藏操作，另有獨立 Bilibili 首頁推薦與 YouTube 瀏覽組件及固定入口，不取代 Bangumi 發現頁。Layout／Skin／私有呈現狀態独立於作品、來源、下載與播放器 owner。固定選單在作者佈局刪除入口後仍可開啟恢復頁，不覆寫原 Layout。移除面板只取消其查詢，不刪收藏、播放歷史或停止已提交任務。Layout 原子保存於 `Workspace/layout-v1.json`，Skin 保存於 `Skins/`，純換皮不換 Layout。舊主視窗／側欄／AppKit 與 SwiftUI 設定頁已移除；JSPlayer、影片＋XML 開啟、登入容器與外掛安裝保留。格式見 [Skin 範例](../../Examples/Skins/README.md)。
+
+YouTube 為瀏覽來源，不宣告原生播放或全域搜尋能力；獨立頁以 `YouTubeBrowseService` 載入首頁／搜尋 JSON bootstrap 及 Innertube 分頁，不執行站方 JavaScript，影片交給系統瀏覽器。`SiteAccounts` 擁有 cookies 的驗證／Keychain 保存／登出；匯入先用隔離 jar 驗證，失敗不發布帳號或覆寫既有憑證。請求固定 HTTPS www.youtube.com 並拒絕重新導向；游標綁定帳號身份，來源或帳號變更取消面板查詢並清除舊列表。沒有嵌入 Google 登入。
+
+`YouTubeBrowserCookies` 僅在 UI 明確同意後一次讀取選定 Chrome／Safari 設定檔，產生記憶體內 Netscape 資料並沿用共同驗證／提交路徑；手動 cookies.txt 仍可選。Chrome 以唯讀 SQLite 查詢先限制 YouTube 網域並排除 partitioned cookies，再經正常 Security API 請求 Chrome Safe Storage、解密 v10 與驗證 schema24 host hash。Safari binarycookies 採有界檔案／偏移解析，只解讀 YouTube 憑證欄位；不繞過 TCC。後台工作可取消，不將原始資料庫或明文匯出落盤，未獲同意不讀設定檔或鑰匙圈；拒絕／格式不支援保留既有帳號與畫面，錯誤不包含秘密或本機路徑。
 
 Torrent 固定採用 **libtorrent-rasterbar 2.1.2**。W11.1–W11.3／MT1／MT2 已完成 arm64／x86_64 靜態核心、Swift／C ABI 所有權、metadata／精確選檔、DownloadService 共享與持久恢復、NIO Range／IINA／mpv 串流。既有限速 peer 的 600 秒影片、未下載 300 秒／570 秒 seek、精確 bytes、雙 reader／取消隔離及停止撤銷證據見[附錄 A.8–A.10](../plans/FRONTEND_REFACTOR_PLAN.md#a-w111)。OpenSSL 3.5.8、隨包 CA／HTTPS tracker 驗證、上傳同意／限速及 private tracker 安全政策維持 §4.8／§5.4 契約；W11.4 UI 狀態見下，不把過去核心實播當成新產品入口驗收。
 

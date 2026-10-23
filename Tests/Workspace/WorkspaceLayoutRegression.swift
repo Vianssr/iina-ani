@@ -830,8 +830,167 @@ struct WorkspaceLayoutRegression {
         }
         print("PASS W8.1 durable instance state: independent UUID reopen, all private fields, removal/pruning, breakpoint identity retention and explicit corrupt/version/write failures")
     }
+    static func paneCountRegression(layout: WorkspaceLayout, validator: WorkspaceValidator) throws {
+        let registry = WorkspaceRegistry.builtins
+        let favorite = layout.pages.first { $0.id == WorkspacePageID.favorites }!
+        let original = favoriteSplit(favorite)
+        let originalPanes = WorkspaceEditorTree.panes(original)
+        func container(_ editor: WorkspaceLayoutEditor) -> WorkspaceNode {
+            WorkspaceEditorTree.find(original.id, in: editor.pages)!
+        }
+        for count in [1, 2, 3, 5, 8] {
+            let editor = WorkspaceLayoutEditor(layout: layout, registry: registry)
+            try editor.setPaneCount(nodeID: original.id, count: count)
+            let changed = editor.layout
+            let node = container(editor)
+            let panes = WorkspaceEditorTree.panes(node)
+            check(node.id == original.id && panes.count == count,
+                  "requested pane count preserves the selected container identity")
+            for child in originalPanes {
+                check(WorkspaceEditorTree.find(child.id, in: editor.pages) == child,
+                      "changing pane count retains complete original child values and identities")
+            }
+            check(editor.pages.filter { $0.id != favorite.id } == layout.pages.filter { $0.id != favorite.id },
+                  "changing favorites columns leaves every other page unchanged")
+            if count == 1 {
+                guard case .horizontalStack(_, let children) = node, children.count == 1,
+                      case .verticalStack(_, let overflow) = children[0] else {
+                    fatalError("one pane must retain a container around vertically grouped overflow")
+                }
+                check(overflow == originalPanes, "one pane retains both original panels in order")
+            } else if count > 2 {
+                check(Array(panes.prefix(2)) == originalPanes, "expansion keeps existing panes first")
+                check(panes.dropFirst(2).allSatisfy { if case .empty = $0 { return true }; return false },
+                      "expansion appends genuine empty drop targets")
+                var remainder = node
+                for remaining in stride(from: count, through: 2, by: -1) {
+                    guard case .split(_, _, let second, let ratio) = remainder else {
+                        fatalError("multiple columns must use nested draggable splits")
+                    }
+                    check(abs(ratio - 1 / Double(remaining)) < 0.000_001,
+                          "right-associated split ratios give every new column equal width")
+                    remainder = second
+                }
+                let identities = panes.map(\.id)
+                check(Set(identities).count == count, "new slots have distinct stable identities")
+            }
+            let reopened = try WorkspaceLayoutCodec.decode(
+                WorkspaceLayoutCodec.encode(changed, validator: validator), validator: validator)
+            check(reopened == changed && reopened.schemaVersion == layout.schemaVersion,
+                  "all pane counts roundtrip in the existing schema without migration")
+            if count == 2 {
+                check(changed == layout && !editor.canUndo, "unchanged count does not create undo history")
+            } else {
+                editor.undo()
+                check(editor.layout == layout && !editor.canUndo, "pane count change is exactly one undo")
+                try editor.setPaneCount(nodeID: original.id, count: 2)
+                check(editor.canRedo, "unchanged pane count does not discard redo history")
+                editor.redo()
+                check(editor.layout == changed, "redo restores exact generated container and slot identities")
+            }
+        }
+
+        let editor = WorkspaceLayoutEditor(layout: layout, registry: registry)
+        try editor.replace(nodeID: original.id) { node in
+            guard case .split(let id, let first, let second, _) = node else { fatalError("split missing") }
+            return .split(id: id, first: first, second: second, ratio: 0.65)
+        }
+        let customRatio = editor.layout
+        try editor.setPaneCount(nodeID: original.id, count: 2)
+        check(editor.layout == customRatio, "unchanged count preserves user-adjusted split ratios")
+        editor.undo()
+        check(editor.layout == layout && !editor.canUndo, "unchanged ratios do not add a second undo")
+        try editor.setPaneCount(nodeID: original.id, count: 5)
+        let expanded = editor.layout
+        let expandedPanes = WorkspaceEditorTree.panes(container(editor))
+        try editor.setPaneCount(nodeID: original.id, count: 3)
+        let reducedPanes = WorkspaceEditorTree.panes(container(editor))
+        guard case .verticalStack(_, let overflow) = reducedPanes[2] else { fatalError("overflow missing") }
+        check(Array(reducedPanes.prefix(2)) == Array(expandedPanes.prefix(2)) &&
+              overflow == Array(expandedPanes.dropFirst(2)),
+              "shrinking retains every overflow slot in the final column without changing child IDs")
+        let reduced = editor.layout
+        editor.undo(); check(editor.layout == expanded, "shrink undo restores all five independent columns")
+        editor.redo(); check(editor.layout == reduced, "shrink redo retains overflow grouping identity")
+        for count in [0, -1, validator.maximumNodes + 1, validator.maximumDepth + 1, Int.max] {
+            do {
+                try editor.setPaneCount(nodeID: original.id, count: count)
+                fatalError("invalid pane count accepted")
+            } catch WorkspaceTransactionError.invalidDestination {
+                check(count < 1, "only nonpositive counts use the destination error")
+            } catch WorkspaceValidationError.tooManyNodes {
+                check(count > validator.maximumNodes, "existing node cap rejects excessive counts")
+            } catch WorkspaceValidationError.excessiveDepth {
+                check(count > validator.maximumDepth, "existing nesting cap rejects overdeep split trees")
+            }
+            check(editor.layout == reduced, "invalid pane count leaves the entire draft unchanged")
+        }
+        editor.undo()
+        check(editor.layout == expanded, "invalid pane counts do not consume or add undo entries")
+        let boundaryNode = WorkspaceNode.horizontalStack(id: UUID(), children: [.empty(id: UUID())])
+        let boundaryEditor = WorkspaceLayoutEditor(
+            layout: WorkspaceLayout(pages: [WorkspacePage(title: "Boundary", root: boundaryNode)]), registry: registry)
+        try boundaryEditor.setPaneCount(nodeID: boundaryNode.id, count: validator.maximumDepth)
+        let atBoundary = boundaryEditor.layout
+        check(WorkspaceEditorTree.panes(boundaryEditor.pages[0].root).count == validator.maximumDepth,
+              "the existing depth limit permits the largest root-level pane tree")
+        do {
+            try boundaryEditor.setPaneCount(nodeID: boundaryNode.id, count: validator.maximumDepth + 1)
+            fatalError("pane count exceeding existing depth cap accepted")
+        } catch WorkspaceValidationError.excessiveDepth {}
+        check(boundaryEditor.layout == atBoundary, "one count beyond the depth boundary rejects atomically")
+        boundaryEditor.undo()
+        check(!boundaryEditor.canUndo, "rejected boundary count does not create undo history")
+
+        let leaves: [WorkspaceNode] = (0..<4).map { _ in .empty(id: UUID()) }
+        for kind in [WorkspaceContainerKind.horizontalStack, .verticalStack, .group, .grid] {
+            let node = WorkspaceEditorTree.container(kind, children: leaves)
+            let page = WorkspacePage(title: "Columns", root: node)
+            let initial = WorkspaceLayout(pages: [page])
+            let converted = WorkspaceLayoutEditor(layout: initial, registry: registry)
+            try converted.setPaneCount(nodeID: node.id, count: 3)
+            let panes = WorkspaceEditorTree.panes(converted.pages[0].root)
+            guard case .verticalStack(_, let overflow) = panes[2] else { fatalError("conversion overflow missing") }
+            check(panes.count == 3 && Array(panes.prefix(2)) == Array(leaves.prefix(2)) &&
+                  overflow == Array(leaves.suffix(2)), "each arrangement converts to columns while preserving overflow")
+            converted.undo(); check(converted.layout == initial, "arrangement conversion is one undo")
+            try converted.setPaneCount(nodeID: node.id, count: 4)
+            check(WorkspaceEditorTree.panes(converted.pages[0].root) == leaves,
+                  "matching child count preserves contents when converting an arrangement to columns")
+            if kind != .horizontalStack {
+                guard case .split = converted.pages[0].root else { fatalError("arrangement must become visible columns") }
+            }
+        }
+        let vertical = WorkspaceNode.verticalStack(id: UUID(), children: Array(leaves.prefix(2)))
+        let nested = WorkspaceNode.split(id: UUID(), first: vertical,
+            second: .horizontalStack(id: UUID(), children: Array(leaves.suffix(2))), ratio: 0.4)
+        check(WorkspaceEditorTree.panes(nested) == [vertical] + Array(leaves.suffix(2)),
+              "pane traversal keeps vertical content together and expands horizontal children")
+        let leftAssociated = WorkspaceNode.split(id: UUID(),
+            first: .split(id: UUID(), first: leaves[0], second: leaves[1], ratio: 0.6),
+            second: leaves[2], ratio: 0.7)
+        check(WorkspaceEditorTree.panes(leftAssociated) == Array(leaves.prefix(3)),
+              "pane traversal accepts existing left-associated split trees")
+        let breakpointEditor = WorkspaceLayoutEditor(layout: layout, registry: registry)
+        try breakpointEditor.addBreakpoint(width: 1440)
+        let beforeBreakpointEdit = breakpointEditor.layout
+        try breakpointEditor.setPaneCount(nodeID: original.id, count: 4)
+        check(breakpointEditor.layout.pages == beforeBreakpointEdit.pages,
+              "pane count editing leaves the base layout unchanged at a selected breakpoint")
+        for (key, pages) in beforeBreakpointEdit.breakpointLayouts where key != breakpointEditor.breakpoint {
+            check(breakpointEditor.layout.breakpointLayouts[key] == pages,
+                  "pane count editing leaves other breakpoint versions unchanged")
+        }
+        check(WorkspaceEditorTree.panes(container(breakpointEditor)).count == 4,
+              "selected breakpoint receives the requested visible column count")
+        breakpointEditor.undo()
+        check(breakpointEditor.layout == beforeBreakpointEdit, "breakpoint pane count is exactly one undo")
+        print("PASS multi-column layout: counts 1–8, draggable equal splits, child identity, retained overflow, arrangement conversion, schema roundtrip, ratio no-op, undo/redo and breakpoint isolation")
+    }
+
     static func editorRegression(layout: WorkspaceLayout, workID: UUID, linkID: UUID,
                                  store: WorkspaceStore, file: URL, validator: WorkspaceValidator) throws {
+        try paneCountRegression(layout: layout, validator: validator)
         try store.save(layout)
         let committedBytes = try Data(contentsOf: file)
         let editor = WorkspaceLayoutEditor(layout: layout, registry: WorkspaceRegistry.builtins)
@@ -883,6 +1042,26 @@ struct WorkspaceLayoutRegression {
         guard case .split(_, let first, let second, _) = favoriteSplit(splitEditor.pages.first(where: { $0.id == favorite.id })!) else { fatalError("split lost") }
         check(first.id == linkID && second.id == workID, "keyboard reorder swaps split slots without copying")
         splitEditor.undo(); check(splitEditor.layout == layout, "split reorder is one undo")
+        try splitEditor.move(nodeID: workID, relativeTo: linkID, after: false)
+        check(splitEditor.layout == layout && !splitEditor.canUndo,
+              "dropping the first split child before the second is a no-op without undo history")
+        try splitEditor.move(nodeID: linkID, relativeTo: workID, after: true)
+        check(splitEditor.layout == layout && !splitEditor.canUndo,
+              "dropping the second split child after the first is a no-op")
+        try splitEditor.move(nodeID: workID, relativeTo: linkID, after: true)
+        guard case .split(_, let movedFirst, let movedSecond, _) =
+                favoriteSplit(splitEditor.pages.first(where: { $0.id == favorite.id })!) else { fatalError("split lost") }
+        check(movedFirst.id == linkID && movedSecond.id == workID,
+              "canvas after-boundary swaps split children without losing identities")
+        splitEditor.undo()
+        check(splitEditor.layout == layout && !splitEditor.canUndo, "canvas split move is exactly one undo")
+        let beforeInvalidDrop = splitEditor.layout
+        do {
+            try splitEditor.move(nodeID: split.id, relativeTo: workID, after: true)
+            fatalError("ancestor dropped beside its descendant")
+        } catch WorkspaceTransactionError.invalidDestination {}
+        check(splitEditor.layout == beforeInvalidDrop && !splitEditor.canUndo,
+              "cyclic relative drops preserve the draft and undo history")
         try splitEditor.replace(nodeID: split.id) { node in
             guard case .split(let id, let first, let second, _) = node else { fatalError("split missing") }
             return .split(id: id, first: first, second: second, ratio: 0.65)

@@ -102,6 +102,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
     private let bookmarkDataManager: DataManager?
     private var layout: WorkspaceLayout
     private let host = WorkspaceSkinHostView()
+    private var sidebarWidth: CGFloat = 188
     private var activePages: [WorkspacePage] = []
     private var componentControllers: [UUID: WorkspaceFavoritePanelController] = [:]
     private var serviceControllers: [UUID: WorkspaceServicePanelController] = [:]
@@ -138,7 +139,10 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
     private weak var previewToolbar: NSView?
     private var editorSelectionID: UUID?
     private var editorSelectionViews: [UUID: WorkspaceEditorSelectionView] = [:]
+    private var activeEditorDragSource: WorkspaceEditorSelectionView?
     var onEditorSelection: ((UUID) -> Void)?
+    var onEditorResize: ((UUID, WorkspaceSize) -> Void)?
+    var onEditorMove: ((UUID, UUID, Bool) -> Void)?
     private var isLayoutEditorPreview: Bool { previewOnly && embeddedPreviewContent != nil }
     var onEditorSplitChange: ((UUID, Double) -> Void)? {
         didSet { previewButtons.forEach { $0.isHidden = onEditorSplitChange != nil } }
@@ -207,17 +211,31 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
 
     func showTasks() { guard !previewOnly else { return }; showFixedPage(WorkspacePageID.downloads) }
     @objc func showFollowedVideos(_ sender: Any? = nil) {
+        showVideoBrowsePage(componentID: "discovery.followed",
+                         pageID: UUID(uuidString: "00000000-0000-4000-8000-000000000008")!,
+                         title: String(localized: "Bilibili 關注動態（固定入口）"))
+    }
+    @objc func showBilibiliRecommendations(_ sender: Any? = nil) {
+        showVideoBrowsePage(componentID: "discovery.bilibiliRecommendations",
+                         pageID: UUID(uuidString: "00000000-0000-4000-8000-000000000009")!,
+                         title: String(localized: "Bilibili 推薦影片"))
+    }
+    @objc func showYouTube(_ sender: Any? = nil) {
+        showVideoBrowsePage(componentID: "discovery.youtube",
+                            pageID: UUID(uuidString: "00000000-0000-4000-8000-000000000010")!,
+                            title: "YouTube")
+    }
+    private func showVideoBrowsePage(componentID: WorkspaceComponentID, pageID id: UUID, title: String) {
         guard !previewOnly else { return }
         let pages = displayPages(for: host.bounds.width)
         for page in pages {
             if let id = WorkspaceLayoutTraversal.componentTypes(in: WorkspaceLayout(pages: [page]))
-                .first(where: { $0.value == "discovery.followed" })?.key, !layout.collapsedInstanceIDs.contains(id) {
+                .first(where: { $0.value == componentID })?.key, !layout.collapsedInstanceIDs.contains(id) {
                 rememberNavigation(to: page.id); selectedPageID = page.id; renderPages(pages); return
             }
         }
-        let id = UUID(uuidString: "00000000-0000-4000-8000-000000000008")!
-        let page = recoveryPages[id] ?? WorkspacePage(id: id, title: String(localized: "Bilibili 關注動態（固定入口）"),
-            root: .component(id: UUID(), componentID: "discovery.followed", contractVersion: 1, parameters: [:],
+        let page = recoveryPages[id] ?? WorkspacePage(id: id, title: title,
+            root: .component(id: UUID(), componentID: componentID, contractVersion: 1, parameters: [:],
                 size: WorkspaceSize(width: 760, height: 640)))
         rememberNavigation(to: id); fixedPage = page; recoveryPages[id] = page; selectedPageID = id
         renderPages(displayPages(for: host.bounds.width))
@@ -690,6 +708,10 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         }
         let followed = NSMenuItem(title: String(localized: "Bilibili 關注動態"), action: #selector(showFollowedVideos(_:)), keyEquivalent: "")
         followed.target = self; capabilityMenu.addItem(followed)
+        let recommended = NSMenuItem(title: String(localized: "Bilibili 推薦影片"), action: #selector(showBilibiliRecommendations(_:)), keyEquivalent: "")
+        recommended.target = self; capabilityMenu.addItem(recommended)
+        let youtube = NSMenuItem(title: "YouTube", action: #selector(showYouTube(_:)), keyEquivalent: "")
+        youtube.target = self; capabilityMenu.addItem(youtube)
         capabilities.isEnabled = !previewOnly
         if previewOnly {
             let notice = NSTextField(labelWithString: String(localized: "安全預覽 — 服務已隔離，業務控制項不可操作"))
@@ -855,14 +877,15 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         shell.distribution = .fill
         shell.spacing = 0
         shell.translatesAutoresizingMaskIntoConstraints = false
-        let navigationWidth: CGFloat = pages.count > 1 ? 188 : 0
+        var navigationView: NSView?
+        var updateNavigation: ((CGFloat) -> Void)?
         if pages.count > 1 {
             let nav = NSStackView()
             nav.orientation = .vertical
             nav.alignment = .leading
             nav.bindSkin(dependencies.skinAppearance, slot: "sidebar")
             nav.spacing = 6
-            nav.widthAnchor.constraint(equalToConstant: navigationWidth).isActive = true
+            var navigationButtons: [(WorkspaceNavigationButton, WorkspaceIcon, NSLayoutConstraint)] = []
             nav.edgeInsets = NSEdgeInsets(top: 24, left: 12, bottom: 18, right: 12)
             let navigationLabel = NSTextField(labelWithString: String(localized: "導覽"))
             navigationLabel.bindSkin(dependencies.skinAppearance, slot: "sectionLabel")
@@ -892,7 +915,9 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
                 button.alignment = .left
                 button.lineBreakMode = .byTruncatingTail
                 button.toolTip = page.displayTitle
-                button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+                let rowHeight = button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44)
+                rowHeight.isActive = true
+                navigationButtons.append((button, icons[page.id] ?? .layout, rowHeight))
                 button.state = page.id == selectedPageID ? .on : .off
                 button.setAccessibilityValue(page.id == selectedPageID ? String(localized: "已選取") : String(localized: "未選取"))
                 button.bindSkin(dependencies.skinAppearance, slot: "navigation")
@@ -910,8 +935,38 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             libraryNote.maximumNumberOfLines = 2
             nav.addArrangedSubview(libraryNote)
             libraryNote.widthAnchor.constraint(equalTo: nav.widthAnchor, constant: -24).isActive = true
-            shell.addArrangedSubview(nav)
-            nav.heightAnchor.constraint(equalTo: shell.heightAnchor).isActive = true
+            var compact: Bool?
+            updateNavigation = { width in
+                let next = width < 140
+                guard compact != next else { return }
+                compact = next
+                navigationLabel.isHidden = next
+                libraryNote.isHidden = next
+                nav.edgeInsets = NSEdgeInsets(top: next ? 12 : 24, left: 12, bottom: 18, right: 12)
+                for (button, icon, height) in navigationButtons {
+                    button.functionIconPosition = next ? .imageAbove : .imageLeading
+                    button.alignment = next ? .center : .left
+                    button.setFunctionIcon(icon, size: next ? 32 : 18)
+                    height.constant = next ? 68 : 44
+                    button.updateSkinState()
+                }
+            }
+            updateNavigation?(sidebarWidth)
+            let navigationScroll = WorkspaceScrollView()
+            navigationScroll.hasVerticalScroller = true
+            navigationScroll.autohidesScrollers = true
+            navigationScroll.scrollerStyle = .overlay
+            navigationScroll.drawsBackground = false
+            nav.translatesAutoresizingMaskIntoConstraints = false
+            navigationScroll.documentView = nav
+            let fitHeight = nav.heightAnchor.constraint(equalTo: navigationScroll.contentView.heightAnchor)
+            fitHeight.priority = .defaultLow
+            NSLayoutConstraint.activate([
+                nav.widthAnchor.constraint(equalTo: navigationScroll.contentView.widthAnchor),
+                nav.heightAnchor.constraint(greaterThanOrEqualTo: navigationScroll.contentView.heightAnchor),
+                fitHeight,
+            ])
+            navigationView = navigationScroll
         }
         if let selected = pages.first(where: { $0.id == selectedPageID }) {
             let scroll = WorkspaceScrollView()
@@ -948,7 +1003,8 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
                case .verticalStack(_, let children) = selected.root {
                 scroll.setAccessibilityLabel(String(localized: "主頁 · Trends、繼續觀看與推薦 · 共同捲動"))
                 for child in children {
-                    if case .component(let id, _, _, _, _) = child {
+                    if case .component(let id, let type, _, _, let size) = child,
+                       type != "discovery.feed" || size.height == dependencies.registry.descriptor(for: type)?.defaultSize.height {
                         serviceControllers[id]?.setPageScrollOwner(scroll)
                     }
                 }
@@ -977,24 +1033,33 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             let usesInternalScroll: Bool
             if case .component(_, let type, _, _, _) = selected.root {
                 usesInternalScroll = type.rawValue == "settings.preferences"
-            } else if case .verticalStack(_, let nodes) = selected.root, nodes.count == 2,
-                      case .component(_, let updates, _, _, _) = nodes[0], updates == "discovery.updates",
-                      case .split(_, let first, let second, _) = nodes[1],
-                      case .component(_, let works, _, _, _) = first, works == "favorites.works",
-                      case .component(_, let links, _, _, _) = second, links == "favorites.links" {
-                usesInternalScroll = true
+            } else if case .verticalStack(_, let nodes) = selected.root {
+                usesInternalScroll = hasColumnBody(nodes)
             } else {
-                usesInternalScroll = false
+                usesInternalScroll = isColumnComposition(selected.root)
             }
             if usesInternalScroll {
-                // Settings and the two library lists own their internal vertical scrolling.
+                // Column bodies and settings own their internal vertical scrolling.
                 let fitHeight = document.heightAnchor.constraint(equalTo: scroll.contentView.heightAnchor)
                 fitHeight.priority = .defaultHigh
                 fitHeight.isActive = true
             }
-            shell.addArrangedSubview(scroll)
-            scroll.widthAnchor.constraint(equalTo: shell.widthAnchor, constant: -navigationWidth).isActive = true
-            scroll.heightAnchor.constraint(equalTo: shell.heightAnchor).isActive = true
+            if let navigationView {
+                let split = WorkspaceSidebarSplitView(
+                    sidebar: navigationView, content: scroll, width: sidebarWidth)
+                split.onWidthChange = { [weak self] width in
+                    self?.sidebarWidth = width
+                    updateNavigation?(width)
+                }
+                split.translatesAutoresizingMaskIntoConstraints = false
+                shell.addArrangedSubview(split)
+                split.widthAnchor.constraint(equalTo: shell.widthAnchor).isActive = true
+                split.heightAnchor.constraint(equalTo: shell.heightAnchor).isActive = true
+            } else {
+                shell.addArrangedSubview(scroll)
+                scroll.widthAnchor.constraint(equalTo: shell.widthAnchor).isActive = true
+                scroll.heightAnchor.constraint(equalTo: shell.heightAnchor).isActive = true
+            }
         } else {
             shell.addArrangedSubview(
                 WorkspaceStatusView(title: String(localized: "沒有可見頁面"), detail: String(localized: "仍可使用固定搜尋、開啟、活動任務與恢復入口。")))
@@ -1073,6 +1138,22 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         return middle == "playback.continue"
     }
 
+    private func isColumnComposition(_ node: WorkspaceNode) -> Bool {
+        switch node {
+        case .split: return true
+        case .horizontalStack(_, let children): return children.count > 1
+        default: return false
+        }
+    }
+
+    private func hasColumnBody(_ nodes: [WorkspaceNode]) -> Bool {
+        guard let body = nodes.last, isColumnComposition(body) else { return false }
+        return nodes.dropLast().allSatisfy {
+            if case .component = $0 { return true }
+            return false
+        }
+    }
+
     @objc private func selectPage(_ sender: NSButton) {
         guard let raw = sender.identifier?.rawValue, let id = UUID(uuidString: raw) else { return }
         if id != fixedPage?.id { fixedPage = nil }
@@ -1087,16 +1168,56 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
 
     private func renderNode(_ node: WorkspaceNode) -> NSView {
         let content = renderSizedNode(node)
-        guard isLayoutEditorPreview else { return content }
+        guard isLayoutEditorPreview else { return placeComponent(content, node: node) }
         let id = node.id
-        let chrome = WorkspaceEditorSelectionView(title: editorTitle(for: node), content: content) { [weak self] in
+        let chrome = WorkspaceEditorSelectionView(id: id, title: editorTitle(for: node), content: content) { [weak self] in
             self?.highlightEditorSelection(id)
             self?.onEditorSelection?(id)
         }
         chrome.selectionButton.identifier = NSUserInterfaceItemIdentifier("workspace.editor.node.\(id.uuidString)")
+        if case .component(_, _, _, _, let size) = node,
+           !layout.collapsedInstanceIDs.contains(id) {
+            chrome.requestedSize = size
+            chrome.onResize = { [weak self] size in self?.onEditorResize?(id, size) }
+        }
+        chrome.onMove = { [weak self] source, after in self?.onEditorMove?(source, id, after) }
+        chrome.onDragStateChange = { [weak self, weak chrome] active in
+            guard let self else { return }
+            if active { self.activeEditorDragSource = chrome }
+            else if self.activeEditorDragSource === chrome { self.activeEditorDragSource = nil }
+        }
         chrome.isSelected = editorSelectionID == id
         editorSelectionViews[id] = chrome
-        return chrome
+        return placeComponent(chrome, node: node)
+    }
+
+    // Default axes remain responsive; authored axes size the visible panel, not its
+    // parent slot. A slot may fill a page/grid/split without stretching that panel.
+    private func placeComponent(_ content: NSView, node: WorkspaceNode) -> NSView {
+        guard case .component(let id, let type, _, _, let size) = node,
+              !layout.collapsedInstanceIDs.contains(id),
+              let descriptor = dependencies.registry.descriptor(for: type) else { return content }
+        let customWidth = size.width != descriptor.defaultSize.width
+        let customHeight = size.height != descriptor.defaultSize.height
+        guard customWidth || customHeight else { return content }
+        let slot = NSView()
+        content.translatesAutoresizingMaskIntoConstraints = false
+        slot.addSubview(content)
+        let chromeWidth = isLayoutEditorPreview ? WorkspaceEditorSelectionView.horizontalInset : 0
+        let chromeHeight = isLayoutEditorPreview ? WorkspaceEditorSelectionView.verticalInset : 0
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: slot.leadingAnchor),
+            content.topAnchor.constraint(equalTo: slot.topAnchor),
+            content.trailingAnchor.constraint(lessThanOrEqualTo: slot.trailingAnchor),
+            content.bottomAnchor.constraint(lessThanOrEqualTo: slot.bottomAnchor),
+            customWidth
+                ? content.widthAnchor.constraint(equalToConstant: size.width + chromeWidth)
+                : content.widthAnchor.constraint(equalTo: slot.widthAnchor),
+            customHeight
+                ? content.heightAnchor.constraint(equalToConstant: size.height + chromeHeight)
+                : content.heightAnchor.constraint(equalTo: slot.heightAnchor),
+        ])
+        return slot
     }
 
     private func editorTitle(for node: WorkspaceNode) -> String {
@@ -1216,8 +1337,11 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         case .split(let id, let first, let second, let ratio):
             let split =
                 containerViews[id] as? WorkspaceRetainedSplitView ?? WorkspaceRetainedSplitView()
+            let firstView = renderNode(first), secondView = renderNode(second)
+            (firstView as? WorkspaceEditorSelectionView)?.dropsHorizontally = true
+            (secondView as? WorkspaceEditorSelectionView)?.dropsHorizontally = true
             split.configure(
-                renderNode(first), renderNode(second), ratio: ratio,
+                firstView, secondView, ratio: ratio,
                 minimumFirst: extent(first, requested: false).width,
                 minimumSecond: extent(second, requested: false).width)
             split.onRatioChange = onEditorSplitChange.map { callback in { callback(id, $0) } }
@@ -1260,8 +1384,11 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         switch node {
         case .component(let id, let type, _, _, let size):
             if layout.collapsedInstanceIDs.contains(id) { return NSSize(width: 280, height: 32) }
-            let value = requested ? size : dependencies.registry.descriptor(for: type)!.minimumSize
-            return NSSize(width: value.width, height: value.height)
+            let descriptor = dependencies.registry.descriptor(for: type)!
+            let value = requested ? size : descriptor.minimumSize
+            return NSSize(
+                width: size.width != descriptor.defaultSize.width ? max(value.width, size.width) : value.width,
+                height: size.height != descriptor.defaultSize.height ? max(value.height, size.height) : value.height)
         case .empty: return NSSize(width: 280, height: 180)
         case .split(_, let first, let second, _):
             let a = extent(first, requested: requested)
@@ -1293,29 +1420,47 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
     {
         let view = NSStackView(views: nodes.map(renderNode))
         view.orientation = orientation
+        if orientation == .horizontal {
+            nodes.forEach { editorSelectionViews[$0.id]?.dropsHorizontally = true }
+        }
         view.alignment = orientation == .horizontal ? .height : .width
         var pinned: [(Int, UUID, Double)] = []
         if orientation == .vertical, isDiscoveryFeedNodes(nodes) {
             for (index, node) in nodes.dropLast().enumerated() {
                 guard case .component(let id, let type, _, _, let size) = node else { continue }
-                let height = type == "playback.continue" ? min(size.height, serviceControllers[id]?.continueHeight ?? size.height) : size.height
+                let automatic = size.height == dependencies.registry.descriptor(for: type)?.defaultSize.height
+                let height = type == "playback.continue" && automatic
+                    ? min(size.height, serviceControllers[id]?.continueHeight ?? size.height) : size.height
                 pinned.append((index, id, layout.collapsedInstanceIDs.contains(id) ? 32 : height))
             }
-        } else if orientation == .vertical, nodes.count == 2,
-                  case .component(let id, let type, _, _, let size) = nodes[0], type == "discovery.updates",
-                  case .split(_, let first, let second, _) = nodes[1],
-                  case .component(_, let firstType, _, _, _) = first, firstType == "favorites.works",
-                  case .component(_, let secondType, _, _, _) = second, secondType == "favorites.links" {
-            let height = min(size.height, serviceControllers[id]?.favoriteUpdatesHeight ?? size.height)
-            pinned.append((0, id, layout.collapsedInstanceIDs.contains(id) ? 32 : height))
+        } else if orientation == .vertical, hasColumnBody(nodes) {
+            for (index, node) in nodes.dropLast().enumerated() {
+                guard case .component(let id, let type, _, _, let size) = node else { continue }
+                let automatic = size.height == dependencies.registry.descriptor(for: type)?.defaultSize.height
+                let contentHeight: Double?
+                switch type {
+                case "discovery.updates": contentHeight = serviceControllers[id]?.favoriteUpdatesHeight
+                case "playback.continue": contentHeight = serviceControllers[id]?.continueHeight
+                default: contentHeight = nil
+                }
+                let height = automatic ? min(size.height, contentHeight ?? size.height) : size.height
+                pinned.append((index, id, layout.collapsedInstanceIDs.contains(id) ? 32 : height))
+            }
         }
-        view.distribution = pinned.isEmpty ? .fillEqually : .fill
+        if orientation == .vertical {
+            for (node, child) in zip(nodes, view.arrangedSubviews) where isColumnComposition(node) {
+                child.heightAnchor.constraint(
+                    greaterThanOrEqualToConstant: extent(node, requested: false).height).isActive = true
+            }
+        }
+        view.distribution = .fill
         for (index, id, value) in pinned {
             let chromeHeight = isLayoutEditorPreview ? WorkspaceEditorSelectionView.verticalInset : 0
             let height = view.arrangedSubviews[index].heightAnchor.constraint(equalToConstant: value + chromeHeight)
             height.priority = .defaultHigh; height.isActive = true
             if case .component(_, let type, _, _, let size) = nodes[index],
-               type == "playback.continue" || type == "discovery.updates",
+               (type == "playback.continue" || type == "discovery.updates"),
+               size.height == dependencies.registry.descriptor(for: type)?.defaultSize.height,
                !layout.collapsedInstanceIDs.contains(id) {
                 serviceControllers[id]?.contentHeightDidChange = { [weak height, weak view] value in
                     height?.constant = min(size.height, value) + chromeHeight
@@ -1392,23 +1537,37 @@ private final class WorkspaceDateLabel: NSTextField {
 }
 
 @MainActor
-private final class WorkspaceEditorSelectionView: NSView {
+private final class WorkspaceEditorSelectionView: NSView, NSDraggingSource {
     static let horizontalInset: CGFloat = 6
     static let verticalInset: CGFloat = 32
+    private static let moveType = NSPasteboard.PasteboardType("com.iina-ani.workspace.editor-node")
     let selectionButton: NSButton
+    let nodeID: UUID
+    var requestedSize: WorkspaceSize? { didSet { updateHandles() } }
+    var onResize: ((WorkspaceSize) -> Void)?
+    var onMove: ((UUID, Bool) -> Void)?
+    var onDragStateChange: ((Bool) -> Void)?
+    var dropsHorizontally = false
     private let select: () -> Void
+    private var resizeHandles: [WorkspaceEditorResizeHandle] = []
+    private var dropAfter: Bool? { didSet { needsDisplay = true } }
     var isSelected = false {
         didSet {
             selectionButton.state = isSelected ? .on : .off
             selectionButton.setAccessibilityValue(isSelected ? String(localized: "已選取") : String(localized: "未選取"))
+            updateHandles()
             needsDisplay = true
         }
     }
 
-    init(title: String, content: NSView, select: @escaping () -> Void) {
-        selectionButton = NSButton(title: title, target: nil, action: nil)
+    init(id: UUID, title: String, content: NSView, select: @escaping () -> Void) {
+        let titleButton = WorkspaceEditorDragTitle(title: title, target: nil, action: nil)
+        selectionButton = titleButton
+        nodeID = id
         self.select = select
         super.init(frame: .zero)
+        registerForDraggedTypes([Self.moveType])
+        titleButton.onMouseDown = { [weak self] event in self?.trackTitle(with: event) }
         selectionButton.target = self
         selectionButton.action = #selector(selectNode)
         selectionButton.isBordered = false
@@ -1416,7 +1575,8 @@ private final class WorkspaceEditorSelectionView: NSView {
         selectionButton.font = .systemFont(ofSize: 12, weight: .medium)
         selectionButton.lineBreakMode = .byTruncatingTail
         selectionButton.setAccessibilityLabel(String(localized: "選取\(title)"))
-        selectionButton.toolTip = String(localized: "選取\(title)，在右側檢視器編輯")
+        selectionButton.toolTip = String(localized: "點選以選取；拖動標題可移到其他區域之前或之後，Escape 取消")
+        selectionButton.setAccessibilityHelp(selectionButton.toolTip)
         selectionButton.translatesAutoresizingMaskIntoConstraints = false
         content.translatesAutoresizingMaskIntoConstraints = false
         addSubview(content)
@@ -1431,6 +1591,7 @@ private final class WorkspaceEditorSelectionView: NSView {
             content.topAnchor.constraint(equalTo: selectionButton.bottomAnchor),
             content.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -3),
         ])
+        updateHandles()
     }
 
     @available(*, unavailable)
@@ -1440,12 +1601,259 @@ private final class WorkspaceEditorSelectionView: NSView {
 
     override func mouseDown(with event: NSEvent) { select() }
 
+    private func updateHandles() {
+        if requestedSize != nil, resizeHandles.isEmpty {
+            for edge in WorkspaceEditorResizeHandle.Edge.allCases {
+                let handle = WorkspaceEditorResizeHandle(edge: edge)
+                handle.onMouseDown = { [weak self] event in self?.trackResize(edge: edge, with: event) }
+                handle.identifier = NSUserInterfaceItemIdentifier("workspace.editor.resize.\(edge.rawValue).\(nodeID.uuidString)")
+                addSubview(handle)
+                resizeHandles.append(handle)
+            }
+            needsLayout = true
+        }
+        resizeHandles.forEach { $0.isHidden = !isSelected || requestedSize == nil }
+        window?.invalidateCursorRects(for: self)
+    }
+
+    override func layout() {
+        super.layout()
+        for handle in resizeHandles {
+            switch handle.edge {
+            case .right: handle.frame = NSRect(x: bounds.maxX - 7, y: bounds.midY - 15, width: 7, height: 30)
+            case .bottom: handle.frame = NSRect(x: bounds.midX - 15, y: bounds.minY, width: 30, height: 7)
+            case .corner: handle.frame = NSRect(x: bounds.maxX - 13, y: bounds.minY, width: 13, height: 13)
+            }
+        }
+    }
+
+    // Keep the initiating view alive on the mouseDown stack. Never rebuild the draft while tracking.
+    // A short timeout lets window closure, deactivation, and external rerenders cancel safely.
+    private func trackPointer(from event: NSEvent, drag: (NSEvent) -> Bool) -> NSEvent? {
+        guard let originalWindow = window else { return nil }
+        while window === originalWindow, superview != nil, originalWindow.isVisible,
+              originalWindow.isKeyWindow, NSApp.isActive {
+            guard let next = originalWindow.nextEvent(
+                matching: [.leftMouseDragged, .leftMouseUp, .keyDown],
+                until: Date(timeIntervalSinceNow: 0.05), inMode: .eventTracking, dequeue: true)
+            else { continue }
+            guard window === originalWindow, superview != nil, originalWindow.isVisible,
+                  originalWindow.isKeyWindow, NSApp.isActive else { return nil }
+            switch next.type {
+            case .leftMouseUp: return next
+            case .leftMouseDragged: if !drag(next) { return nil }
+            case .keyDown:
+                if next.keyCode == 53 { return nil }
+                NSApp.sendEvent(next)
+            default: break
+            }
+        }
+        return nil
+    }
+
+    private func trackTitle(with event: NSEvent) {
+        select()
+        let origin = event.locationInWindow
+        _ = trackPointer(from: event) { next in
+            let point = next.locationInWindow
+            guard hypot(point.x - origin.x, point.y - origin.y) >= 5 else { return true }
+            let item = NSPasteboardItem()
+            item.setString(nodeID.uuidString, forType: Self.moveType)
+            let draggingItem = NSDraggingItem(pasteboardWriter: item)
+            let title = selectionButton.title
+            let size = selectionButton.bounds.size
+            let image = NSImage(size: size, flipped: false) { rect in
+                NSColor.controlAccentColor.withAlphaComponent(0.9).setFill()
+                NSBezierPath(roundedRect: rect, xRadius: 5, yRadius: 5).fill()
+                (title as NSString).draw(in: rect.insetBy(dx: 6, dy: 5), withAttributes: [
+                    .font: NSFont.systemFont(ofSize: 12, weight: .medium), .foregroundColor: NSColor.white,
+                ])
+                return true
+            }
+            draggingItem.setDraggingFrame(convert(selectionButton.bounds, from: selectionButton), contents: image)
+            onDragStateChange?(true)
+            let session = beginDraggingSession(with: [draggingItem], event: next, source: self)
+            session.animatesToStartingPositionsOnCancelOrFail = true
+            return false
+        }
+    }
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        context == .withinApplication ? .move : []
+    }
+
+    func ignoreModifierKeys(for session: NSDraggingSession) -> Bool { true }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        onDragStateChange?(false)
+    }
+
+    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { draggingUpdated(sender) }
+
+    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
+        guard NSApp.isActive, let source = sender.draggingSource as? WorkspaceEditorSelectionView,
+              source.window === window, source.superview != nil,
+              sender.draggingPasteboard.string(forType: Self.moveType) == source.nodeID.uuidString,
+              !isDescendant(of: source), onMove != nil else {
+            dropAfter = nil
+            return []
+        }
+        let point = convert(sender.draggingLocation, from: nil)
+        dropAfter = dropsHorizontally ? point.x >= bounds.midX : point.y < bounds.midY
+        return .move
+    }
+
+    override func draggingExited(_ sender: NSDraggingInfo?) { dropAfter = nil }
+
+    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool { draggingUpdated(sender) == .move }
+
+    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+        guard draggingUpdated(sender) == .move, let after = dropAfter,
+              let source = sender.draggingSource as? WorkspaceEditorSelectionView else { return false }
+        dropAfter = nil
+        onMove?(source.nodeID, after)
+        return true
+    }
+
+    override func concludeDragOperation(_ sender: NSDraggingInfo?) { dropAfter = nil }
+
+    private func trackResize(edge: WorkspaceEditorResizeHandle.Edge, with event: NSEvent) {
+        guard isSelected, let original = requestedSize, let overlayHost = window?.contentView else { return }
+        let origin = event.locationInWindow
+        let originalFrame = overlayHost.convert(bounds, from: self)
+        let initial = WorkspaceSize(
+            width: edge == .bottom ? original.width : bounds.width - Self.horizontalInset,
+            height: edge == .right ? original.height : bounds.height - Self.verticalInset)
+        let feedback = WorkspaceEditorResizeFeedback(frame: originalFrame)
+        feedback.caption = String(localized: "要求尺寸：\(Int(original.width.rounded())) × \(Int(original.height.rounded())) pt")
+        overlayHost.addSubview(feedback)
+        var requested = original
+        var moved = false
+        func update(_ next: NSEvent) {
+            let dx = next.locationInWindow.x - origin.x
+            let dy = origin.y - next.locationInWindow.y
+            guard hypot(dx, dy) >= 2 || moved else { return }
+            moved = true
+            requested = WorkspaceSize(
+                width: edge == .bottom ? original.width : max(1, initial.width + dx),
+                height: edge == .right ? original.height : max(1, initial.height + dy))
+            var frame = originalFrame
+            frame.size.width = max(20, originalFrame.width + requested.width - initial.width)
+            frame.size.height = max(20, originalFrame.height + requested.height - initial.height)
+            if !overlayHost.isFlipped { frame.origin.y = originalFrame.maxY - frame.height }
+            feedback.frame = frame
+            feedback.caption = String(localized: "要求尺寸：\(Int(requested.width.rounded())) × \(Int(requested.height.rounded())) pt")
+        }
+        let mouseUp = trackPointer(from: event) { next in
+            update(next)
+            return true
+        }
+        if let mouseUp { update(mouseUp) }
+        feedback.removeFromSuperview()
+        if mouseUp != nil, moved { onResize?(requested) }
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
         let border = NSBezierPath(roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: 5, yRadius: 5)
         (isSelected ? NSColor.controlAccentColor : NSColor.separatorColor).setStroke()
         border.lineWidth = isSelected ? 2 : 1
         border.stroke()
+        if let after = dropAfter {
+            let cue: NSRect
+            if dropsHorizontally {
+                cue = NSRect(x: after ? bounds.maxX - 4 : bounds.minX, y: bounds.minY, width: 4, height: bounds.height)
+            } else {
+                cue = NSRect(x: bounds.minX, y: after ? bounds.minY : bounds.maxY - 4, width: bounds.width, height: 4)
+            }
+            NSColor.controlAccentColor.setFill()
+            NSBezierPath(roundedRect: cue, xRadius: 2, yRadius: 2).fill()
+        }
+    }
+}
+
+@MainActor
+private final class WorkspaceEditorDragTitle: NSButton {
+    var onMouseDown: ((NSEvent) -> Void)?
+    override func mouseDown(with event: NSEvent) { onMouseDown?(event) }
+    override func resetCursorRects() { addCursorRect(bounds, cursor: .openHand) }
+}
+
+@MainActor
+private final class WorkspaceEditorResizeHandle: NSControl {
+    enum Edge: String, CaseIterable { case right, bottom, corner }
+    let edge: Edge
+    var onMouseDown: ((NSEvent) -> Void)?
+    private static let diagonalCursor: NSCursor = {
+        let image = NSImage(systemSymbolName: "arrow.up.left.and.arrow.down.right", accessibilityDescription: nil)!
+        return NSCursor(image: image, hotSpot: NSPoint(x: image.size.width / 2, y: image.size.height / 2))
+    }()
+
+    init(edge: Edge) {
+        self.edge = edge
+        super.init(frame: .zero)
+        let label: String
+        switch edge {
+        case .right: label = String(localized: "拖動調整寬度")
+        case .bottom: label = String(localized: "拖動調整高度")
+        case .corner: label = String(localized: "拖動調整寬度與高度")
+        }
+        toolTip = label
+        setAccessibilityElement(true)
+        setAccessibilityRole(.splitter)
+        setAccessibilityLabel(label)
+        setAccessibilityHelp(String(localized: "拖動以調整要求尺寸；放開套用至草稿，Escape 取消"))
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func mouseDown(with event: NSEvent) {
+        let cursor: NSCursor
+        switch edge {
+        case .right: cursor = .resizeLeftRight
+        case .bottom: cursor = .resizeUpDown
+        case .corner: cursor = Self.diagonalCursor
+        }
+        cursor.push()
+        defer { NSCursor.pop() }
+        onMouseDown?(event)
+    }
+
+    override func resetCursorRects() {
+        switch edge {
+        case .right: addCursorRect(bounds, cursor: .resizeLeftRight)
+        case .bottom: addCursorRect(bounds, cursor: .resizeUpDown)
+        case .corner: addCursorRect(bounds, cursor: Self.diagonalCursor)
+        }
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.controlAccentColor.setFill()
+        let grip = edge == .corner ? bounds.insetBy(dx: 3, dy: 3)
+            : bounds.insetBy(dx: edge == .right ? 1 : 6, dy: edge == .right ? 6 : 1)
+        NSBezierPath(roundedRect: grip, xRadius: 3, yRadius: 3).fill()
+    }
+}
+
+@MainActor
+private final class WorkspaceEditorResizeFeedback: NSView {
+    var caption = "" { didSet { needsDisplay = true } }
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.controlAccentColor.withAlphaComponent(0.08).setFill()
+        bounds.fill()
+        NSColor.controlAccentColor.setStroke()
+        let border = NSBezierPath(rect: bounds.insetBy(dx: 1, dy: 1))
+        border.lineWidth = 2
+        border.setLineDash([5, 3], count: 2, phase: 0)
+        border.stroke()
+        let label = NSRect(x: 8, y: bounds.maxY - 28, width: max(0, bounds.width - 16), height: 22)
+        NSColor.windowBackgroundColor.setFill()
+        NSBezierPath(roundedRect: label, xRadius: 4, yRadius: 4).fill()
+        (caption as NSString).draw(in: label.insetBy(dx: 4, dy: 3), withAttributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium), .foregroundColor: NSColor.labelColor,
+        ])
     }
 }
 
@@ -1505,6 +1913,59 @@ final class WorkspaceDensityButton: WorkspaceSkinButton {
 @MainActor
 private final class WorkspaceDocumentView: NSView {
     override var isFlipped: Bool { true }
+}
+
+/// Keeps navigation width in points while the document receives window resizing.
+@MainActor
+private final class WorkspaceSidebarSplitView: NSSplitView, NSSplitViewDelegate {
+    var onWidthChange: ((CGFloat) -> Void)?
+    private var sidebarWidth: CGFloat
+    private var updating = false
+
+    init(sidebar: NSView, content: NSView, width: CGFloat) {
+        sidebarWidth = width
+        super.init(frame: .zero)
+        isVertical = true
+        dividerStyle = .thin
+        delegate = self
+        setAccessibilityIdentifier("workspace.sidebar.split")
+        for view in [sidebar, content] {
+            view.translatesAutoresizingMaskIntoConstraints = true
+            addArrangedSubview(view)
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    private var maximumWidth: CGFloat { min(320, max(96, bounds.width - dividerThickness - 320)) }
+
+    override func resizeSubviews(withOldSize oldSize: NSSize) {
+        guard arrangedSubviews.count == 2 else { return }
+        updating = true
+        let available = max(0, bounds.width - dividerThickness)
+        let width = min(available, min(max(96, sidebarWidth), maximumWidth))
+        arrangedSubviews[0].frame = NSRect(x: 0, y: 0, width: width, height: bounds.height)
+        arrangedSubviews[1].frame = NSRect(
+            x: width + dividerThickness, y: 0, width: max(0, available - width), height: bounds.height)
+        updating = false
+    }
+
+    func splitViewDidResizeSubviews(_ notification: Notification) {
+        guard !updating, arrangedSubviews.count == 2, bounds.width > 0 else { return }
+        let width = arrangedSubviews[0].frame.width
+        guard width >= 96, width <= maximumWidth, abs(width - sidebarWidth) > 0.5 else { return }
+        sidebarWidth = width
+        onWidthChange?(width)
+    }
+
+    func splitView(_ splitView: NSSplitView, constrainMinCoordinate proposed: CGFloat, ofSubviewAt index: Int) -> CGFloat {
+        max(96, proposed)
+    }
+
+    func splitView(_ splitView: NSSplitView, constrainMaxCoordinate proposed: CGFloat, ofSubviewAt index: Int) -> CGFloat {
+        min(maximumWidth, proposed)
+    }
 }
 
 @MainActor

@@ -148,6 +148,9 @@
 		0A0600260000000000000001 /* AnimeSourceService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0600260000000000000000 /* AnimeSourceService.swift */; };
 		0A0700010000000000000001 /* BrowseSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0700010000000000000000 /* BrowseSearchService.swift */; };
 		0A0700010000000000000003 /* DiscoveryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0700010000000000000002 /* DiscoveryService.swift */; };
+		0A2310260000000000000001 /* YouTubeBrowseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2310260000000000000000 /* YouTubeBrowseService.swift */; };
+		0A2310260000000000000003 /* YouTubeCookieImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2310260000000000000002 /* YouTubeCookieImport.swift */; };
+		0A2310260000000000000005 /* YouTubeBrowserCookies.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2310260000000000000004 /* YouTubeBrowserCookies.swift */; };
 		0A0700010000000000000005 /* SourceSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0700010000000000000004 /* SourceSearch.swift */; };
 		0A0810010000000000000001 /* WorkspaceCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0810010000000000000000 /* WorkspaceCapability.swift */; };
 		0A0810020000000000000001 /* WorkspaceApplicationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0810020000000000000000 /* WorkspaceApplicationController.swift */; };
@@ -382,6 +385,9 @@
 		0A0600260000000000000000 /* AnimeSourceService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnimeSourceService.swift; sourceTree = "<group>"; };
 		0A0700010000000000000000 /* BrowseSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BrowseSearchService.swift; sourceTree = "<group>"; };
 		0A0700010000000000000002 /* DiscoveryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoveryService.swift; sourceTree = "<group>"; };
+		0A2310260000000000000000 /* YouTubeBrowseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeBrowseService.swift; sourceTree = "<group>"; };
+		0A2310260000000000000002 /* YouTubeCookieImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeCookieImport.swift; sourceTree = "<group>"; };
+		0A2310260000000000000004 /* YouTubeBrowserCookies.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeBrowserCookies.swift; sourceTree = "<group>"; };
 		0A0700010000000000000004 /* SourceSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SourceSearch.swift"; sourceTree = "<group>"; };
 		0A0810010000000000000000 /* WorkspaceCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceCapability.swift"; sourceTree = "<group>"; };
 		0A0810020000000000000000 /* WorkspaceApplicationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceApplicationController.swift"; sourceTree = "<group>"; };
@@ -798,6 +804,8 @@
 				0A0400010000000000000008 /* BangumiOAuth.swift */,
 				0120FDBE2C725E9800526079 /* DouyinCookiesManager.swift */,
 				01FA1F012D83000100000107 /* SiteAccounts.swift */,
+				0A2310260000000000000002 /* YouTubeCookieImport.swift */,
+				0A2310260000000000000004 /* YouTubeBrowserCookies.swift */,
 			);
 			path = "Accounts";
 			sourceTree = "<group>";
@@ -869,6 +877,7 @@
 				01B881362C4128E900E44B97 /* BilibiliDynamicManger.swift */,
 				0A0700010000000000000000 /* BrowseSearchService.swift */,
 				0A0700010000000000000002 /* DiscoveryService.swift */,
+				0A2310260000000000000000 /* YouTubeBrowseService.swift */,
 			);
 			path = "Discovery";
 			sourceTree = "<group>";
@@ -1273,6 +1282,9 @@
 				0A0400010000000000000009 /* BangumiOAuth.swift in Sources */,
 				0A0700010000000000000001 /* BrowseSearchService.swift in Sources */,
 				0A0700010000000000000003 /* DiscoveryService.swift in Sources */,
+				0A2310260000000000000001 /* YouTubeBrowseService.swift in Sources */,
+				0A2310260000000000000003 /* YouTubeCookieImport.swift in Sources */,
+				0A2310260000000000000005 /* YouTubeBrowserCookies.swift in Sources */,
 				0A0600260000000000000001 /* AnimeSourceService.swift in Sources */,
 				0A0700010000000000000005 /* SourceSearch.swift in Sources */,
 				0A1310260000000000000001 /* TorrentSearchService.swift in Sources */,
