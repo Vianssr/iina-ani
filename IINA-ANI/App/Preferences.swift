@@ -138,6 +138,11 @@ final class Preferences: NSObject, Sendable {
         }
     }
 
+    var detailCommentsVertical: Bool {
+        get { prefs.object(forKey: "workspace.detailCommentsVertical") as? Bool ?? true }
+        set { prefs.set(newValue, forKey: "workspace.detailCommentsVertical") }
+    }
+
     var detailTransition: WorkspaceDetailTransitionSettings {
         get {
             let fallback = WorkspaceDetailTransitionSettings.defaults

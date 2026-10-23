@@ -15904,6 +15904,29 @@
         }
       }
     },
+    "垂直列表（自動載入）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vertical List (Automatic Loading)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "垂直列表（自动加载）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "垂直列表（自動載入）"
+          }
+        }
+      }
+    },
     "垂直排列": {
       "extractionState": "manual",
       "localizations": {
@@ -24575,6 +24598,29 @@
         }
       }
     },
+    "橫向卡片（手動載入）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Horizontal Cards (Manual Loading)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "横向卡片（手动加载）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "橫向卡片（手動載入）"
+          }
+        }
+      }
+    },
     "檔案": {
       "extractionState": "manual",
       "localizations": {
@@ -29704,6 +29750,29 @@
         }
       }
     },
+    "詳情評論顯示方式": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detail Comments Layout"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详情评论显示方式"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳情評論顯示方式"
+          }
+        }
+      }
+    },
     "詳情頁動畫已保存，下次開啟作品時生效。": {
       "extractionState": "manual",
       "localizations": {
@@ -33380,6 +33449,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "預設"
+          }
+        }
+      }
+    },
+    "預設以垂直列表顯示評論，捲動到底部時自動載入更多；也可選擇橫向卡片並手動載入。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comments use a vertical list by default and load more automatically at the bottom. You can also choose horizontal cards with manual loading."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认以垂直列表显示评论，滚动到底部时自动加载更多；也可选择横向卡片并手动加载。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預設以垂直列表顯示評論，捲動到底部時自動載入更多；也可選擇橫向卡片並手動載入。"
           }
         }
       }

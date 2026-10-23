@@ -487,6 +487,11 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private var comments: [BangumiComment] = []
     private var nextCommentsPage: Int?
     private var commentsLoading = false
+    private var commentsVertical = Preferences.shared.detailCommentsVertical
+    private var commentsLoadFailed = false
+    private var commentsInitialPageLoaded = false
+    private var commentsBottomLoadConsumed = false
+    private var commentsViewportUpdateScheduled = false
     private var extrasSubjectID: Int?
     private enum InformationPage: Equatable {
         case overview, characters, character(Int), relations, comments, comment(String)
@@ -507,6 +512,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private let characterShelf = WorkspaceDetailShelf(height: 202)
     private let relationShelf = WorkspaceDetailShelf(height: 260)
     private let commentShelf = WorkspaceDetailShelf(height: 228)
+    private let commentList = NSStackView()
     private let characterStatus = NSTextField(wrappingLabelWithString: "")
     private let relationStatus = NSTextField(wrappingLabelWithString: "")
     private var commentsProvenance = ""
@@ -645,7 +651,12 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         super.init(nibName: nil, bundle: nil)
     }
     required init?(coder: NSCoder) { nil }
-    deinit { operation?.cancel(); metadataOperation?.cancel(); extrasOperation?.cancel(); commentsOperation?.cancel(); collectionOperation?.cancel(); if playbackCommand { command?.cancel() } }
+    deinit {
+        operation?.cancel(); metadataOperation?.cancel(); extrasOperation?.cancel()
+        commentsOperation?.cancel(); collectionOperation?.cancel()
+        if playbackCommand { command?.cancel() }
+        NotificationCenter.default.removeObserver(self)
+    }
 
     override func viewWillAppear() {
         super.viewWillAppear()
@@ -653,6 +664,16 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         observeCompletedDownloads()
         updateCommands()
         refreshCollectionStatus()
+    }
+
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        scheduleCommentsViewportUpdate()
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        scheduleCommentsViewportUpdate()
     }
 
     override func loadView() {
@@ -676,6 +697,20 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
             scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             content.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
         ])
+        scroll.contentView.postsBoundsChangedNotifications = true
+        content.postsFrameChangedNotifications = true
+        NotificationCenter.default.addObserver(self, selector: #selector(commentsViewportChanged),
+            name: NSView.boundsDidChangeNotification, object: scroll.contentView)
+        NotificationCenter.default.addObserver(self, selector: #selector(commentsViewportChanged),
+            name: NSView.frameDidChangeNotification, object: content)
+        NotificationCenter.default.addObserver(self, selector: #selector(commentsViewportChanged),
+            name: NSWindow.didBecomeKeyNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(commentsViewportChanged),
+            name: NSWindow.didChangeOcclusionStateNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(commentsViewportChanged),
+            name: NSApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(commentsPreferenceChanged),
+            name: UserDefaults.didChangeNotification, object: nil)
         func append(_ item: NSView) {
             content.addArrangedSubview(item)
             item.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -40).isActive = true
@@ -812,6 +847,8 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         appendInfo(characterStatus, to: charactersContent)
         appendInfo(sectionLink(String(localized: "評論"), action: #selector(showCommentsInformation)), to: commentsContent)
         appendInfo(commentShelf, to: commentsContent)
+        commentList.orientation = .vertical; commentList.alignment = .leading; commentList.spacing = 16
+        appendInfo(commentList, to: commentsContent)
         appendInfo(commentsStatus, to: commentsContent)
         moreCommentsButton = button(String(localized: "載入更多評論"), #selector(loadMoreComments), icon: .add)
         commentsContent.addArrangedSubview(moreCommentsButton)
@@ -859,6 +896,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         for field in [coverStatus, episodeEmpty, catalogEmpty, classificationStatus] {
             field.bindSkin(appearance, slot: "emptyState", componentID: "detail.media")
         }
+        renderComments()
         updateCommands()
     }
 
@@ -1023,6 +1061,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
             documentScroll.reflectScrolledClipView(documentScroll.contentView)
             view.window?.makeFirstResponder(informationReturnFocus)
             informationReturnFocus = nil
+            scheduleCommentsViewportUpdate()
         } else {
             renderInformationPage()
             informationScroll.contentView.scroll(to: .zero)
@@ -1164,6 +1203,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         attached = true
         observeCompletedDownloads()
         if isViewLoaded { updateCommands(); refreshCollectionStatus() }
+        scheduleCommentsViewportUpdate()
     }
 
     func detach() {
@@ -1208,6 +1248,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         informationMoreCommentsButton = nil
         characterShelf.resetScrollPosition(); relationShelf.resetScrollPosition(); commentShelf.resetScrollPosition()
         extras = nil; extrasSubjectID = nil; comments = []; nextCommentsPage = nil
+        commentsLoadFailed = false; commentsInitialPageLoaded = false; commentsBottomLoadConsumed = false
         overviewFailure = nil; commentsProvenance = ""
         generation = UUID(); metadataGeneration = UUID()
         operation?.cancel(); metadataOperation?.cancel(); invalidatePlayback()
@@ -1545,13 +1586,16 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private func invalidateExtraInformation() {
         extrasOperation?.cancel(); commentsOperation?.cancel()
         extrasGeneration = UUID(); commentsGeneration = UUID()
+        if commentsLoading { commentsStatus.stringValue = "" }
         commentsLoading = false
+        if isViewLoaded { updateCommentsControls() }
     }
     private func loadExtraInformation(subjectID: Int, force: Bool) {
         invalidateExtraInformation()
         extrasSubjectID = subjectID
         if force || extras?.subject.value?.id != subjectID { extras = nil }
         comments = []; nextCommentsPage = 1; overviewFailure = nil; commentsProvenance = ""
+        commentsLoadFailed = false; commentsInitialPageLoaded = false; commentsBottomLoadConsumed = false
         commentsStatus.stringValue = String(localized: "評論載入中…")
         renderOverview(); renderExtraInformation(); renderComments()
         loadCommentsPage(subjectID: subjectID, page: 1, force: force)
@@ -1713,13 +1757,77 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         return surface
     }
     private func renderComments() {
-        commentShelf.setItems(comments.map(commentCard))
-        commentShelf.isHidden = comments.isEmpty
+        let origin = documentScroll.contentView.bounds.origin
+        if commentsVertical {
+            commentShelf.setItems([])
+            if commentList.arrangedSubviews.count > comments.count { clear(commentList) }
+            for comment in comments.dropFirst(commentList.arrangedSubviews.count) {
+                appendInfo(card(title: comment.author, items: [infoText(commentMetadata(comment)), infoText(comment.text)]), to: commentList)
+            }
+        } else {
+            clear(commentList)
+            commentShelf.setItems(comments.map(commentCard))
+        }
+        commentShelf.isHidden = commentsVertical || comments.isEmpty
+        commentList.isHidden = !commentsVertical || comments.isEmpty
         updateCommentsControls()
+        view.layoutSubtreeIfNeeded()
+        var bounds = documentScroll.contentView.bounds
+        bounds.origin = origin
+        documentScroll.contentView.scroll(to: documentScroll.contentView.constrainBoundsRect(bounds).origin)
+        documentScroll.reflectScrolledClipView(documentScroll.contentView)
         switch informationHistory.last {
         case .comments, .comment: renderInformationPage()
         default: break
         }
+        scheduleCommentsViewportUpdate()
+    }
+
+    @objc private func commentsPreferenceChanged() {
+        let vertical = Preferences.shared.detailCommentsVertical
+        guard commentsVertical != vertical else { return }
+        commentsVertical = vertical
+        renderComments()
+    }
+
+    @objc private func commentsViewportChanged() { scheduleCommentsViewportUpdate() }
+
+    private func scheduleCommentsViewportUpdate() {
+        guard isViewLoaded, !commentsViewportUpdateScheduled else { return }
+        commentsViewportUpdateScheduled = true
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.updateCommentsForViewport()
+            self.commentsViewportUpdateScheduled = false
+        }
+    }
+
+    private func updateCommentsForViewport() {
+        guard attached, !previewOnly, commentsVertical, commentsInitialPageLoaded,
+              informationHistory.isEmpty, !documentScroll.isHiddenOrHasHiddenAncestor,
+              !commentsContent.isHiddenOrHasHiddenAncestor,
+              NSApp.isActive, let window = view.window, window.isVisible, window.isKeyWindow,
+              !window.isMiniaturized, window.occlusionState.contains(.visible),
+              let document = documentScroll.documentView else { return }
+        view.layoutSubtreeIfNeeded()
+        let visible = documentScroll.documentVisibleRect
+        guard visible.height > 0 else { return }
+        let atBottom = visible.maxY >= document.bounds.maxY - 48
+        if !atBottom {
+            // Keep enough distance that hiding the fallback button cannot itself
+            // move the viewport back into the automatic-load threshold.
+            if !commentsLoading, visible.maxY < document.bounds.maxY - 128 {
+                commentsBottomLoadConsumed = false
+                updateCommentsControls()
+            }
+            return
+        }
+        guard !commentsLoading, !commentsLoadFailed, !commentsBottomLoadConsumed,
+              let subjectID = extrasSubjectID, let page = nextCommentsPage else { return }
+        // One request per bottom encounter. If a short page still fits, leave the
+        // manual control available rather than chaining requests without scrolling.
+        commentsBottomLoadConsumed = true
+        loadCommentsPage(subjectID: subjectID, page: page, force: false)
     }
     private func renderInformationPage() {
         guard let page = informationHistory.last else { return }
@@ -1825,27 +1933,34 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private func updateCommentsControls() {
         for control in [moreCommentsButton, informationMoreCommentsButton].compactMap({ $0 }) {
             control.isHidden = nextCommentsPage == nil
+                || (control === moreCommentsButton && commentsVertical && !commentsLoadFailed && !commentsBottomLoadConsumed)
             control.isEnabled = !previewOnly && !commentsLoading && nextCommentsPage != nil
-            control.title = commentsLoading ? String(localized: "評論載入中…") : String(localized: "載入更多評論")
+            control.title = commentsLoading ? String(localized: "評論載入中…")
+                : commentsLoadFailed ? String(localized: "重試載入") : String(localized: "載入更多評論")
         }
         commentsStatus.isHidden = commentsStatus.stringValue.isEmpty
     }
     @objc private func loadMoreComments() {
         guard !commentsLoading, let id = extrasSubjectID, let page = nextCommentsPage else { return }
-        loadCommentsPage(subjectID: id, page: page, force: false)
+        commentsBottomLoadConsumed = true
+        loadCommentsPage(subjectID: id, page: page, force: commentsLoadFailed)
     }
     private func loadCommentsPage(subjectID: Int, page: Int, force: Bool) {
         guard !previewOnly, !commentsLoading else { return }
-        commentsLoading = true; updateCommentsControls()
+        commentsLoading = true
+        commentsStatus.stringValue = String(localized: "評論載入中…")
+        updateCommentsControls()
         let token = commentsGeneration
         commentsOperation = Task { [weak self] in
             guard let self else { return }
             do {
                 let result = try await BangumiService.shared.comments(subjectID: subjectID, page: page, forceRefresh: force)
                 guard attached, commentsGeneration == token, extrasSubjectID == subjectID, !Task.isCancelled else { return }
-                let ids = Set(comments.map(\.id))
-                comments.append(contentsOf: result.value.data.filter { !ids.contains($0.id) })
-                nextCommentsPage = result.value.nextPage
+                var ids = Set(comments.map(\.id))
+                comments.append(contentsOf: result.value.data.filter { ids.insert($0.id).inserted })
+                commentsInitialPageLoaded = true
+                commentsLoadFailed = result.failure != nil
+                nextCommentsPage = commentsLoadFailed ? page : result.value.nextPage.flatMap { $0 > page ? $0 : nil }
                 let origin: String
                 switch result.origin { case .network: origin = String(localized: "網路"); case .cache: origin = String(localized: "快取"); case .staleCache: origin = String(localized: "過期快取") }
                 commentsProvenance = String(localized: "Bangumi 公開短評 · \(origin) · 第 \(result.value.page) 頁 · \(result.fetchedAt?.formatted() ?? String(localized: "時間未知"))")
@@ -1853,10 +1968,12 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 renderComments()
             } catch {
                 guard attached, commentsGeneration == token, !Task.isCancelled else { return }
+                commentsLoadFailed = true
                 commentsStatus.stringValue = String(localized: "評論載入失敗：\(error.localizedDescription)；已載入評論保留，可再試。")
                 if informationHistory.last == .comments { renderInformationPage() }
             }
             commentsLoading = false; updateCommentsControls()
+            scheduleCommentsViewportUpdate()
         }
     }
 

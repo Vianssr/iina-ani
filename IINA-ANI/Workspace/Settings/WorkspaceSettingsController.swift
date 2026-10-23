@@ -515,6 +515,15 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
             }
         }
         detailTransitionSettings()
+        add("detail.comments.presentation", .appearance, String(localized: "詳情評論顯示方式"),
+            "detail comments vertical horizontal list cards automatic manual load scroll 詳情 详情 評論 评论 垂直 縱向 纵向 橫向 横向 列表 卡片 自動 自动 手動 手动 載入 加载",
+            String(localized: "預設以垂直列表顯示評論，捲動到底部時自動載入更多；也可選擇橫向卡片並手動載入。"),
+            accessibilityID: "detail.comments.presentation") {
+            popup([String(localized: "垂直列表（自動載入）"), String(localized: "橫向卡片（手動載入）")],
+                  selected: prefs.detailCommentsVertical ? 0 : 1) { [weak self] index in
+                self?.prefs.detailCommentsVertical = index == 0
+            }
+        }
         let entries: [(String, String, String, () -> Void)] = [
             ("skin.manage", String(localized: "Skin 管理與預覽"), "skin theme 皮肤 主題 換皮", commands.manageSkins),
             ("skin.import", String(localized: "匯入 .iinaskin"), "import 安装 導入", commands.importSkin),
