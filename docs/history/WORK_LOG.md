@@ -1131,3 +1131,70 @@
 - `.gitignore` 排除 AGENT／AGENTS、Claude／Gemini 指令、助理設定及個人 IDE 狀態；保留本機檔案。既有排除規則持續保護 `Config/Local.xcconfig`、環境秘密、簽署私鑰、`.build`、npm 依賴與下載外掛。共用 `Config/App.xcconfig` 與空白範本仍是必要建置來源。
 - 匯入清單為 616 個檔案，保留全部原始碼、資源、授權與鎖檔。逐檔檢查排除規則、大小與雜湊，候選檔案未命中本機 OAuth 憑證或本輪檢查的 GitHub token／AWS key／私鑰格式；此檢查不代表全面安全審計。
 - 本次僅調整發佈排除規則與文件，未更動應用程式碼，未重跑建置或 App 驗收；先前驗證及未簽收限制維持原記錄。這筆記錄描述匯入準備，不將原始碼上傳視為正式 App 發佈。
+
+
+## 2026-10-22 — 原生前端視覺重設
+
+- 主殼改為 188 pt 文字導覽、搜尋優先工具列與帶日期的發現頁標題。導覽保留保存順序、穩定 ID、選取狀態及固定入口；首頁標題隨共同文件捲動，日期在跨日／啟用／語系通知後更新。沒有改寫使用者 Layout 或 Skin 選擇。
+- 內建 Skin 增加語義化字級／字重與暖白、墨藍、琥珀導覽、青綠進度配色；卡片與正文層級分開，原生搜尋及按鈕保留系統繪製與焦點。作者素材、狀態樣式、個人覆寫仍優先，錯誤狀態色不被初始次要文字色覆蓋。
+- 發現區使用 16 pt 外層邊距、標題／數量膠囊、Bangumi 標識與更寬的橫向卡片；Trends 保留 210 pt，續看保留既有非空／空區高度，新增清楚的封面、播放提示、集數與實際時間／進度層級。海報標題仍於 hover／鍵盤選取顯示，推薦網格算法、4 pt 間距及 15 pt 尾端保留不變。
+- 收藏保留作品／連結雙欄、操作及排序，整理標題、封面、metadata 與空／篩選無結果狀態。設定導覽改為緊湊橫列，外觀命令移除重複標題／長說明，保留搜尋定位、命令及預覽隔離。新增字串補齊 English／简体中文／繁體中文。
+- 原始碼檢查：Swift parse、git diff --check 通過；未更動工程引用、套件或資源身份，不另宣稱 manifest／全新依賴安裝驗證。
+- 建置：README 指令的 Debug macOS／CODE_SIGNING_ALLOWED=NO App 建置成功；產物在 .build/xcode/Build/Products/Debug/IINA-ANI.app。Workspace renderer、layout、Skin appearance 及 feed-grid 四項相關回歸通過，包含 Skin 覆寫、明暗文字／邊框對比、保留控制器與原生分隔線等既有斷言。
+- feed-grid 初跑受系統延後載入的永遠顯示捲軸偏好影響：測試 clip 寬度從 776 變成 759 pt，導致既有固定欄數斷言失敗。腳本僅增加程序內 -AppleShowScrollBars WhenScrolling，使原測試要求的 overlay 幾何穩定；未改使用者偏好、生產網格或斷言。修正後標準入口通過。
+- 正式 App 驗證：啟動本次來源建置的正式 AppDelegate／Workspace，檢視實際載入的 Trends／推薦／續看與收藏、設定；操作切頁、Cmd-F、搜尋提交／取消、清除本輪查詢、Layout 編輯／取消及淺色隔離預覽／取消。正常退出重開後檢視最終首頁與設定，保留原外觀偏好與使用者資料。搜尋停在載入後取消，未將其記為搜尋結果成功；未觸發播放或下載。
+- 最終真實視窗截圖：.build/ui-redesign/discovery.png、settings.png；建置與四組回歸日誌同目錄。淺色預覽與收藏畫面另已透過 CUA 當場檢視。App 留在最終首頁供使用者檢視。
+- 限制：本輪未完整重驗播放／彈幕／下載／登入、自訂 Skin 全矩陣、VoiceOver、Intel／macOS 13.5、正式簽署；GUI 拖曳未成功改變視窗尺寸，不宣稱 960×640 實際視窗驗收。既有產品關卡維持原狀。
+
+## 2026-10-22 — 頂部工具列分組與標題整理
+
+- 頂部依序分為搜尋／開啟、日曆／活動任務、佈局／功能三組，統一控制項高度並加入分隔線；佈局按鈕增加文字，保留原 action、輔助使用名稱與預覽隔離。搜尋區可伸縮，工具列內建群組間距為 12 pt，作者 Skin 的 spacing 仍優先。
+- 主視窗標題改為 IINA-ANI，側欄及頂層選單改為導覽，固定入口改為顯示主視窗；預覽、編輯器與空頁標題同步移除 Workspace／工作區。新增字串補齊 English、简体中文及繁體中文；內部型別、資料路徑與使用者佈局不改名。
+- 實際啟動時發現續看卡片初次載入可能沿用空態高度、呈現壓扁卡片；補上完成佈局後的橫向尺寸重算，隱藏或零高度時保留初始化尺寸，正式高度仍採用實際 clip bounds。未改網格算法、密度或播放流程。
+- 驗證：git diff --check、三語新增字串檢查通過；README 指令的 Debug macOS／CODE_SIGNING_ALLOWED=NO 建置成功，Workspace renderer 與 Skin appearance 回歸通過。未修改工程／套件引用，未另跑全新依賴安裝或 manifest 驗證。
+- 正式 AppDelegate 實際視窗確認工具列順序、功能選單、活動任務、日曆開啟／Esc 關閉、佈局編輯／取消及導覽選單名稱。最終建置冷啟動直接確認續看卡片完整顯示，再切至設定返回首頁。未套用佈局、Skin 或功能偏好變更；App 留在首頁。
+- 截圖與日誌：.build/ui-redesign/toolbar.png、toolbar-build.log、toolbar-renderer.log、toolbar-skin.log。限制：本輪未驗證窄視窗、完整播放／下載、所有自訂 Skin、VoiceOver、最低 macOS／Intel 或正式簽署；日曆顯示既有部分封面更新失敗提示，資料及舊圖仍保留。
+
+## 2026-10-22 — 詳情資訊層級與局部液態玻璃
+
+- 詳情頂部改為圓角資訊區：放大海報與評分，分開作品名稱、原名、類型／年份／集數與評分人數／排名；收藏及快速下載集中於作品資訊，刷新／原始頁面／管理獨立。保留既有 header／list Skin 覆寫入口；內建卡片提供低對比漸層及細邊框，作者背景／裝飾仍優先。
+- 選集以較清晰的按鈕間距、目前選擇提示及次要狀態文案呈現；未更新集數、精確身份、已下載標記、來源匹配及自動播放規則不變。資訊分頁靠左排列，簡介、人物、關聯與評論沿用原資料、富文字連結及展開收合。
+- 新增 WorkspaceGlassSurface 並註冊工程；macOS 26 起以 NSGlassEffectView.contentView 承載內容，舊系統以 NSVisualEffectView 備援。玻璃限定於來源／下載窗口的標頭與操作區及五狀態收藏選單；降低透明度、增加對比、自訂 Skin 背景／素材有實色備援並觀察設定變更。收藏選單依字級計算高度。
+- 快速下載整理為來源、選集及固定底部提交區，顯示已選／就緒數量；來源窗口底部按實際可見按鈕寬度採單列或分行，下載操作列亦依本地化文字自適應。沒有改動已建立下載 owner、去重或取消語義。新增字串齊備 English／简体中文／繁體中文。
+- 原始碼／工程檢查：Swift parse、git diff --check、project plist 與新增三語字串檢查通過。README 指令的 Debug macOS／CODE_SIGNING_ALLOWED=NO 最終建置 BUILD SUCCEEDED；沿用既有並行隔離及未使用回傳值警告，不以本次視覺改動擴大處理。
+- 回歸：detail episode、Skin appearance、Workspace renderer 三組通過；最後按鈕內距／材質邊框及自適應操作列調整後再次建置並重跑 detail episode 通過。
+- 正式 AppDelegate／Workspace 互動：以本次產物冷啟動，確認作品海報、評分、長標題換行；主視窗經系統半屏排列縮到約 960 pt 寬時集數網格重排正常。驗證收藏五個選項／Esc、快速下載開啟關閉、人物／關聯分頁、簡介展開／收合、選集後來源尋找及取消。最終來源窗口顯示已匹配候選並保留明選，未選來源啟播；底部單列按鈕及初始卡片圓角正常。
+- 截圖與日誌保留於 .build/detail-redesign/：detail.png、source-popup.png、download-popup.png、build.log 與三組回歸日誌。App 留在原本查看的「学生会也有洞！」詳情頁，搜尋欄為空；未變更外觀偏好或確認收藏狀態，未提交下載。
+- 限制：本輪未重驗完整播放／彈幕／下載、淺色與自訂 Skin 全矩陣、系統輔助使用開關切換、完整 VoiceOver、Intel／macOS 13.5。來源／下載窗口分別在原生 640／760 pt 寬檢視；GUI 拖曳未成功改到最小 460／520 pt，不宣稱最小彈窗尺寸實際驗收。既有產品關卡不因此簽收。
+
+### 2026-10-22 — 可調詳情封面轉場
+
+- 新增封面滑動放大、影院推近及光圈揭幕三種效果；曲線均為非勻速。設定 → 外觀與佈局提供效果、曲線、0.2–1.8 秒時長、Gamma 0.35–1 與倍率 1.05–1.5，獨立 Preferences 保存，補齊繁中／簡中／英文。修正小數控制項顯示精度；預設為封面滑入／柔和曲線／0.65 秒。
+- 開啟前保存來源封面、實際可見範圍與螢幕座標，詳情先沿用卡片圖，Core Animation 完成時移除覆蓋層並還原封面與焦點。支援 aspect-fill 到 aspect-fit、裁切卡片及 popover 跨視窗座標；影院使用 CIGammaAdjust 真實 Gamma 調整及獨立暗場，光圈使用圓形遮罩配合輕微傾轉。無封面使用淡入；關閉動畫／減少動態效果直接呈現，不疊加 Skin 一般進場動畫。
+- 返回／換頁、Escape、縮放、關窗與再次開啟會清理轉場；目的封面必須同視窗且可見。固定產品入口會選中自訂 Layout 的完整巢狀 tab 路徑，不修改作者保存的 Layout。保留開始工作時已存在的其他介面變更。
+- 原始碼／工程檢查：新檔已加入 Xcode Sources，git diff --check 通過；本輪未修改 HuyaKit manifest。
+- 建置：README Debug macOS 未簽署命令 BUILD SUCCEEDED，最終日誌 `.build/detail-transition-build-final.log`；既有其他模組警告未冒稱清零。
+- 回歸：`run-workspace-detail-transition.sh`、`run-workspace-detail-transition-preferences.sh`、`run-workspace-renderer.sh`、`run-workspace-detail-episodes.sh` 均通過。覆蓋真實 AppKit 裁切／座標、fit/fill、自然完成及取消只回呼一次、來源／目的透明度還原、無來源、不同視窗／隱藏目標、巢狀分頁生命週期，以及偏好重開、壞類型、非有限值／上下限與其他偏好不變；Renderer 日誌 `.build/detail-transition-renderer-test.log`。
+- 正式 App 驗證：正常退出既有 App，再啟動本份來源 `.build/xcode/Build/Products/Debug/IINA-ANI.app`，走實際 AppDelegate。於 Trends 作品卡實測三種效果並取得過程／完成畫面截圖（本次聊天工具記錄）；完成後詳情與鍵盤焦點可操作。再次重啟確認光圈／1.8 秒設定保留，及 0.65 Gamma／1.18 倍率正確小數顯示。最後恢復預設封面滑入／0.65 秒並實際開啟詳情，App 保持開啟供檢視。
+- 限制：本輪未重新驗收真實播放／彈幕／下載、macOS 13.5／Intel、完整 VoiceOver 或系統減少動態效果切換；未改動帳號或收藏。沿用目前使用者 profile 進行 UI 驗證，僅操作上述動畫偏好，未清除資料，未做私人 profile 前後雜湊。既有全面產品驗收與發佈門檻不因此簽收。
+
+## 2026-10-23 — 詳情頁精簡資訊與 Apple TV 式人物排列
+
+- 主頁移除簡介／人物／關聯／評論 segmented tabs 與預設完整資料表，保留作品重點、三行摘要及選集；管理工具收進管理區。章節標題改為可點擊入口，完整簡介、標籤、統計與來源／快取明細移至資訊子頁。
+- 新增 WorkspaceDetailShelf：主頁關聯海報優先動畫條目、人物圓形圖片搭配名字與配音／角色，評論置於底部水平卡片。全身人物圖採頂部裁切保留臉部，長標題與配音可顯示兩行；圖片取消、失敗佔位、鍵盤與 Skin 呈現保持獨立。關聯轉場只擷取被點卡片的真實圖片，不誤取佔位圖。
+- 詳情內部歷史支援人物清單→人物介紹，以及作品資訊、完整關聯及評論頁；返回、Escape 與 shell 返回優先消費當前可見詳情的內部歷史，回主頁保留垂直與各列水平位置。切頁不重建作品／播放 owner，既有非同步 generation、取消與評論去重／下一頁契約保留。
+- 評論卡可點開全文；載入更多保留目前水平位置。完整評論頁仍可載入更多並顯示來源與失敗。補齊 6 個新增字串的英文、簡體及繁體翻譯，更新使用指南及架構說明。
+- 原始碼／工程檢查：git diff --check 通過，新 helper 已登記 Xcode Sources；保留工作區既有未提交變更。
+- 建置：正式 IINA-ANI Debug scheme（macOS，.build/xcode，不簽署）成功。既有 run-workspace-detail-episodes.sh、run-skin-appearance.sh、run-workspace-renderer.sh、run-workspace-detail-transition.sh 均通過。
+- 額外排版檢查：App-linked shelf 檢查 20 張卡片、追加 30 張與縮至 1 張，驗證內容寬、水平位置保留及有效範圍限制；證據 .build/shelf-check/。此檢查不取代正式 App 操作。
+- 正式 App 執行：從本次 build 產物啟動 AppDelegate，使用 Bangumi「葬送的芙莉蓮」驗證精簡主頁、人物橫列與完整網格、人物介紹、兩層 Escape、工具列返回、完整關聯頁、評論全文及完整評論清單。以原生水平捲軸移至中段，再載入更多，確認新評論追加且畫面位置保留；1280 pt 與約 960 pt 寬視窗皆完成目視檢查，已還原視窗大小及清空驗收搜尋字串。截圖／建置／回歸記錄在 .build/detail-shelves/。
+- 限制：本次未重跑實際播放、下載、收藏寫入或 OAuth 同步，不宣稱最低 macOS／Intel 驗收；觸控板完整手勢矩陣及所有作者 Skin 未重跑。原生捲軸操作可水平瀏覽，CUA 的合成水平滾輪未產生可確認位移，未將其列為手勢通過證據。
+
+## 2026-10-23 — 頂部資訊預覽與管理彈窗
+
+- 作品資訊移入 hero 右欄，主內容保留海報、名稱、評分與操作；依內容寬度在窄視窗改為同卡片內縱排。新增 WorkspaceDetailInfoPreview 並登記 Xcode Sources：先合併預覽空白，再保留最多 180 個 Unicode Character／七行，TextKit 對最後可見行做文字 alpha 漸淡，獨立箭頭開啟未刪減的資訊子頁；完整原文與來源不變。
+- Manage 由內嵌展開區改為獨立可縮放 NSPanel，玻璃標頭與固定關閉區沿用 WorkspaceGlassSurface；原分類、網址、Bangumi 關聯、刷新與資料狀態欄位重用，狀態文字即時同步。重開不重置同作品未提交的分類與 ID，背景同 ID 更新不覆寫草稿。關閉／Escape 結束編輯並還原焦點，不取消已提交操作；reset／detach／資訊頁與來源窗口切換會關閉管理窗口。
+- 文件與語系：新增兩個標籤的英文／簡體／繁體翻譯，更新使用指南及架構描述；保留工作區既有變更。git diff --check、字串 JSON 與工程 Sources 註冊檢查通過，未變更 HuyaKit manifest。
+- 建置與回歸：README Debug macOS 未簽署建置成功。detail episode、Skin appearance、Workspace renderer 回歸通過；InfoPreview 離線檢查覆蓋 Unicode、180 字界線、七行、寬窄高度、空白正規化及實際 glyph alpha 淡出。建置／回歸記錄位於 .build/detail-info-popup/，預覽檢查位於 .build/info-preview-check/。
+- 正式 App 驗證：從本次 build 產物啟動實際 AppDelegate，以「FX战士久留美」檢查 1280 pt 右欄與約 1192 pt 縱排，最終版沒有多餘空行；箭頭可打開全文，Escape 返回並恢復焦點。管理窗口開關、Escape、未提交網址／分類／ID 重開保留、無效 ID 本地驗證即時提示均確認；沒有提交有效 ID 關聯或分類寫入。測試欄位已還原、搜尋字串清空、視窗尺寸恢復，App 留在作品詳情頁。截圖 detail-final.png、narrow-final.png、manage-popup.png。
+- 限制：本輪未重驗播放／彈幕／下載或實際收藏／關聯寫入，未實測完整 VoiceOver、所有 Skin、系統輔助使用切換及最低 macOS／Intel。既有 Bangumi 未登入提示仍如實保留，未改帳號、收藏或作品關聯。

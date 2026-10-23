@@ -31,18 +31,18 @@ final class WorkspaceApplicationController: NSObject {
 
     func installMenu() {
         guard let mainMenu = NSApp.mainMenu else { return }
-        let root = NSMenuItem(title: String(localized: "工作區"), action: nil, keyEquivalent: "")
-        let menu = NSMenu(title: String(localized: "工作區"))
+        let root = NSMenuItem(title: String(localized: "導覽"), action: nil, keyEquivalent: "")
+        let menu = NSMenu(title: String(localized: "導覽"))
         root.submenu = menu
         let entries: [(String, Selector, String, NSEvent.ModifierFlags)] = [
-            (String(localized: "開啟工作區"), #selector(showWorkspace), "1", [.command, .shift]),
+            (String(localized: "顯示主視窗"), #selector(showWorkspace), "1", [.command, .shift]),
             (String(localized: "搜尋"), #selector(searchWorkspace), "f", [.command]),
             (String(localized: "Bilibili 關注動態"), #selector(showFollowed), "", [.command]),
             (String(localized: "開啟網址…"), #selector(openAddress), "o", [.command, .shift]),
             (String(localized: "開啟 Torrent 檔案…"), #selector(chooseTorrent), "t", [.command, .shift]),
             (String(localized: "活動任務"), #selector(showTasks), "d", [.command, .shift]),
             (String(localized: "設定…"), #selector(showSettings), ",", [.command]),
-            (String(localized: "恢復內建工作區"), #selector(restoreWorkspace), "", [.command]),
+            (String(localized: "恢復內建佈局"), #selector(restoreWorkspace), "", [.command]),
         ]
         for (title, action, key, modifiers) in entries {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
@@ -220,7 +220,11 @@ final class WorkspaceApplicationController: NSObject {
         withDetail { $0.openTorrent() }
     }
     private func withDetail(_ action: (WorkspaceDetailController) -> Void) {
-        perform { if let detail = $0.showProduct("detail.media") as? WorkspaceDetailController { action(detail) } }
+        perform { $0.showDetail(settings: self.delegate.services.preferences.detailTransition, action) }
+    }
+    func openRelatedSubject(_ id: Int, from view: NSView?) {
+        let source = WorkspaceCoverTransitionSource.capture(from: view)
+        perform { $0.showDetail(settings: self.delegate.services.preferences.detailTransition, source: source) { $0.openBangumi(id) } }
     }
     @objc private func runLayoutScript() {
         do { try layoutScriptController().chooseAndRunSource() }

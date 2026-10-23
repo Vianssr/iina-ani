@@ -68,7 +68,7 @@ final class MainMenu: NSObject {
         delegate.workspaceApplication.installMenu()
         let window = submenu(String(localized: "視窗"))
         NSApp.windowsMenu = window
-        add(window, String(localized: "顯示工作區"), #selector(WorkspaceApplicationController.showWorkspace), target: delegate.workspaceApplication)
+        add(window, String(localized: "顯示主視窗"), #selector(WorkspaceApplicationController.showWorkspace), target: delegate.workspaceApplication)
         add(window, String(localized: "重新整理目前清單"), Selector(("reload:")), "r")
         add(window, String(localized: "縮小"), #selector(NSWindow.performMiniaturize(_:)), "m")
         add(window, String(localized: "縮放"), #selector(NSWindow.performZoom(_:)))

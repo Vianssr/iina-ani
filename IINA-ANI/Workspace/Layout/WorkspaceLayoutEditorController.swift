@@ -70,7 +70,7 @@ final class WorkspaceLayoutEditorController: NSWindowController, NSWindowDelegat
         preview = makePreview(layout)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1400, height: 900),
                               styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
-        window.title = String(localized: "編輯工作區 — 草稿（結束編輯才保存）")
+        window.title = String(localized: "編輯佈局 — 草稿（結束編輯才保存）")
         window.contentMinSize = NSSize(width: 1100, height: 700)
         window.isReleasedWhenClosed = false
         super.init(window: window)

@@ -1,29 +1,6 @@
 {
   "sourceLanguage": "en",
   "strings": {
-    "Bangumi sign-in is not configured in this build. Configure Config/Local.xcconfig and rebuild.": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bangumi sign-in is not configured in this build. Configure Config/Local.xcconfig and rebuild."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此构建尚未配置 Bangumi 登录。请配置 Config/Local.xcconfig 后重新构建。"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此建置尚未配置 Bangumi 登入。請配置 Config/Local.xcconfig 後重新建置。"
-          }
-        }
-      }
-    },
     "\n%lld 個目錄項目缺少有效同來源身份，未列入下載。": {
       "extractionState": "manual",
       "localizations": {
@@ -112,6 +89,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "\n尚無公開評論。"
+          }
+        }
+      }
+    },
+    "\n排名 #%lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\nRank #%lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\n排名 #%lld"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "\n排名 #%lld"
           }
         }
       }
@@ -860,6 +860,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "%@ 仍依賴此能力。"
+          }
+        }
+      }
+    },
+    "%@ 分": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ points"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 分"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 分"
           }
         }
       }
@@ -1899,6 +1922,29 @@
       },
       "extractionState": "manual"
     },
+    "Bangumi sign-in is not configured in this build. Configure Config/Local.xcconfig and rebuild.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bangumi sign-in is not configured in this build. Configure Config/Local.xcconfig and rebuild."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此构建尚未配置 Bangumi 登录。请配置 Config/Local.xcconfig 后重新构建。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此建置尚未配置 Bangumi 登入。請配置 Config/Local.xcconfig 後重新建置。"
+          }
+        }
+      }
+    },
     "Bangumi subject ID（手動確認）": {
       "extractionState": "manual",
       "localizations": {
@@ -1964,6 +2010,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "Bangumi 熱門目錄中沒有條目。"
+          }
+        }
+      }
+    },
+    "Bangumi · %lld 人評分": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bangumi · %lld ratings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bangumi · %lld 人评分"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bangumi · %lld 人評分"
           }
         }
       }
@@ -3900,6 +3969,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "IINA-ANI — 工作區預覽"
+          }
+        }
+      }
+    },
+    "IINA-ANI — 預覽": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IINA-ANI — Preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IINA-ANI — 预览"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IINA-ANI — 預覽"
           }
         }
       }
@@ -10200,6 +10292,29 @@
         }
       }
     },
+    "三種曲線都採用非勻速變化，控制動畫的起步、推進與停靠節奏。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All three curves vary the animation speed to control its start, movement, and finish."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "三种曲线都采用非匀速变化，控制动画的起步、推进与停靠节奏。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "三種曲線都採用非勻速變化，控制動畫的起步、推進與停靠節奏。"
+          }
+        }
+      }
+    },
     "上傳上限（bytes/s）": {
       "extractionState": "manual",
       "localizations": {
@@ -10955,6 +11070,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "仍可使用固定搜尋、開啟、活動任務與恢復入口。"
+          }
+        }
+      }
+    },
+    "佈局": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Layout"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "布局"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "佈局"
           }
         }
       }
@@ -12707,6 +12845,52 @@
         }
       }
     },
+    "僅影響影院推近效果，範圍 0.35–1；低於 1 會提亮中間調，再疊加暗色遮罩形成影院對比。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies only to Cinema zoom, from 0.35 to 1. Values below 1 brighten midtones; a dark overlay adds cinematic contrast."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅影响影院推近效果，范围 0.35–1；低于 1 会提亮中间调，再叠加暗色遮罩形成影院对比。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅影響影院推近效果，範圍 0.35–1；低於 1 會提亮中間調，再疊加暗色遮罩形成影院對比。"
+          }
+        }
+      }
+    },
+    "僅影響影院推近效果，範圍 1.05–1.5 倍；較大的倍率會帶來更明顯的推近。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Applies only to Cinema zoom, from 1.05× to 1.5×. Higher values produce a stronger zoom."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅影响影院推近效果，范围 1.05–1.5 倍；较大的倍率会带来更明显的推近。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅影響影院推近效果，範圍 1.05–1.5 倍；較大的倍率會帶來更明顯的推近。"
+          }
+        }
+      }
+    },
     "僅支援 rss 第 1 版來源。": {
       "extractionState": "manual",
       "localizations": {
@@ -12937,6 +13121,29 @@
         }
       }
     },
+    "先預覽，再決定。外觀與佈局調整不會影響收藏、帳號或下載。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview before you apply. Your favorites, accounts, and downloads stay as they are."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先预览，再决定。外观与布局调整不会影响收藏、账号或下载。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "先預覽，再決定。外觀與佈局調整不會影響收藏、帳號或下載。"
+          }
+        }
+      }
+    },
     "先預覽；取消不保存字級、密度或偏好。": {
       "extractionState": "manual",
       "localizations": {
@@ -12956,6 +13163,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "先預覽；取消不保存字級、密度或偏好。"
+          }
+        }
+      }
+    },
+    "光圈揭幕": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iris reveal"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "光圈揭幕"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "光圈揭幕"
           }
         }
       }
@@ -13995,6 +14225,52 @@
         }
       }
     },
+    "動畫時長（秒）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animation duration (seconds)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动画时长（秒）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動畫時長（秒）"
+          }
+        }
+      }
+    },
+    "動畫速率曲線": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Animation timing curve"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动画速率曲线"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "動畫速率曲線"
+          }
+        }
+      }
+    },
     "勾選下載：%@": {
       "extractionState": "manual",
       "localizations": {
@@ -14083,6 +14359,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "勾選此影片下載；不影響單列播放選擇。"
+          }
+        }
+      }
+    },
+    "勾選集數後即可加入下載佇列。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select episodes to add to the download queue."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "勾选集数后即可加入下载队列。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "勾選集數後即可加入下載佇列。"
           }
         }
       }
@@ -14777,6 +15076,29 @@
         }
       }
     },
+    "可調整為 0.2–1.8 秒；設定即改即保存，下次開啟作品時生效。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose 0.2–1.8 seconds. Changes are saved immediately and apply the next time you open a title."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可调整为 0.2–1.8 秒；设置即改即保存，下次打开作品时生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可調整為 0.2–1.8 秒；設定即改即保存，下次開啟作品時生效。"
+          }
+        }
+      }
+    },
     "可重建快取上限（MiB）": {
       "extractionState": "manual",
       "localizations": {
@@ -15371,6 +15693,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "固定搜尋、開啟、活動任務與恢復入口仍可使用。"
+          }
+        }
+      }
+    },
+    "在下方貼上網址，收藏影片、直播或常用頁面。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste a URL below to save videos, live streams, or favorite pages."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在下方贴上网址，收藏视频、直播或常用页面。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在下方貼上網址，收藏影片、直播或常用頁面。"
           }
         }
       }
@@ -16548,6 +16893,52 @@
         }
       }
     },
+    "封面從點選位置滑動放大；影院效果將封面推近並降低 gamma；光圈從封面中心展開。動畫結束時顯示詳情預覽；系統開啟減少動態效果時直接顯示。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Glide the selected cover into place, zoom it in with reduced gamma for a cinematic effect, or reveal the page through an iris opening from the cover. The detail preview appears when the animation ends. With Reduce Motion enabled, it opens immediately."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面从点选位置滑动放大；影院效果将封面推近并降低 gamma；光圈从封面中心展开。动画结束时显示详情预览；系统打开减少动态效果时直接显示。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面從點選位置滑動放大；影院效果將封面推近並降低 gamma；光圈從封面中心展開。動畫結束時顯示詳情預覽；系統開啟減少動態效果時直接顯示。"
+          }
+        }
+      }
+    },
+    "封面滑動放大": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover glide"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面滑动放大"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面滑動放大"
+          }
+        }
+      }
+    },
     "封面無法載入；其他作品資料仍可使用。": {
       "extractionState": "manual",
       "localizations": {
@@ -16774,6 +17165,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "尋找已選作品與集數的公開來源…"
+          }
+        }
+      }
+    },
+    "導覽": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导航"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "導覽"
           }
         }
       }
@@ -17188,6 +17602,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "尚無作品收藏。從搜尋或推薦開啟詳情，即可收藏作品。"
+          }
+        }
+      }
+    },
+    "尚無公開評論。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No public comments yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无公开评论。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚無公開評論。"
           }
         }
       }
@@ -18894,6 +19331,52 @@
         }
       }
     },
+    "已載入項目數": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loaded item count"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已载入项目数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已載入項目數"
+          }
+        }
+      }
+    },
+    "已選 %lld 集 · %lld 集就緒": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld selected · %lld ready"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选 %lld 集 · %lld 集就绪"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已選 %lld 集 · %lld 集就緒"
+          }
+        }
+      }
+    },
     "已選 Torrent 檔案資料缺失或不完整；恢復任務以重新校驗。": {
       "extractionState": "manual",
       "localizations": {
@@ -18959,6 +19442,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "已選取"
+          }
+        }
+      }
+    },
+    "已選擇：%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已選擇：%@"
           }
         }
       }
@@ -19492,6 +19998,75 @@
         }
       }
     },
+    "影院推近": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinema zoom"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影院推近"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影院推近"
+          }
+        }
+      }
+    },
+    "影院效果 gamma": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinema gamma"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影院效果 gamma"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影院效果 gamma"
+          }
+        }
+      }
+    },
+    "影院效果放大倍率": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cinema zoom factor"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影院效果放大倍率"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影院效果放大倍率"
+          }
+        }
+      }
+    },
     "待同步": {
       "extractionState": "manual",
       "localizations": {
@@ -19630,6 +20205,29 @@
         }
       }
     },
+    "從搜尋或推薦開啟作品詳情，即可加入收藏。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a title from search or recommendations to add it to your favorites."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从搜索或推荐打开作品详情，即可加入收藏。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "從搜尋或推薦開啟作品詳情，即可加入收藏。"
+          }
+        }
+      }
+    },
     "復原": {
       "extractionState": "manual",
       "localizations": {
@@ -19699,6 +20297,29 @@
         }
       }
     },
+    "快速下載": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick Download"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速下载"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速下載"
+          }
+        }
+      }
+    },
     "快速下載 · %@": {
       "extractionState": "manual",
       "localizations": {
@@ -19764,6 +20385,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "快速下載方式"
+          }
+        }
+      }
+    },
+    "快速起步、緩慢停靠": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fast start, gentle finish"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速起步、缓慢停靠"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速起步、緩慢停靠"
           }
         }
       }
@@ -20063,6 +20707,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "應用內開啟 %@ · %@"
+          }
+        }
+      }
+    },
+    "我的工作區": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "MY WORKSPACE"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的工作区"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "我的工作區"
           }
         }
       }
@@ -20481,6 +21148,29 @@
         }
       }
     },
+    "把常看的連結留在這裡": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep your favorite links here"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把常看的链接留在这里"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把常看的連結留在這裡"
+          }
+        }
+      }
+    },
     "折疊或隱藏導覽不會刪除資料；取消編輯會捨棄整份草稿。": {
       "extractionState": "manual",
       "localizations": {
@@ -20822,6 +21512,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "排期刷新已停用。"
+          }
+        }
+      }
+    },
+    "接著上次的故事，發現下一部喜歡的作品。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pick up your story. Discover your next favorite."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接着上次的故事，发现下一部喜欢的作品。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接著上次的故事，發現下一部喜歡的作品。"
           }
         }
       }
@@ -21995,6 +22708,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "收藏作品…"
+          }
+        }
+      }
+    },
+    "收藏你的下一部作品": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your next favorite starts here"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收藏你的下一部作品"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收藏你的下一部作品"
           }
         }
       }
@@ -23678,6 +24414,52 @@
         }
       }
     },
+    "柔和加速與減速": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smooth acceleration and deceleration"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "柔和加速与减速"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "柔和加速與減速"
+          }
+        }
+      }
+    },
+    "查看%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看%@"
+          }
+        }
+      }
+    },
     "查看既有上游專案": {
       "extractionState": "manual",
       "localizations": {
@@ -24805,6 +25587,29 @@
         }
       }
     },
+    "每一部，都值得期待。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A story worth your time."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每一部，都值得期待。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每一部，都值得期待。"
+          }
+        }
+      }
+    },
     "水平位移": {
       "extractionState": "manual",
       "localizations": {
@@ -24943,6 +25748,29 @@
         }
       }
     },
+    "沒有可見頁面": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Visible Pages"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可见页面"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有可見頁面"
+          }
+        }
+      }
+    },
     "沒有找到 BT 結果。": {
       "extractionState": "manual",
       "localizations": {
@@ -25031,6 +25859,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "沒有符合搜尋或篩選條件的收藏。"
+          }
+        }
+      }
+    },
+    "沒有符合條件的收藏": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching favorites"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有符合条件的收藏"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有符合條件的收藏"
           }
         }
       }
@@ -25767,6 +26618,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "無法連接播放器 IPC。 "
+          }
+        }
+      }
+    },
+    "熱度趨勢": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trending"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "热度趋势"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "熱度趨勢"
           }
         }
       }
@@ -26806,6 +27680,29 @@
         }
       }
     },
+    "空白頁面": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty Page"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空白页面"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空白頁面"
+          }
+        }
+      }
+    },
     "第一欄空間比例": {
       "extractionState": "manual",
       "localizations": {
@@ -26894,6 +27791,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "管理 ▾"
+          }
+        }
+      }
+    },
+    "管理…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manage…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "管理…"
           }
         }
       }
@@ -27519,6 +28439,29 @@
         }
       }
     },
+    "編輯佈局 — 草稿（結束編輯才保存）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Edit Layout — Draft (Saved When Editing Ends)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑布局 — 草稿（结束编辑才保存）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編輯佈局 — 草稿（結束編輯才保存）"
+          }
+        }
+      }
+    },
     "編輯佈局與組件": {
       "extractionState": "manual",
       "localizations": {
@@ -28117,6 +29060,29 @@
         }
       }
     },
+    "蓄勢後推進": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anticipation and acceleration"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓄势后推进"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓄勢後推進"
+          }
+        }
+      }
+    },
     "衝突，已保留": {
       "extractionState": "manual",
       "localizations": {
@@ -28692,6 +29658,29 @@
         }
       }
     },
+    "試試其他關鍵詞，或調整上方的篩選條件。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try another keyword or adjust the filters above."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "试试其他关键词，或调整上方的筛选条件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "試試其他關鍵詞，或調整上方的篩選條件。"
+          }
+        }
+      }
+    },
     "詳情": {
       "extractionState": "manual",
       "localizations": {
@@ -28711,6 +29700,52 @@
           "stringUnit": {
             "state": "translated",
             "value": "詳情"
+          }
+        }
+      }
+    },
+    "詳情頁動畫已保存，下次開啟作品時生效。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detail animation settings saved. They will apply the next time you open a title."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详情页动画已保存，下次打开作品时生效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳情頁動畫已保存，下次開啟作品時生效。"
+          }
+        }
+      }
+    },
+    "詳情頁開啟動畫": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detail opening animation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详情页打开动画"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳情頁開啟動畫"
           }
         }
       }
@@ -29911,6 +30946,29 @@
         }
       }
     },
+    "連按兩下查看詳情": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Double-click for details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "双击查看详情"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連按兩下查看詳情"
+          }
+        }
+      }
+    },
     "連結收藏": {
       "extractionState": "manual",
       "localizations": {
@@ -30233,6 +31291,29 @@
         }
       }
     },
+    "選擇下載集數": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Episodes to Download"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择下载集数"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇下載集數"
+          }
+        }
+      }
+    },
     "選擇來源集數／分 P；尚未猜測播放集數。": {
       "extractionState": "manual",
       "localizations": {
@@ -30344,6 +31425,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "選擇匹配來源即播放已選集數"
+          }
+        }
+      }
+    },
+    "選擇集數，再尋找播放來源。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose an episode, then find a playback source."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择集数，再寻找播放来源。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇集數，再尋找播放來源。"
           }
         }
       }
@@ -30969,6 +32073,29 @@
         }
       }
     },
+    "開啟完整資訊": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Full Information"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启完整信息"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟完整資訊"
+          }
+        }
+      }
+    },
     "開啟工作區": {
       "extractionState": "manual",
       "localizations": {
@@ -31245,6 +32372,52 @@
         }
       }
     },
+    "閱讀 %@ 的評論": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read %@’s comment"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读 %@ 的评论"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閱讀 %@ 的評論"
+          }
+        }
+      }
+    },
+    "閱讀全文": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read more"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "阅读全文"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "閱讀全文"
+          }
+        }
+      }
+    },
     "關於": {
       "extractionState": "manual",
       "localizations": {
@@ -31337,6 +32510,29 @@
         }
       }
     },
+    "關聯作品": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Related works"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关联作品"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關聯作品"
+          }
+        }
+      }
+    },
     "關聯條目載入中…": {
       "extractionState": "manual",
       "localizations": {
@@ -31402,6 +32598,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "關閉"
+          }
+        }
+      }
+    },
+    "關閉動畫": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No animation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭动画"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關閉動畫"
           }
         }
       }
@@ -32234,6 +33453,29 @@
         }
       }
     },
+    "顯示主視窗": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Main Window"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示主窗口"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示主視窗"
+          }
+        }
+      }
+    },
     "顯示全部": {
       "extractionState": "manual",
       "localizations": {
@@ -32414,6 +33656,29 @@
           "stringUnit": {
             "state": "translated",
             "value": "鬥魚"
+          }
+        }
+      }
+    },
+    "點擊查看人物介紹": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click to view the character profile"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击查看人物介绍"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "點擊查看人物介紹"
           }
         }
       }

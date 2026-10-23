@@ -206,6 +206,165 @@ private final class WorkspaceDetailDocumentStack: NSStackView {
     override var isFlipped: Bool { true }
 }
 
+/// A quiet reading surface; authored skins remain the source of colors and assets.
+@MainActor
+private final class WorkspaceDetailSurface: NSView {
+    private let skin: SkinAppearance
+    private let hero: Bool
+    private let wash = CAGradientLayer()
+
+    init(appearance: SkinAppearance, hero: Bool = false) {
+        skin = appearance
+        self.hero = hero
+        super.init(frame: .zero)
+        bindSkin(appearance, slot: "panel", componentID: "detail.media")
+        layer?.insertSublayer(wash, at: 0)
+        wash.startPoint = CGPoint(x: 0, y: 1)
+        wash.endPoint = CGPoint(x: 1, y: 0)
+        NotificationCenter.default.addObserver(self, selector: #selector(refresh), name: SkinAppearance.didChangeNotification, object: appearance)
+        refresh()
+    }
+    required init?(coder: NSCoder) { nil }
+    deinit { NotificationCenter.default.removeObserver(self) }
+    override func layout() { super.layout(); refresh() }
+    override func setFrameSize(_ newSize: NSSize) { super.setFrameSize(newSize); refresh() }
+    override func setFrameOrigin(_ newOrigin: NSPoint) { super.setFrameOrigin(newOrigin); refresh() }
+    @objc private func refresh() {
+        let style = skin.resolve(slot: "panel", componentID: "detail.media", state: .normal)
+        let accent = skin.resolve(slot: "primaryAction", componentID: "detail.media", state: .selected)
+        let custom = style.values["background"] != nil || style.assetIDs[.background] != nil || style.assetIDs[.decoration] != nil
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        layer?.cornerRadius = style.values["radius"] == nil ? (hero ? 24 : 18) : style.radius
+        layer?.masksToBounds = true
+        if style.values["borderWidth"] == nil { layer?.borderWidth = 1 }
+        if style.values["borderColor"] == nil { layer?.borderColor = style.foreground.withAlphaComponent(0.09).cgColor }
+        wash.frame = bounds
+        wash.isHidden = custom
+        wash.colors = hero
+            ? [accent.foreground.withAlphaComponent(0.10).cgColor, style.foreground.withAlphaComponent(0.025).cgColor, NSColor.clear.cgColor]
+            : [style.foreground.withAlphaComponent(0.025).cgColor, style.foreground.withAlphaComponent(0.025).cgColor]
+        CATransaction.commit()
+    }
+}
+
+@MainActor
+private final class WorkspaceDetailActionButton: WorkspaceSkinButton {
+    var prominent = false { didSet { updateSkinState() } }
+    override var usesNativeBezel: Bool { false }
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        cell = WorkspaceDetailActionCell(textCell: "")
+        setButtonType(.momentaryPushIn)
+    }
+    required init?(coder: NSCoder) { super.init(coder: coder) }
+    override var intrinsicContentSize: NSSize {
+        let size = super.intrinsicContentSize
+        return NSSize(width: size.width + 22, height: max(36, size.height + 8))
+    }
+    override func applySkinStyle(_ style: SkinResolvedStyle, state: SkinControlState) {
+        guard prominent, isEnabled, state == .normal || state == .selected, let binding = workspaceSkinBinding else { return }
+        let selected = binding.appearance.resolve(slot: binding.slot, componentID: binding.componentID, state: .selected)
+        if style.values["background"] == nil, style.assetIDs[.background] == nil { layer?.backgroundColor = selected.background.cgColor }
+        if style.values["foreground"] == nil { contentTintColor = selected.foreground }
+        if style.values["fontSize"] == nil, style.values["fontFamily"] == nil { font = NSFont.systemFont(ofSize: 13, weight: .semibold) }
+    }
+}
+
+private final class WorkspaceDetailActionCell: NSButtonCell {
+    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+        super.drawInterior(withFrame: cellFrame.insetBy(dx: 10, dy: 0), in: controlView)
+    }
+}
+
+@MainActor
+private final class WorkspaceDetailSectionButton: WorkspaceSkinButton {
+    var defaultPointSize: CGFloat = 20
+    override var usesNativeBezel: Bool { false }
+    override var preservesNativeImage: Bool { true }
+    override var acceptsFirstResponder: Bool { isEnabled }
+    override func applySkinStyle(_ style: SkinResolvedStyle, state: SkinControlState) {
+        if style.values["fontSize"] == nil, style.values["fontFamily"] == nil {
+            font = .systemFont(ofSize: defaultPointSize, weight: .semibold)
+        }
+        if state == .normal, style.values["background"] == nil, style.assetIDs[.background] == nil {
+            layer?.backgroundColor = NSColor.clear.cgColor
+        }
+        if style.values["borderWidth"] == nil { layer?.borderWidth = state == .focus ? 1 : 0 }
+    }
+}
+
+@MainActor
+private final class WorkspaceDetailHeroStack: NSStackView {
+    private let text: NSView
+    private var stackedWidth: NSLayoutConstraint!
+    init(poster: NSView, text: NSView) {
+        self.text = text
+        super.init(frame: .zero)
+        orientation = .horizontal; alignment = .top; spacing = 24
+        addArrangedSubview(poster); addArrangedSubview(text)
+        stackedWidth = text.widthAnchor.constraint(equalTo: widthAnchor)
+    }
+    required init?(coder: NSCoder) { nil }
+    override func layout() {
+        let vertical = bounds.width < 600
+        let target: NSUserInterfaceLayoutOrientation = vertical ? .vertical : .horizontal
+        if orientation != target {
+            stackedWidth.isActive = false
+            orientation = target
+            alignment = vertical ? .leading : .top
+            stackedWidth.isActive = vertical
+        }
+        super.layout()
+    }
+}
+
+@MainActor
+private final class WorkspaceDetailStatusField: NSTextField {
+    var didChangeText: (() -> Void)?
+    override var stringValue: String { didSet { didChangeText?() } }
+}
+
+@MainActor
+private final class WorkspaceDetailHeroColumns: NSStackView {
+    private var stackedWidths: [NSLayoutConstraint] = []
+    private var previewWidth: NSLayoutConstraint!
+    private var primaryWidth: NSLayoutConstraint!
+    var minimumPrimaryWidth: (() -> CGFloat)?
+
+    init(primary: NSView, preview: NSView) {
+        super.init(frame: .zero)
+        orientation = .vertical; alignment = .leading; spacing = 28
+        for item in [primary, preview] {
+            addArrangedSubview(item)
+            stackedWidths.append(item.widthAnchor.constraint(equalTo: widthAnchor))
+        }
+        previewWidth = preview.widthAnchor.constraint(equalToConstant: 280)
+        primaryWidth = primary.widthAnchor.constraint(equalTo: widthAnchor, constant: -308)
+        NSLayoutConstraint.activate(stackedWidths)
+    }
+    required init?(coder: NSCoder) { nil }
+    override func layout() {
+        let infoWidth = min(320, max(240, bounds.width * 0.28))
+        let horizontal = bounds.width >= max(900, max(600, minimumPrimaryWidth?() ?? 600) + spacing + infoWidth)
+        let target: NSUserInterfaceLayoutOrientation = horizontal ? .horizontal : .vertical
+        if orientation != target {
+            NSLayoutConstraint.deactivate(stackedWidths)
+            previewWidth.isActive = false
+            primaryWidth.isActive = false
+            orientation = target
+            alignment = horizontal ? .top : .leading
+            if horizontal { previewWidth.isActive = true; primaryWidth.isActive = true }
+            else { NSLayoutConstraint.activate(stackedWidths) }
+        }
+        if horizontal {
+            previewWidth.constant = infoWidth
+            primaryWidth.constant = -previewWidth.constant - spacing
+        }
+        super.layout()
+    }
+}
+
 @MainActor
 private final class WorkspaceDetailButtonGrid: NSView {
     override var isFlipped: Bool { true }
@@ -233,6 +392,7 @@ private final class WorkspaceDetailButtonGrid: NSView {
 private final class WorkspaceDetailAdaptiveColumns: NSStackView {
     private let breakpoint: CGFloat
     private var stackedWidths: [NSLayoutConstraint] = []
+    var minimumHorizontalWidth: (() -> CGFloat)?
     init(views: [NSView], breakpoint: CGFloat) {
         self.breakpoint = breakpoint
         super.init(frame: .zero)
@@ -247,12 +407,12 @@ private final class WorkspaceDetailAdaptiveColumns: NSStackView {
     }
     required init?(coder: NSCoder) { nil }
     override func layout() {
-        let target: NSUserInterfaceLayoutOrientation = bounds.width >= breakpoint ? .horizontal : .vertical
+        let target: NSUserInterfaceLayoutOrientation = bounds.width >= (minimumHorizontalWidth?() ?? breakpoint) ? .horizontal : .vertical
         if orientation != target {
             NSLayoutConstraint.deactivate(stackedWidths)
             orientation = target
             alignment = target == .horizontal ? .top : .leading
-            distribution = target == .horizontal ? .fillEqually : .fill
+            distribution = target == .horizontal && minimumHorizontalWidth == nil ? .fillEqually : .fill
             if target == .vertical { NSLayoutConstraint.activate(stackedWidths) }
         }
         super.layout()
@@ -295,6 +455,9 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private lazy var animeSources = AnimeSourceService(decoder: services.decoder)
     private var animeReport: AnimeSourceReport?
     private var sourcePanel: NSPanel?
+    private var managementPanel: NSPanel?
+    private let managementTitle = NSTextField(wrappingLabelWithString: "")
+    private let managementStatus = NSTextField(wrappingLabelWithString: "")
     private var quickDownloadPanel: NSPanel?
     private var quickDownloadController: WorkspaceQuickDownloadController?
     private var quickDownloadButton: WorkspaceSkinButton!
@@ -325,12 +488,33 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private var nextCommentsPage: Int?
     private var commentsLoading = false
     private var extrasSubjectID: Int?
-    private var overviewContent: WorkspaceDetailAdaptiveColumns!
-    private var informationTabs: NSSegmentedControl!
-    private let subjectInformation = NSStackView()
-    private let tagsContent = NSStackView()
-    private let commentsPage = NSStackView()
+    private enum InformationPage: Equatable {
+        case overview, characters, character(Int), relations, comments, comment(String)
+    }
+    private var informationHistory: [InformationPage] = []
+    private let informationHost = NSView()
+    private let informationScroll = WorkspaceScrollView()
+    private let informationBody = WorkspaceDetailDocumentStack()
+    private let informationTitle = NSTextField(labelWithString: "")
+    private var informationBackButton: WorkspaceSkinButton!
+    private var informationMoreCommentsButton: WorkspaceSkinButton?
+    private weak var informationReturnFocus: NSView?
+    private var informationReturnOrigin = NSPoint.zero
+    private var overviewEntries: [(String, String)] = []
+    private var overviewTags: [String] = []
+    private var overviewFailure: String?
+    private var synopsisPreview: WorkspaceDetailInfoPreview!
+    private let characterShelf = WorkspaceDetailShelf(height: 202)
+    private let relationShelf = WorkspaceDetailShelf(height: 260)
+    private let commentShelf = WorkspaceDetailShelf(height: 228)
+    private let characterStatus = NSTextField(wrappingLabelWithString: "")
+    private let relationStatus = NSTextField(wrappingLabelWithString: "")
+    private var commentsProvenance = ""
     private let heroRating = NSTextField(wrappingLabelWithString: "")
+    private let heroRatingDetail = NSTextField(wrappingLabelWithString: "")
+    private let heroFacts = NSTextField(wrappingLabelWithString: "")
+    private let episodeSelection = NSTextField(wrappingLabelWithString: "")
+    private var ratingRow: NSStackView!
     private let charactersContent = NSStackView()
     private let relationsContent = NSStackView()
     private let commentsContent = NSStackView()
@@ -378,12 +562,27 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private var coverRequest: SDWebImageCombinedOperation?
     private var coverGeneration = UUID()
     private let cover = NSImageView()
+    private var transitionFallbackImage: NSImage?
+    var transitionCover: NSImageView? { cover.isHidden ? nil : cover }
+
+    func prepareTransitionCover(_ image: NSImage?) {
+        guard let image else { return }
+        transitionFallbackImage = image
+        if cover.image == nil { cover.image = image }
+        cover.isHidden = false
+        coverStatus.isHidden = true
+        // Metadata-only and related-item routes may still be loading their identity.
+        if work == nil, selection == nil, image.size.height > image.size.width {
+            coverWidth.constant = 152
+            coverHeight.constant = 228
+        }
+    }
     private let coverStatus = NSTextField(wrappingLabelWithString: String(localized: "來源未提供封面"))
     private let documentScroll = WorkspaceScrollView()
     private let heading = NSTextField(wrappingLabelWithString: String(localized: "作品／影片詳情"))
     private let metadata = NSTextField(wrappingLabelWithString: String(localized: "開啟作品、影片連結或搜尋結果。"))
     private let identity = NSTextField(wrappingLabelWithString: "")
-    private lazy var summary = WorkspaceDetailDescription(appearance: appearance)
+    private var summaryText = ""
     private let episodeEmpty = NSTextField(wrappingLabelWithString: String(localized: "尚無集數資料"))
     private let catalogEmpty = NSTextField(wrappingLabelWithString: String(localized: "尚未載入來源"))
     private var catalogCaption: NSTextField!
@@ -400,12 +599,14 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private var sourceTitle: String?
     private var sourceAuthor: String?
     private var sourceOnline: Bool?
-    private let status = NSTextField(wrappingLabelWithString: String(localized: "尚未選擇來源。"))
+    private let status = WorkspaceDetailStatusField(wrappingLabelWithString: String(localized: "尚未選擇來源。"))
     private let reasons = NSTextField(wrappingLabelWithString: "")
     private let address = NSTextField()
     private let sourceAddress = NSTextField()
     private let bangumiID = NSTextField()
     private let classificationPopup = NSPopUpButton()
+    private var presentedClassification: MediaContentKind?
+    private var presentedBangumiID: String?
     private let classificationStatus = NSTextField(wrappingLabelWithString: String(localized: "未知待確認"))
     private var classificationButton: WorkspaceSkinButton!
     private var associateButton: WorkspaceSkinButton!
@@ -506,51 +707,89 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         favoriteLinkButton = button(String(localized: "Favorite Link"), #selector(favoriteLink), icon: .bookmark)
         refreshButton = button(String(localized: "刷新"), #selector(refreshMetadata), icon: .refresh)
         originalButton = button(String(localized: "原始頁面"), #selector(openOriginal), icon: .openLink)
-        moreButton = button(String(localized: "管理 ▸"), #selector(toggleMaintenance), icon: .settings)
+        moreButton = button(String(localized: "管理…"), #selector(toggleMaintenance), icon: .settings)
         moreButton.setAccessibilityLabel(String(localized: "作品管理與資料狀態"))
         moreButton.setAccessibilityValue(String(localized: "已收合"))
 
         heading.setAccessibilityLabel(String(localized: "作品／影片名稱"))
+        identity.font = .systemFont(ofSize: 13)
+        identity.textColor = .secondaryLabelColor
         cover.imageScaling = .scaleProportionallyUpOrDown
         cover.setAccessibilityLabel(String(localized: "作品封面"))
-        coverHeight = cover.heightAnchor.constraint(equalToConstant: 174)
+        cover.wantsLayer = true
+        cover.layer?.cornerRadius = 14
+        cover.layer?.masksToBounds = true
+        coverHeight = cover.heightAnchor.constraint(equalToConstant: 228)
         coverHeight.isActive = true
-        coverWidth = cover.widthAnchor.constraint(equalToConstant: 116)
+        coverWidth = cover.widthAnchor.constraint(equalToConstant: 152)
         coverWidth.isActive = true
         cover.isHidden = true
-        let headerText = NSStackView(views: [heading, identity, heroRating, coverStatus])
+        heroRating.font = .systemFont(ofSize: 32, weight: .bold)
+        heroRatingDetail.bindSkin(appearance, slot: "subtitle", componentID: "detail.media")
+        heroFacts.font = .systemFont(ofSize: 13, weight: .semibold)
+        heroFacts.bindSkin(appearance, slot: "list", componentID: "detail.media")
+        ratingRow = row([heroRating, heroRatingDetail])
+        ratingRow.alignment = .centerY
+        heroRating.setContentHuggingPriority(.required, for: .horizontal)
+        heroRatingDetail.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let libraryActions = row([favoriteWorkButton, quickDownloadButton, moreButton])
+        let headerText = NSStackView(views: [heading, identity, heroFacts, ratingRow, libraryActions, coverStatus])
         headerText.orientation = .vertical
         headerText.alignment = .leading
-        headerText.spacing = 10
-        for field in [heading, identity, heroRating, coverStatus] {
+        headerText.spacing = 12
+        for field in [heading, identity, heroFacts, coverStatus] {
             field.widthAnchor.constraint(equalTo: headerText.widthAnchor).isActive = true
             field.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         }
         headerText.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let header = row([cover, headerText])
-        header.alignment = .top
-        append(header)
-        let libraryActions = row([favoriteWorkButton, favoriteLinkButton, quickDownloadButton])
-        let utilityActions = row([refreshButton, originalButton, moreButton])
-        let actions = WorkspaceDetailAdaptiveColumns(views: [libraryActions, utilityActions], breakpoint: 560)
-        append(actions)
+        let header = WorkspaceDetailHeroStack(poster: cover, text: headerText)
+        synopsisPreview = WorkspaceDetailInfoPreview(appearance: appearance, target: self, action: #selector(showOverviewInformation))
+        let heroColumns = WorkspaceDetailHeroColumns(primary: header, preview: synopsisPreview)
+        heroColumns.minimumPrimaryWidth = { [weak self, weak libraryActions] in
+            (self?.coverWidth.constant ?? 152) + 24 + (libraryActions?.fittingSize.width ?? 420)
+        }
+        append(card(title: nil, items: [heroColumns], hero: true))
+        let utilityActions = row([favoriteLinkButton, refreshButton, originalButton])
+        refreshButton.functionIconPosition = .imageOnly
+        refreshButton.updateSkinState()
+        refreshButton.setAccessibilityLabel(String(localized: "刷新"))
+        refreshButton.toolTip = String(localized: "刷新")
+        let utilitySpacer = NSView()
+        utilitySpacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        utilityActions.addArrangedSubview(utilitySpacer)
         let collectionControls = NSStackView(views: collectionButtons)
-        collectionControls.orientation = .horizontal
-        collectionControls.alignment = .centerY
+        collectionControls.orientation = .vertical
+        collectionControls.alignment = .leading
         collectionControls.spacing = 8
         collectionControls.edgeInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
-        collectionControls.widthAnchor.constraint(equalToConstant: 340).isActive = true
+        collectionControls.widthAnchor.constraint(equalToConstant: 240).isActive = true
+        for control in collectionButtons {
+            control.widthAnchor.constraint(equalTo: collectionControls.widthAnchor, constant: -24).isActive = true
+        }
         let collectionController = NSViewController()
-        collectionController.view = collectionControls
+        let collectionGlass = WorkspaceGlassSurface(appearance: appearance, cornerRadius: 18)
+        collectionGlass.contentView.addSubview(collectionControls)
+        collectionControls.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            collectionControls.leadingAnchor.constraint(equalTo: collectionGlass.contentView.leadingAnchor),
+            collectionControls.trailingAnchor.constraint(equalTo: collectionGlass.contentView.trailingAnchor),
+            collectionControls.topAnchor.constraint(equalTo: collectionGlass.contentView.topAnchor),
+            collectionControls.bottomAnchor.constraint(equalTo: collectionGlass.contentView.bottomAnchor),
+        ])
+        collectionController.view = collectionGlass
         collectionPopover.contentViewController = collectionController
-        collectionPopover.contentSize = NSSize(width: 340, height: 56)
+        collectionPopover.contentSize = NSSize(width: 240, height: 236)
         collectionPopover.behavior = .transient
         collectionPopover.delegate = self
         status.isSelectable = true
-        append(status)
+        status.didChangeText = { [weak self] in self?.syncManagementStatus() }
+        status.bindSkin(appearance, slot: "status", componentID: "detail.media")
 
-        episodeCaption = label(String(localized: "選集"))
-        episodeCaption.bindSkin(appearance, slot: "header", componentID: "detail.media")
+        episodeCaption = NSTextField(wrappingLabelWithString: String(localized: "選集"))
+        episodeCaption.font = .systemFont(ofSize: 18, weight: .semibold)
+        episodeCaption.bindSkin(appearance, slot: "list", componentID: "detail.media")
+        episodeSelection.bindSkin(appearance, slot: "subtitle", componentID: "detail.media")
+        (sourcePanelButton as? WorkspaceDetailActionButton)?.prominent = true
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
         let episodeToolbar = row([episodeCaption, spacer, sourcePanelButton])
@@ -558,28 +797,27 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         episodeGroups.orientation = .vertical
         episodeGroups.alignment = .leading
         episodeGroups.spacing = 14
-        append(card(title: nil, items: [episodeToolbar, episodeGroups, episodeEmpty]))
+        append(card(title: nil, items: [episodeToolbar, episodeSelection, episodeGroups, episodeEmpty, status]))
 
-        informationTabs = NSSegmentedControl(labels: [String(localized: "簡介"), String(localized: "人物"), String(localized: "關聯"), String(localized: "評論")], trackingMode: .selectOne, target: self, action: #selector(informationTabChanged))
-        informationTabs.segmentStyle = .rounded
-        informationTabs.selectedSegment = 0
-        informationTabs.setAccessibilityLabel(String(localized: "作品資訊分頁"))
-        for index in 0..<informationTabs.segmentCount { informationTabs.setWidth(72, forSegment: index) }
-        append(informationTabs)
         metadata.isSelectable = true
         identity.isSelectable = true
-        for section in [subjectInformation, charactersContent, relationsContent, commentsContent, commentsPage, tagsContent] {
-            section.orientation = .vertical; section.alignment = .leading; section.spacing = 12
+        for section in [charactersContent, relationsContent, commentsContent] {
+            section.orientation = .vertical; section.alignment = .leading; section.spacing = 16
         }
-        let synopsis = card(title: String(localized: "故事簡介"), items: [summary, tagsContent])
-        let facts = card(title: String(localized: "作品資訊"), items: [subjectInformation])
-        overviewContent = WorkspaceDetailAdaptiveColumns(views: [synopsis, facts], breakpoint: 760)
+        appendInfo(sectionLink(String(localized: "關聯作品"), action: #selector(showRelationsInformation)), to: relationsContent)
+        appendInfo(relationShelf, to: relationsContent)
+        appendInfo(relationStatus, to: relationsContent)
+        appendInfo(sectionLink(String(localized: "人物"), action: #selector(showCharactersInformation)), to: charactersContent)
+        appendInfo(characterShelf, to: charactersContent)
+        appendInfo(characterStatus, to: charactersContent)
+        appendInfo(sectionLink(String(localized: "評論"), action: #selector(showCommentsInformation)), to: commentsContent)
+        appendInfo(commentShelf, to: commentsContent)
+        appendInfo(commentsStatus, to: commentsContent)
         moreCommentsButton = button(String(localized: "載入更多評論"), #selector(loadMoreComments), icon: .add)
-        for item in [commentsContent, commentsStatus, moreCommentsButton] as [NSView] { appendInfo(item, to: commentsPage) }
-        for page in [overviewContent!, charactersContent, relationsContent, commentsPage] {
-            append(page)
+        commentsContent.addArrangedSubview(moreCommentsButton)
+        for field in [characterStatus, relationStatus, commentsStatus] {
+            field.bindSkin(appearance, slot: "subtitle", componentID: "detail.media")
         }
-        updateInformationTab()
 
         address.placeholderString = String(localized: "影片／作品原始連結")
         address.setAccessibilityLabel(String(localized: "開啟影片連結"))
@@ -599,11 +837,14 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         maintenance.orientation = .vertical
         maintenance.alignment = .leading
         maintenance.spacing = 12
-        for item in [card(title: String(localized: "作品管理"), items: [row([address, button(String(localized: "開啟"), #selector(openTypedAddress), icon: .openLink)]), classificationStatus, row([classificationPopup, classificationButton]), bangumiControls]), card(title: String(localized: "資料狀態"), items: [metadata])] {
+        for item in [utilityActions, card(title: String(localized: "作品管理"), items: [row([address, button(String(localized: "開啟"), #selector(openTypedAddress), icon: .openLink)]), classificationStatus, row([classificationPopup, classificationButton]), bangumiControls]), card(title: String(localized: "資料狀態"), items: [metadata])] {
             appendInfo(item, to: maintenance)
         }
-        maintenance.isHidden = true
-        append(maintenance)
+        append(relationsContent)
+        append(charactersContent)
+        append(commentsContent)
+        buildInformationPage(in: root)
+        buildManagementPanel()
         buildSourcePanel()
         view = root
         root.bindSkin(appearance, slot: "panel", componentID: "detail.media")
@@ -611,7 +852,9 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         for field in [heading, identity, heroRating, metadata, status] {
             field.lineBreakMode = .byWordWrapping
             field.maximumNumberOfLines = 0
-            if field !== heading { field.bindSkin(appearance, slot: "list", componentID: "detail.media") }
+            if field !== heading && field !== status {
+                field.bindSkin(appearance, slot: "list", componentID: "detail.media")
+            }
         }
         for field in [coverStatus, episodeEmpty, catalogEmpty, classificationStatus] {
             field.bindSkin(appearance, slot: "emptyState", componentID: "detail.media")
@@ -620,39 +863,48 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     }
 
     @objc private func toggleMaintenance() {
-        maintenance.isHidden.toggle()
-        moreButton.title = maintenance.isHidden ? String(localized: "管理 ▸") : String(localized: "管理 ▾")
-        moreButton.setAccessibilityValue(maintenance.isHidden ? String(localized: "已收合") : String(localized: "已展開"))
+        guard !previewOnly, attached, let parent = view.window, let panel = managementPanel else { return }
+        if panel.isVisible { closeManagementPanel(); return }
+        closeCollectionPopover()
+        if panel.parent !== parent {
+            panel.parent?.removeChildWindow(panel)
+            parent.addChildWindow(panel, ordered: .above)
+            panel.setFrameOrigin(NSPoint(x: parent.frame.midX - panel.frame.width / 2, y: parent.frame.midY - panel.frame.height / 2))
+        }
+        updateCommands()
+        moreButton.setAccessibilityValue(String(localized: "已展開"))
+        panel.makeKeyAndOrderFront(nil)
     }
-    private func card(title: String?, items: [NSView]) -> NSView {
-        let container = NSView()
-        container.bindSkin(appearance, slot: "panel", componentID: "detail.media")
-        let border = NSBox()
-        border.boxType = .custom
-        border.titlePosition = .noTitle
-        border.fillColor = .clear
-        border.borderColor = .separatorColor
-        border.borderWidth = 1
-        border.cornerRadius = 10
-        container.addSubview(border)
-        border.translatesAutoresizingMaskIntoConstraints = false
+
+    @objc private func closeManagementPanel() {
+        guard let panel = managementPanel else { return }
+        let restoreFocus = panel.isKeyWindow
+        panel.makeFirstResponder(nil)
+        panel.parent?.removeChildWindow(panel)
+        panel.orderOut(nil)
+        moreButton?.setAccessibilityValue(String(localized: "已收合"))
+        if restoreFocus, attached {
+            view.window?.makeKey()
+            view.window?.makeFirstResponder(moreButton)
+        }
+    }
+    private func card(title: String?, items: [NSView], hero: Bool = false) -> NSView {
+        let container = WorkspaceDetailSurface(appearance: appearance, hero: hero)
         let stack = NSStackView()
-        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
+        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 16
         container.addSubview(stack)
         stack.translatesAutoresizingMaskIntoConstraints = false
+        let inset: CGFloat = hero ? 24 : 20
         NSLayoutConstraint.activate([
-            border.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            border.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            border.topAnchor.constraint(equalTo: container.topAnchor),
-            border.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: 14),
-            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -14),
-            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: 14),
-            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -14),
+            stack.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: inset),
+            stack.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -inset),
+            stack.topAnchor.constraint(equalTo: container.topAnchor, constant: inset),
+            stack.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -inset),
         ])
         if let title {
-            let caption = label(title)
-            caption.font = NSFontManager.shared.convert(caption.font ?? NSFont.systemFont(ofSize: 13), toHaveTrait: .boldFontMask)
+            let caption = NSTextField(wrappingLabelWithString: title)
+            caption.font = .systemFont(ofSize: 15, weight: .semibold)
+            caption.bindSkin(appearance, slot: "list", componentID: "detail.media")
             appendInfo(caption, to: stack)
         }
         for item in items { appendInfo(item, to: stack) }
@@ -672,22 +924,117 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         grid.column(at: 0).width = 84
         return grid
     }
-    @objc private func informationTabChanged() {
-        updateInformationTab()
-        view.layoutSubtreeIfNeeded()
-        if let document = documentScroll.documentView {
-            let origin = informationTabs.convert(informationTabs.bounds, to: document).origin
-            documentScroll.contentView.scroll(to: NSPoint(x: 0, y: max(0, origin.y - 8)))
-            documentScroll.reflectScrolledClipView(documentScroll.contentView)
-        }
+    private func sectionLink(_ title: String, action: Selector) -> NSView {
+        let control = WorkspaceDetailSectionButton(title: title, target: self, action: action)
+        control.setButtonType(.momentaryPushIn)
+        control.isBordered = false
+        control.alignment = .left
+        control.font = .systemFont(ofSize: 20, weight: .semibold)
+        control.image = NSImage(systemSymbolName: "chevron.right", accessibilityDescription: nil)
+        control.imagePosition = .imageTrailing
+        control.bindSkin(appearance, slot: "list", componentID: "detail.media")
+        control.setAccessibilityLabel(String(localized: "查看\(title)"))
+        control.heightAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
+        control.setContentHuggingPriority(.required, for: .horizontal)
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        return row([control, spacer])
     }
-    private func updateInformationTab() {
-        let extended = classification.kind == .anime && (work?.bangumiID != nil || extrasSubjectID != nil)
-        informationTabs.isHidden = !extended
-        if !extended { informationTabs.selectedSegment = 0 }
-        for (index, page) in [overviewContent!, charactersContent, relationsContent, commentsPage].enumerated() {
-            page.isHidden = index != informationTabs.selectedSegment
+    private func buildInformationPage(in root: NSView) {
+        informationHost.isHidden = true
+        root.addSubview(informationHost)
+        informationHost.translatesAutoresizingMaskIntoConstraints = false
+        informationBackButton = button(String(localized: "返回"), #selector(backFromInformation), icon: .back)
+        informationBackButton.keyEquivalent = "\u{1b}"
+        informationTitle.font = .systemFont(ofSize: 20, weight: .semibold)
+        informationTitle.bindSkin(appearance, slot: "list", componentID: "detail.media")
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let toolbar = row([informationBackButton, informationTitle, spacer])
+        toolbar.spacing = 16
+        let glass = WorkspaceGlassSurface(appearance: appearance, cornerRadius: 0)
+        glass.contentView.addSubview(toolbar)
+        toolbar.translatesAutoresizingMaskIntoConstraints = false
+        informationHost.addSubview(glass)
+        informationHost.addSubview(informationScroll)
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        informationScroll.translatesAutoresizingMaskIntoConstraints = false
+        informationScroll.hasVerticalScroller = true
+        informationScroll.drawsBackground = false
+        informationBody.orientation = .vertical
+        informationBody.alignment = .leading
+        informationBody.spacing = 20
+        informationBody.edgeInsets = NSEdgeInsets(top: 24, left: 24, bottom: 32, right: 24)
+        informationBody.translatesAutoresizingMaskIntoConstraints = false
+        informationScroll.documentView = informationBody
+        NSLayoutConstraint.activate([
+            informationHost.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            informationHost.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            informationHost.topAnchor.constraint(equalTo: root.topAnchor),
+            informationHost.bottomAnchor.constraint(equalTo: root.bottomAnchor),
+            glass.leadingAnchor.constraint(equalTo: informationHost.leadingAnchor),
+            glass.trailingAnchor.constraint(equalTo: informationHost.trailingAnchor),
+            glass.topAnchor.constraint(equalTo: informationHost.topAnchor),
+            glass.heightAnchor.constraint(equalToConstant: 64),
+            toolbar.leadingAnchor.constraint(equalTo: glass.contentView.leadingAnchor, constant: 20),
+            toolbar.trailingAnchor.constraint(equalTo: glass.contentView.trailingAnchor, constant: -20),
+            toolbar.centerYAnchor.constraint(equalTo: glass.contentView.centerYAnchor),
+            informationScroll.leadingAnchor.constraint(equalTo: informationHost.leadingAnchor),
+            informationScroll.trailingAnchor.constraint(equalTo: informationHost.trailingAnchor),
+            informationScroll.topAnchor.constraint(equalTo: glass.bottomAnchor),
+            informationScroll.bottomAnchor.constraint(equalTo: informationHost.bottomAnchor),
+            informationBody.widthAnchor.constraint(equalTo: informationScroll.contentView.widthAnchor),
+        ])
+    }
+    @objc private func showOverviewInformation(_ sender: NSButton) { openInformation(.overview, from: sender) }
+    @objc private func showCharactersInformation(_ sender: NSButton) { openInformation(.characters, from: sender) }
+    @objc private func showRelationsInformation(_ sender: NSButton) { openInformation(.relations, from: sender) }
+    @objc private func showCommentsInformation(_ sender: NSButton) { openInformation(.comments, from: sender) }
+    @objc private func showCharacterInformation(_ sender: NSButton) { openInformation(.character(sender.tag), from: sender) }
+    @objc private func showCommentInformation(_ sender: NSButton) {
+        guard let id = sender.identifier?.rawValue else { return }
+        openInformation(.comment(id), from: sender)
+    }
+    private func openInformation(_ page: InformationPage, from sender: NSView) {
+        closeManagementPanel()
+        if informationHistory.isEmpty {
+            informationReturnOrigin = documentScroll.contentView.bounds.origin
+            informationReturnFocus = sender
         }
+        if informationHistory.last != page { informationHistory.append(page) }
+        documentScroll.isHidden = true
+        informationHost.isHidden = false
+        renderInformationPage()
+        informationScroll.contentView.scroll(to: .zero)
+        informationScroll.reflectScrolledClipView(informationScroll.contentView)
+        view.window?.makeFirstResponder(informationBackButton)
+    }
+    @objc private func backFromInformation() { _ = goBackInInformation() }
+    @discardableResult func goBackInInformation() -> Bool {
+        guard !informationHistory.isEmpty else { return false }
+        informationHistory.removeLast()
+        if informationHistory.isEmpty {
+            informationHost.isHidden = true
+            documentScroll.isHidden = false
+            view.layoutSubtreeIfNeeded()
+            var bounds = documentScroll.contentView.bounds
+            bounds.origin = informationReturnOrigin
+            documentScroll.contentView.scroll(to: documentScroll.contentView.constrainBoundsRect(bounds).origin)
+            documentScroll.reflectScrolledClipView(documentScroll.contentView)
+            view.window?.makeFirstResponder(informationReturnFocus)
+            informationReturnFocus = nil
+        } else {
+            renderInformationPage()
+            informationScroll.contentView.scroll(to: .zero)
+            informationScroll.reflectScrolledClipView(informationScroll.contentView)
+            view.window?.makeFirstResponder(informationBackButton)
+        }
+        return true
+    }
+    private func updateInformationSections() {
+        let extended = classification.kind == .anime && (work?.bangumiID != nil || extrasSubjectID != nil)
+        for section in [charactersContent, relationsContent, commentsContent] { section.isHidden = !extended }
+        synopsisPreview.text = WorkspaceDetailRichText.render(summaryText).string
     }
 
     private func label(_ value: String) -> NSTextField {
@@ -709,7 +1056,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         return stack
     }
     private func button(_ title: String, _ action: Selector, icon: WorkspaceIcon? = nil) -> WorkspaceSkinButton {
-        let button = WorkspaceSkinButton(title: title, target: self, action: action)
+        let button = WorkspaceDetailActionButton(title: title, target: self, action: action)
         button.setFunctionIcon(icon)
         button.bezelStyle = .rounded
         button.bindSkin(appearance, slot: "primaryAction", componentID: "detail.media")
@@ -718,7 +1065,8 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         return button
     }
     private func selectionButton(_ title: String, identity: String, action: Selector, selected: Bool) -> NSButton {
-        let value = NSButton(title: title, target: self, action: action)
+        let value = WorkspaceDetailActionButton(title: title, target: self, action: action)
+        value.bindSkin(appearance, slot: "tabs", componentID: "detail.media")
         value.bezelStyle = .rounded
         value.setButtonType(.pushOnPushOff)
         value.state = selected ? .on : .off
@@ -728,6 +1076,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         value.setAccessibilityLabel(title)
         value.setAccessibilityValue(selected ? String(localized: "已選取") : String(localized: "未選取"))
         value.isEnabled = !previewOnly
+        value.updateSkinState()
         return value
     }
 
@@ -819,6 +1168,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
 
     func detach() {
         attached = false
+        closeManagementPanel()
         closeCollectionPopover()
         completedObservation.stop()
         closeQuickDownload()
@@ -847,15 +1197,25 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private func reset() {
         _ = view
         attached = true
+        closeManagementPanel()
         closeCollectionPopover()
         closeQuickDownload()
         hideSourcePanel(); invalidateExtraInformation()
+        informationHistory = []
+        informationHost.isHidden = true; documentScroll.isHidden = false
+        informationReturnFocus = nil; informationReturnOrigin = .zero
+        clear(informationBody)
+        informationMoreCommentsButton = nil
+        characterShelf.resetScrollPosition(); relationShelf.resetScrollPosition(); commentShelf.resetScrollPosition()
         extras = nil; extrasSubjectID = nil; comments = []; nextCommentsPage = nil
+        overviewFailure = nil; commentsProvenance = ""
         generation = UUID(); metadataGeneration = UUID()
         operation?.cancel(); metadataOperation?.cancel(); invalidatePlayback()
         invalidateCollectionOperation()
         collectionIdentity = nil
         workIsFavorite = false
+        transitionFallbackImage = nil
+        cover.alphaValue = 1
         coverRequest?.cancel(); coverGeneration = UUID(); cover.image = nil; cover.isHidden = true
         work = nil; links = []; localEpisodes = []; selection = nil; media = nil; sourceCoverURL = nil
         sourceName = nil; sourceTitle = nil; sourceAuthor = nil; sourceOnline = nil
@@ -864,12 +1224,9 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         sourceManagementButton.setAccessibilityValue(String(localized: "已收合"))
         renderCandidates()
         selectedEpisodeKey = nil
-        summary.stringValue = String(localized: "簡介未知")
+        summaryText = String(localized: "簡介未知")
         commentsStatus.stringValue = ""
         renderOverview(); renderExtraInformation(); renderComments()
-        maintenance.isHidden = true; moreButton.title = String(localized: "管理 ▸")
-        informationTabs.selectedSegment = 0
-        moreButton.setAccessibilityValue(String(localized: "已收合"))
         leaves = []; leafTitles = []; qualityKeys = []; accounts = []
         loading = false; commanding = false
         autoOpenAfterSelection = false
@@ -880,6 +1237,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         heading.stringValue = String(localized: "作品／影片詳情")
         metadata.stringValue = String(localized: "影片不需要 Bangumi 關聯即可播放、收藏或下載。")
         bangumiID.stringValue = ""; sourceAddress.stringValue = ""; address.stringValue = ""
+        presentedClassification = nil; presentedBangumiID = nil
         coverStatus.stringValue = String(localized: "來源未提供封面"); coverStatus.isHidden = false
         documentScroll.contentView.scroll(to: .zero)
         documentScroll.reflectScrolledClipView(documentScroll.contentView)
@@ -1102,17 +1460,17 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     }
     private func showCover(_ raw: String?) {
         coverRequest?.cancel(); coverGeneration = UUID()
-        cover.image = nil; cover.isHidden = true
-        coverStatus.isHidden = false; coverStatus.stringValue = String(localized: "來源未提供封面")
+        cover.image = transitionFallbackImage; cover.isHidden = cover.image == nil
+        coverStatus.isHidden = cover.image != nil; coverStatus.stringValue = String(localized: "來源未提供封面")
         guard !previewOnly, let raw, let url = URL(string: raw) else { return }
         coverStatus.stringValue = String(localized: "封面載入中…")
         let token = coverGeneration
         coverRequest = SDWebImageManager.shared.loadImage(with: url, progress: nil) { [weak self] image, _, error, _, finished, _ in
             MainActor.assumeIsolated {
                 guard let self, self.attached, self.coverGeneration == token, finished else { return }
-                self.cover.image = image
-                self.cover.isHidden = image == nil
-                self.coverStatus.isHidden = image != nil
+                self.cover.image = image ?? self.transitionFallbackImage
+                self.cover.isHidden = self.cover.image == nil
+                self.coverStatus.isHidden = self.cover.image != nil
                 self.coverStatus.stringValue = String(localized: "封面無法載入；其他作品資料仍可使用。")
                 if error != nil { self.metadata.stringValue += String(localized: "\n封面暫時無法載入；其他作品資料仍可使用。") }
             }
@@ -1123,7 +1481,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         heading.stringValue = work.title
         if let subjectID = work.bangumiID, extrasSubjectID != subjectID { loadExtraInformation(subjectID: subjectID, force: false) }
         let subject = extras?.subject.value ?? work.bangumiMetadata?.subject
-        summary.stringValue = subject?.summary.flatMap { $0.isEmpty ? nil : $0 } ?? work.summary.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "簡介未知")
+        summaryText = subject?.summary.flatMap { $0.isEmpty ? nil : $0 } ?? work.summary.flatMap { $0.isEmpty ? nil : $0 } ?? String(localized: "簡介未知")
         let detail = [subject?.date.map { String(localized: "放送日期：\($0)") },
             (work.aliases + (subject?.aliases ?? [])).isEmpty ? nil : String(localized: "別名：\((work.aliases + (subject?.aliases ?? [])).joined(separator: "、"))"),
             work.classification.kind == .anime ? subject.map { String(localized: "已公開集數：\($0.episodeCount.map(String.init) ?? String(localized: "未知"))／總集數：\($0.totalEpisodes.map(String.init) ?? String(localized: "未知"))") } : nil,
@@ -1132,7 +1490,11 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         metadata.stringValue = detail.joined(separator: "\n")
         renderOverview()
         showCover(subject?.coverURL ?? work.coverURL)
-        bangumiID.stringValue = work.bangumiID.map(String.init) ?? ""
+        let subjectIDText = work.bangumiID.map(String.init) ?? ""
+        if presentedBangumiID != subjectIDText {
+            bangumiID.stringValue = subjectIDText
+            presentedBangumiID = subjectIDText
+        }
         do {
             links = try delegate.workLibrary.sourceLinks(forWorkID: work.id)
             localEpisodes = try delegate.workLibrary.episodes(forWorkID: work.id)
@@ -1189,7 +1551,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         invalidateExtraInformation()
         extrasSubjectID = subjectID
         if force || extras?.subject.value?.id != subjectID { extras = nil }
-        comments = []; nextCommentsPage = 1
+        comments = []; nextCommentsPage = 1; overviewFailure = nil; commentsProvenance = ""
         commentsStatus.stringValue = String(localized: "評論載入中…")
         renderOverview(); renderExtraInformation(); renderComments()
         loadCommentsPage(subjectID: subjectID, page: 1, force: force)
@@ -1212,7 +1574,9 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 updateCommands()
             } catch {
                 guard attached, extrasGeneration == token, !Task.isCancelled else { return }
-                clear(subjectInformation); appendInfo(infoText(error.localizedDescription), to: subjectInformation)
+                overviewFailure = error.localizedDescription
+                renderOverview()
+                renderExtraInformation()
             }
         }
     }
@@ -1236,9 +1600,9 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         item.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
     }
     private func renderOverview() {
-        clear(subjectInformation); clear(tagsContent)
         let subject = extras?.subject.value ?? work?.bangumiMetadata?.subject
         var entries: [(String, String)] = []
+        overviewTags = []
         if let subject {
             entries = subject.infobox.map { ($0.key, $0.value.displayText) }
             if let date = subject.date, !entries.contains(where: { $0.1 == date }) { entries.insert((String(localized: "放送日期"), date), at: 0) }
@@ -1252,16 +1616,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
             if let collection = subject.collection {
                 entries.append((String(localized: "收藏統計"), String(localized: "想看 \(collection.wish.map(String.init) ?? String(localized: "未知")) · 看過 \(collection.collect.map(String.init) ?? String(localized: "未知"))\n在看 \(collection.doing.map(String.init) ?? String(localized: "未知")) · 擱置 \(collection.onHold.map(String.init) ?? String(localized: "未知")) · 拋棄 \(collection.dropped.map(String.init) ?? String(localized: "未知"))")))
             }
-            let tags = subject.tags.map { "#\($0.name) · \($0.count)" } + subject.metaTags.filter { tag in !subject.tags.contains(where: { $0.name == tag }) }.map { "#" + $0 }
-            if !tags.isEmpty {
-                appendInfo(WorkspaceDetailTagFlow(labels: tags.map { value in
-                    let field = label("  " + value + "  ")
-                    field.maximumNumberOfLines = 1
-                    field.lineBreakMode = .byTruncatingTail
-                    field.toolTip = value
-                    return field
-                }), to: tagsContent)
-            }
+            overviewTags = subject.tags.map { "#\($0.name) · \($0.count)" } + subject.metaTags.filter { tag in !subject.tags.contains(where: { $0.name == tag }) }.map { "#" + $0 }
         } else if let work {
             if !work.aliases.isEmpty { entries.append((String(localized: "別名"), work.aliases.joined(separator: "、"))) }
             entries.append((String(localized: "內容類型"), work.classification.kind.title))
@@ -1270,83 +1625,210 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
             if let sourceName { entries.append((String(localized: "來源"), sourceName)) }
             if let sourceAuthor { entries.append((classification.kind == .live ? String(localized: "主播") : String(localized: "作者"), sourceAuthor)) }
         }
-        appendInfo(factsGrid(entries), to: subjectInformation)
-        if let section = extras?.subject { appendInfo(infoText(sectionOrigin(section)), to: subjectInformation) }
-        else if extrasSubjectID != nil { appendInfo(infoText(String(localized: "Bangumi 資訊載入中…")), to: subjectInformation) }
-        tagsContent.isHidden = tagsContent.arrangedSubviews.isEmpty
+        overviewEntries = entries
+        updateInformationSections()
+        if informationHistory.last == .overview { renderInformationPage() }
+    }
+    private func characterButton(_ character: BangumiCharacter) -> WorkspaceDetailPortraitButton {
+        let actors = character.actors.map(\.name).joined(separator: "、")
+        let subtitle = actors.isEmpty ? character.relation : actors
+        let control = WorkspaceDetailPortraitButton(title: character.title, subtitle: subtitle,
+            imageURL: previewOnly ? nil : character.coverURL.flatMap(URL.init(string:)),
+            appearance: appearance, target: self, action: #selector(showCharacterInformation(_:)))
+        control.tag = character.id
+        control.setAccessibilityHelp(String(localized: "點擊查看人物介紹"))
+        return control
+    }
+    private func relationButton(_ subject: BangumiSubjectRelation) -> WorkspaceDetailPosterButton {
+        let control = WorkspaceDetailPosterButton(title: subject.title, subtitle: subject.relation,
+            imageURL: previewOnly ? nil : subject.coverURL.flatMap(URL.init(string:)),
+            appearance: appearance, target: self, action: #selector(openRelatedSubject(_:)))
+        control.tag = subject.id
+        control.isEnabled = !previewOnly
+        control.setAccessibilityLabel(String(localized: "應用內開啟 \(subject.relation) · \(subject.title)"))
+        return control
     }
     private func renderExtraInformation() {
-        clear(charactersContent); clear(relationsContent)
-        if let section = extras?.characters {
-            appendInfo(infoText(sectionOrigin(section)), to: charactersContent)
-            for character in section.value ?? [] {
-                let actors = character.actors.map(\.name).joined(separator: "、")
-                let identity = [character.name == character.title ? nil : character.name, character.relation.isEmpty ? nil : character.relation,
-                    actors.isEmpty ? nil : String(localized: "配音：\(actors)")].compactMap { $0 }.joined(separator: " · ")
-                let introduction = WorkspaceDetailDescription(appearance: appearance)
-                introduction.stringValue = character.summary.isEmpty ? String(localized: "人物簡介未提供") : character.summary
-                var items: [NSView] = [infoText(identity), introduction]
-                if !character.infobox.isEmpty { items.append(factsGrid(character.infobox.map { ($0.key, $0.value.displayText) })) }
-                if let failure = character.introductionFailure { items.append(infoText(String(localized: "人物介紹載入失敗：\(failure)"))) }
-                let portrait = WorkspaceMediaThumbnail(url: character.coverURL, poster: true,
-                    appearance: appearance, componentID: "detail.media", previewOnly: previewOnly)
-                portrait.setAccessibilityLabel(String(localized: "\(character.title) 人物圖片"))
-                let content = card(title: character.title, items: items)
-                let characterRow = row([portrait, content])
-                characterRow.alignment = .top
-                content.widthAnchor.constraint(equalTo: characterRow.widthAnchor, constant: -64).isActive = true
-                appendInfo(characterRow, to: charactersContent)
+        let characters = extras?.characters.value ?? []
+        characterShelf.setItems(characters.map(characterButton))
+        characterShelf.isHidden = characters.isEmpty
+        characterStatus.stringValue = extras?.characters.failure?.localizedDescription ?? overviewFailure
+            ?? (characters.isEmpty ? (extras == nil && extrasSubjectID != nil ? String(localized: "人物介紹載入中…") : String(localized: "沒有公開人物資料。")) : "")
+        characterStatus.isHidden = characterStatus.stringValue.isEmpty
+        let relations = extras?.relations.value ?? []
+        let animeRelations = relations.filter { $0.type == 2 }
+        relationShelf.setItems((animeRelations.isEmpty ? relations : animeRelations).map(relationButton))
+        relationShelf.isHidden = relations.isEmpty
+        relationStatus.stringValue = extras?.relations.failure?.localizedDescription ?? overviewFailure
+            ?? (relations.isEmpty ? (extras == nil && extrasSubjectID != nil ? String(localized: "關聯條目載入中…") : String(localized: "沒有公開關聯條目。")) : "")
+        relationStatus.isHidden = relationStatus.stringValue.isEmpty
+        updateInformationSections()
+        if let page = informationHistory.last {
+            switch page {
+            case .characters, .character, .relations: renderInformationPage()
+            default: break
             }
-            if section.value?.isEmpty == true { appendInfo(infoText(String(localized: "沒有公開人物資料。")), to: charactersContent) }
-        } else { appendInfo(infoText(extrasSubjectID == nil ? String(localized: "尚無人物資料。") : String(localized: "人物介紹載入中…")), to: charactersContent) }
-        if let section = extras?.relations {
-            appendInfo(infoText(sectionOrigin(section)), to: relationsContent)
-            var groups: [(String, [BangumiSubjectRelation])] = []
-            for relation in section.value ?? [] {
-                if let index = groups.firstIndex(where: { $0.0 == relation.relation }) { groups[index].1.append(relation) }
-                else { groups.append((relation.relation, [relation])) }
-            }
-            for (relation, subjects) in groups {
-                let grid = WorkspaceDetailButtonGrid()
-                grid.replace(subjects.map { subject in
-                    let value = button(subject.title, #selector(openRelatedSubject(_:)))
-                    value.tag = subject.id
-                    value.toolTip = subject.title
-                    value.setAccessibilityLabel(String(localized: "應用內開啟 \(relation) · \(subject.title)"))
-                    value.lineBreakMode = .byTruncatingTail
-                    value.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-                    let cover = WorkspaceMediaThumbnail(url: subject.coverURL, poster: true,
-                        appearance: appearance, componentID: "detail.media", previewOnly: previewOnly)
-                    cover.setAccessibilityLabel(String(localized: "\(subject.title) 封面"))
-                    let item = NSStackView(views: [cover, value])
-                    item.translatesAutoresizingMaskIntoConstraints = true
-                    item.orientation = .vertical
-                    item.alignment = .centerX
-                    item.spacing = 8
-                    value.widthAnchor.constraint(equalTo: item.widthAnchor).isActive = true
-                    return item
-                }, rowHeight: 132)
-                appendInfo(card(title: relation, items: [grid]), to: relationsContent)
-            }
-            if section.value?.isEmpty == true { appendInfo(infoText(String(localized: "沒有公開關聯條目。")), to: relationsContent) }
-        } else { appendInfo(infoText(extrasSubjectID == nil ? String(localized: "尚無關聯條目。") : String(localized: "關聯條目載入中…")), to: relationsContent) }
+        }
     }
     @objc private func openRelatedSubject(_ sender: NSButton) {
         guard !previewOnly, sender.tag > 0 else { return }
-        openBangumi(sender.tag)
+        delegate.workspaceApplication.openRelatedSubject(sender.tag, from: sender)
+    }
+    private func commentMetadata(_ comment: BangumiComment) -> String {
+        comment.dateText + (comment.rating.map { String(localized: " · \($0) 分") } ?? "")
+    }
+    private func commentCard(_ comment: BangumiComment) -> NSView {
+        let surface = WorkspaceDetailSurface(appearance: appearance)
+        let author = NSTextField(wrappingLabelWithString: comment.author)
+        author.font = .systemFont(ofSize: 14, weight: .semibold)
+        author.bindSkin(appearance, slot: "list", componentID: "detail.media")
+        author.maximumNumberOfLines = 1; author.lineBreakMode = .byTruncatingTail
+        let date = NSTextField(wrappingLabelWithString: commentMetadata(comment))
+        date.font = .systemFont(ofSize: 11)
+        date.bindSkin(appearance, slot: "subtitle", componentID: "detail.media")
+        date.maximumNumberOfLines = 1
+        let preview = label(WorkspaceDetailRichText.render(comment.text).string)
+        preview.maximumNumberOfLines = 5; preview.lineBreakMode = .byWordWrapping
+        preview.heightAnchor.constraint(equalToConstant: 80).isActive = true
+        let read = WorkspaceDetailSectionButton(title: String(localized: "閱讀全文") + "  ›", target: self, action: #selector(showCommentInformation(_:)))
+        read.setButtonType(.momentaryPushIn)
+        read.defaultPointSize = 13
+        read.isBordered = false; read.alignment = .left
+        read.identifier = NSUserInterfaceItemIdentifier(comment.id)
+        read.bindSkin(appearance, slot: "list", componentID: "detail.media")
+        read.setAccessibilityLabel(String(localized: "閱讀 \(comment.author) 的評論"))
+        let stack = NSStackView(views: [author, date, preview, read])
+        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 10
+        surface.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            surface.widthAnchor.constraint(equalToConstant: 320),
+            surface.heightAnchor.constraint(equalToConstant: 212),
+            stack.leadingAnchor.constraint(equalTo: surface.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: surface.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: surface.topAnchor, constant: 16),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: surface.bottomAnchor, constant: -12),
+        ])
+        for field in [author, date, preview] { field.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true }
+        return surface
     }
     private func renderComments() {
-        clear(commentsContent)
-        for comment in comments {
-            let rating = comment.rating.map { String(localized: " · \($0) 分") } ?? ""
-            appendInfo(card(title: comment.author, items: [infoText(comment.dateText + rating), infoText(comment.text)]), to: commentsContent)
-        }
+        commentShelf.setItems(comments.map(commentCard))
+        commentShelf.isHidden = comments.isEmpty
         updateCommentsControls()
+        switch informationHistory.last {
+        case .comments, .comment: renderInformationPage()
+        default: break
+        }
+    }
+    private func renderInformationPage() {
+        guard let page = informationHistory.last else { return }
+        let origin = informationScroll.contentView.bounds.origin
+        clear(informationBody)
+        informationMoreCommentsButton = nil
+        func append(_ item: NSView) {
+            informationBody.addArrangedSubview(item)
+            item.widthAnchor.constraint(equalTo: informationBody.widthAnchor, constant: -48).isActive = true
+        }
+        let context = label(heading.stringValue)
+        context.bindSkin(appearance, slot: "subtitle", componentID: "detail.media")
+        append(context)
+        switch page {
+        case .overview:
+            informationTitle.stringValue = String(localized: "作品資訊")
+            append(card(title: String(localized: "故事簡介"), items: [infoText(summaryText)]))
+            append(card(title: String(localized: "作品資訊"), items: [factsGrid(overviewEntries)]))
+            if !overviewTags.isEmpty {
+                append(WorkspaceDetailTagFlow(labels: overviewTags.map { label("  " + $0 + "  ") }))
+            }
+            if let section = extras?.subject { append(infoText(sectionOrigin(section))) }
+            else if extrasSubjectID != nil { append(infoText(String(localized: "Bangumi 資訊載入中…"))) }
+            if let overviewFailure { append(infoText(overviewFailure)) }
+        case .characters:
+            informationTitle.stringValue = String(localized: "人物")
+            let characters = extras?.characters.value ?? []
+            if !characters.isEmpty {
+                let grid = WorkspaceDetailButtonGrid()
+                let items = characters.map { character -> NSView in
+                    let wrapper = NSView()
+                    let control = characterButton(character)
+                    wrapper.addSubview(control)
+                    NSLayoutConstraint.activate([
+                        control.centerXAnchor.constraint(equalTo: wrapper.centerXAnchor),
+                        control.topAnchor.constraint(equalTo: wrapper.topAnchor),
+                    ])
+                    return wrapper
+                }
+                grid.replace(items, rowHeight: 202)
+                append(grid)
+            } else { append(infoText(characterStatus.stringValue)) }
+            if let section = extras?.characters { append(infoText(sectionOrigin(section))) }
+        case .character(let id):
+            guard let character = extras?.characters.value?.first(where: { $0.id == id }) else {
+                informationTitle.stringValue = String(localized: "人物")
+                append(infoText(characterStatus.stringValue)); break
+            }
+            informationTitle.stringValue = character.title
+            let portrait = characterButton(character)
+            portrait.target = nil; portrait.action = nil
+            portrait.setAccessibilityHelp(nil)
+            let identity = [character.name == character.title ? nil : character.name, character.relation.isEmpty ? nil : character.relation,
+                character.actors.isEmpty ? nil : String(localized: "配音：\(character.actors.map(\.name).joined(separator: "、"))")].compactMap { $0 }.joined(separator: "\n")
+            let headingRow = row([portrait, infoText(identity)])
+            headingRow.alignment = .centerY
+            append(headingRow)
+            append(card(title: String(localized: "人物"), items: [infoText(character.summary.isEmpty ? String(localized: "人物簡介未提供") : character.summary)]))
+            if !character.infobox.isEmpty { append(factsGrid(character.infobox.map { ($0.key, $0.value.displayText) })) }
+            if let failure = character.introductionFailure { append(infoText(String(localized: "人物介紹載入失敗：\(failure)"))) }
+        case .relations:
+            informationTitle.stringValue = String(localized: "關聯作品")
+            var groups: [(String, [BangumiSubjectRelation])] = []
+            for relation in extras?.relations.value ?? [] {
+                if let index = groups.firstIndex(where: { $0.0 == relation.relation }) { groups[index].1.append(relation) }
+                else { groups.append((relation.relation, [relation])) }
+            }
+            for (title, relations) in groups {
+                let heading = NSTextField(wrappingLabelWithString: title)
+                heading.font = .systemFont(ofSize: 17, weight: .semibold)
+                heading.bindSkin(appearance, slot: "list", componentID: "detail.media")
+                append(heading)
+                let shelf = WorkspaceDetailShelf(height: 260)
+                shelf.setItems(relations.map(relationButton))
+                append(shelf)
+            }
+            if groups.isEmpty { append(infoText(relationStatus.stringValue)) }
+            if let section = extras?.relations { append(infoText(sectionOrigin(section))) }
+        case .comments:
+            informationTitle.stringValue = String(localized: "評論")
+            for comment in comments {
+                append(card(title: comment.author, items: [infoText(commentMetadata(comment)), infoText(comment.text)]))
+            }
+            if !commentsProvenance.isEmpty { append(infoText(commentsProvenance)) }
+            if !commentsStatus.stringValue.isEmpty { append(infoText(commentsStatus.stringValue)) }
+            let more = button(String(localized: "載入更多評論"), #selector(loadMoreComments), icon: .add)
+            informationMoreCommentsButton = more
+            informationBody.addArrangedSubview(more)
+            updateCommentsControls()
+        case .comment(let id):
+            informationTitle.stringValue = String(localized: "評論")
+            if let comment = comments.first(where: { $0.id == id }) {
+                append(card(title: comment.author, items: [infoText(commentMetadata(comment)), infoText(comment.text)]))
+            }
+        }
+        informationTitle.setAccessibilityLabel(informationTitle.stringValue)
+        informationHost.layoutSubtreeIfNeeded()
+        var bounds = informationScroll.contentView.bounds
+        bounds.origin = origin
+        informationScroll.contentView.scroll(to: informationScroll.contentView.constrainBoundsRect(bounds).origin)
+        informationScroll.reflectScrolledClipView(informationScroll.contentView)
     }
     private func updateCommentsControls() {
-        moreCommentsButton.isHidden = nextCommentsPage == nil
-        moreCommentsButton.isEnabled = !previewOnly && !commentsLoading && nextCommentsPage != nil
-        moreCommentsButton.title = commentsLoading ? String(localized: "評論載入中…") : String(localized: "載入更多評論")
+        for control in [moreCommentsButton, informationMoreCommentsButton].compactMap({ $0 }) {
+            control.isHidden = nextCommentsPage == nil
+            control.isEnabled = !previewOnly && !commentsLoading && nextCommentsPage != nil
+            control.title = commentsLoading ? String(localized: "評論載入中…") : String(localized: "載入更多評論")
+        }
+        commentsStatus.isHidden = commentsStatus.stringValue.isEmpty
     }
     @objc private func loadMoreComments() {
         guard !commentsLoading, let id = extrasSubjectID, let page = nextCommentsPage else { return }
@@ -1366,11 +1848,13 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 nextCommentsPage = result.value.nextPage
                 let origin: String
                 switch result.origin { case .network: origin = String(localized: "網路"); case .cache: origin = String(localized: "快取"); case .staleCache: origin = String(localized: "過期快取") }
-                commentsStatus.stringValue = String(localized: "Bangumi 公開短評 · \(origin) · 第 \(result.value.page) 頁 · \(result.fetchedAt?.formatted() ?? String(localized: "時間未知"))") + (comments.isEmpty ? String(localized: "\n尚無公開評論。") : "") + (result.failure.map { "\n" + $0.localizedDescription } ?? "")
+                commentsProvenance = String(localized: "Bangumi 公開短評 · \(origin) · 第 \(result.value.page) 頁 · \(result.fetchedAt?.formatted() ?? String(localized: "時間未知"))")
+                commentsStatus.stringValue = result.failure?.localizedDescription ?? (comments.isEmpty ? String(localized: "尚無公開評論。") : "")
                 renderComments()
             } catch {
                 guard attached, commentsGeneration == token, !Task.isCancelled else { return }
                 commentsStatus.stringValue = String(localized: "評論載入失敗：\(error.localizedDescription)；已載入評論保留，可再試。")
+                if informationHistory.last == .comments { renderInformationPage() }
             }
             commentsLoading = false; updateCommentsControls()
         }
@@ -1430,6 +1914,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     }
     private func updateCommands() {
         guard isViewLoaded else { return }
+        moreButton.isEnabled = !previewOnly && attached
         updateAccounts()
         if previewOnly {
             quickDownloadButton.isEnabled = false
@@ -1482,6 +1967,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 && (!workIsFavorite || control.tag != work?.collectionStatus?.rawValue)
         }
         favoriteLinkButton.isEnabled = selection != nil && !commanding
+        favoriteLinkButton.isHidden = classification.kind == .anime && selection == nil
         let descriptor = selection.flatMap { services.decoder.registry.descriptor(for: $0.item.sourceID) }
         qualities.isEnabled = media != nil && descriptor?.capabilities.contains(.quality) == true && !loading && !commanding
         qualities.toolTip = descriptor?.unavailableReason(for: .quality)
@@ -1499,7 +1985,10 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         classificationPopup.isEnabled = (work != nil || selection != nil) && !loading && !commanding && !collectionSaving
         classificationButton.isEnabled = classificationPopup.isEnabled
         classificationStatus.stringValue = String(localized: "類型：\(classification.kind.title)\n分類出處：\(classification.provenance)") + (classification.kind == .unknown ? String(localized: "\n尚未確認；播放不需要 Bangumi，番劇關聯與映射在確認為番劇前不可用。") : "")
-        classificationPopup.selectItem(at: MediaContentKind.allCases.firstIndex(of: classification.kind) ?? 0)
+        if presentedClassification != classification.kind {
+            classificationPopup.selectItem(at: MediaContentKind.allCases.firstIndex(of: classification.kind) ?? 0)
+            presentedClassification = classification.kind
+        }
         cancelButton.isEnabled = loading || playbackCommand
         cancelButton.isHidden = !loading && !playbackCommand
         downloadButton.isHidden = classification.kind == .live
@@ -1512,6 +2001,8 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
             let station = services.decoder.registry.descriptor(for: selection.item.sourceID)?.name ?? selection.item.sourceID
             panelSelection.stringValue = String(localized: "\(station) · \((selection.episode ?? selection.item).pageURL)\n品質：\(selection.qualityID ?? String(localized: "尚未解析")) · 線路：\(selection.lineID ?? String(localized: "預設"))")
         } else { panelSelection.stringValue = loading ? String(localized: "正在尋找或載入所選集數的來源。") : String(localized: "尚未選擇可播放的匹配來源。") }
+        episodeSelection.stringValue = String(localized: "選擇集數，再尋找播放來源。")
+        episodeSelection.isHidden = !anime || selectedEpisodeIndex == nil
         if let index = selectedEpisodeIndex {
             let title: String
             if bangumiEpisodes.indices.contains(index) {
@@ -1522,6 +2013,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 title = "\(episode.sort.formatted(.number.grouping(.never))) · \(episode.label)"
             }
             panelSelection.stringValue = title + "\n" + panelSelection.stringValue
+            episodeSelection.stringValue = String(localized: "已選擇：\(title)")
         }
         exactPlayButton.isEnabled = playReason == nil && !commanding && !playbackSubmitted && (!anime || !hasWorkEpisodes || selectedEpisodeIndex != nil)
         findSourceButton.isEnabled = animeCommandReason == nil
@@ -1535,7 +2027,13 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         candidateChanged()
         updatePresentation()
     }
+    private func syncManagementStatus() {
+        managementStatus.stringValue = status.stringValue
+        managementStatus.workspaceSkinBinding?.state = status.workspaceSkinBinding?.state ?? .normal
+    }
     private func updatePresentation() {
+        managementTitle.stringValue = work?.title ?? heading.stringValue
+        syncManagementStatus()
         let scrollOrigin = documentScroll.contentView.bounds.origin
         let kind = classification.kind
         let anime = kind == .anime
@@ -1547,20 +2045,24 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         if anime, let count = subject?.totalEpisodes { facts.append(String(localized: "全 \(count) 集")) }
         let originalTitle = subject?.name ?? sourceTitle
         var lines = originalTitle.flatMap { $0 == heading.stringValue || $0.isEmpty ? nil : $0 }.map { [$0] } ?? []
-        lines.append(facts.joined(separator: " · "))
+        heroFacts.stringValue = facts.joined(separator: "   ·   ")
         if !anime, let author = sourceAuthor { lines.append(live ? String(localized: "主播：\(author)") : String(localized: "作者：\(author)")) }
         if live { lines.append(sourceOnline.map { $0 ? String(localized: "直播中") : String(localized: "未開播") } ?? String(localized: "直播狀態未知")) }
         identity.stringValue = lines.joined(separator: "\n")
-        if let rating = subject?.rating {
-            heroRating.stringValue = String(localized: "\(rating.score.formatted(.number.precision(.fractionLength(1)))) 分 · \(rating.total) 人評分") + (rating.rank.flatMap { $0 > 0 ? String(localized: " · 排名 #\($0)") : nil } ?? "")
-        } else { heroRating.stringValue = "" }
-        heroRating.isHidden = heroRating.stringValue.isEmpty
-        coverWidth.constant = anime ? 116 : 180
-        coverHeight.constant = anime ? 174 : 102
+        identity.isHidden = lines.isEmpty
+        if let rating = subject?.rating, rating.total > 0 {
+            heroRating.stringValue = rating.score.formatted(.number.precision(.fractionLength(1)))
+            heroRating.setAccessibilityLabel(String(localized: "\(heroRating.stringValue) 分"))
+            heroRatingDetail.stringValue = String(localized: "Bangumi · \(rating.total) 人評分") + (rating.rank.flatMap { $0 > 0 ? String(localized: "\n排名 #\($0)") : nil } ?? "")
+        } else { heroRating.stringValue = ""; heroRatingDetail.stringValue = "" }
+        ratingRow.isHidden = heroRating.stringValue.isEmpty
+        coverWidth.constant = anime ? 152 : 208
+        coverHeight.constant = anime ? 228 : 117
         cover.setAccessibilityLabel(anime ? String(localized: "作品海報") : String(localized: "影片縮圖"))
         episodeCaption.stringValue = anime ? String(localized: "選集") : live ? String(localized: "直播") : String(localized: "影片")
         let episodeCount = bangumiEpisodes.count + localOnlyEpisodes.count
-        updateInformationTab()
+        updateInformationSections()
+        status.isHidden = !loading && [String(localized: "尚未選擇來源。"), String(localized: "作品資訊已載入；選集與播放來源獨立。")].contains(status.stringValue)
         episodeGroups.isHidden = !anime || episodeCount == 0
         episodeEmpty.isHidden = !anime || episodeCount > 0
         episodeEmpty.stringValue = work?.bangumiMetadata == nil ? String(localized: "集數資料尚未載入；可刷新資訊，或選擇來源後查看來源選集。") : String(localized: "資訊來源未提供集數；請從來源窗口選擇精確集數。")
@@ -1586,6 +2088,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
             status.stringValue = error.localizedDescription
         }
         status.workspaceSkinBinding?.state = .error
+        syncManagementStatus()
     }
     private var hasWorkEpisodes: Bool { work != nil && (!bangumiEpisodes.isEmpty || !localOnlyEpisodes.isEmpty) }
     private var hasPinnedAnimeEpisode: Bool { classification.kind == .anime && hasWorkEpisodes && selectedEpisodeIndex != nil }
@@ -1753,6 +2256,78 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         renderCandidates()
         try await submitAnimePlayback(token: token)
     }
+    private func glassBand(_ items: [NSView]) -> NSView {
+        let surface = WorkspaceGlassSurface(appearance: appearance, cornerRadius: 18)
+        let stack = NSStackView(views: items)
+        stack.orientation = .vertical; stack.alignment = .leading; stack.spacing = 12
+        surface.contentView.addSubview(stack)
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: surface.contentView.leadingAnchor, constant: 16),
+            stack.trailingAnchor.constraint(equalTo: surface.contentView.trailingAnchor, constant: -16),
+            stack.topAnchor.constraint(equalTo: surface.contentView.topAnchor, constant: 14),
+            stack.bottomAnchor.constraint(equalTo: surface.contentView.bottomAnchor, constant: -14),
+        ])
+        for item in items where !(item is NSSegmentedControl) {
+            item.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+        return surface
+    }
+
+    private func buildManagementPanel() {
+        let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 620, height: 540), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
+        panel.title = String(localized: "作品管理")
+        panel.isReleasedWhenClosed = false
+        panel.minSize = NSSize(width: 500, height: 360)
+        panel.delegate = self
+        let root = NSView()
+        root.bindSkin(appearance, slot: "panel", componentID: "detail.media")
+        panel.contentView = root
+        let title = NSTextField(labelWithString: String(localized: "作品管理"))
+        title.font = .systemFont(ofSize: 17, weight: .semibold)
+        title.bindSkin(appearance, slot: "list", componentID: "detail.media")
+        managementTitle.maximumNumberOfLines = 2
+        managementTitle.bindSkin(appearance, slot: "subtitle", componentID: "detail.media")
+        let header = glassBand([title, managementTitle])
+        let close = button(String(localized: "關閉"), #selector(closeManagementPanel), icon: .close)
+        close.keyEquivalent = "\u{1b}"
+        let spacer = NSView()
+        spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        let footer = glassBand([row([spacer, close])])
+        let scroll = WorkspaceScrollView()
+        scroll.hasVerticalScroller = true
+        scroll.drawsBackground = false
+        let content = WorkspaceDetailDocumentStack()
+        content.orientation = .vertical; content.alignment = .leading; content.spacing = 16
+        content.edgeInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
+        scroll.documentView = content
+        content.translatesAutoresizingMaskIntoConstraints = false
+        content.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor).isActive = true
+        managementStatus.isSelectable = true
+        managementStatus.bindSkin(appearance, slot: "status", componentID: "detail.media")
+        for item in [maintenance!, managementStatus] {
+            content.addArrangedSubview(item)
+            item.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -32).isActive = true
+        }
+        for item in [header, scroll, footer] {
+            root.addSubview(item)
+            item.translatesAutoresizingMaskIntoConstraints = false
+        }
+        NSLayoutConstraint.activate([
+            header.topAnchor.constraint(equalTo: root.topAnchor, constant: 16),
+            header.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
+            header.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
+            scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
+            scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
+            scroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
+            footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
+            footer.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            footer.bottomAnchor.constraint(equalTo: root.bottomAnchor, constant: -16),
+        ])
+        managementPanel = panel
+    }
+
     private func buildSourcePanel() {
         let panel = NSPanel(contentRect: NSRect(x: 0, y: 0, width: 640, height: 620), styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
         panel.title = String(localized: "來源與播放選擇")
@@ -1766,8 +2341,14 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         playbackSourceTabs = NSSegmentedControl(labels: [String(localized: "線上來源"), String(localized: "BT 搜尋與播放")], trackingMode: .selectOne, target: self, action: #selector(playbackSourceChanged))
         playbackSourceTabs.selectedSegment = 0
         playbackSourceTabs.setAccessibilityLabel(String(localized: "播放來源類型"))
-        root.addSubview(playbackSourceTabs)
-        playbackSourceTabs.translatesAutoresizingMaskIntoConstraints = false
+        let panelHeading = NSTextField(wrappingLabelWithString: String(localized: "來源與播放選擇"))
+        panelHeading.font = .systemFont(ofSize: 17, weight: .semibold)
+        panelHeading.bindSkin(appearance, slot: "list", componentID: "detail.media")
+        let header = glassBand([panelHeading, playbackSourceTabs])
+        root.addSubview(header)
+        header.translatesAutoresizingMaskIntoConstraints = false
+        panelSelection.bindSkin(appearance, slot: "subtitle", componentID: "detail.media")
+        panelStatus.bindSkin(appearance, slot: "status", componentID: "detail.media")
         torrentSourceHost = NSView()
         torrentSourceHost.isHidden = true
         root.addSubview(torrentSourceHost)
@@ -1805,23 +2386,36 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         exactPlayButton = button(String(localized: "播放所選集數"), #selector(playPanelSelection), icon: .play)
         let spacer = NSView()
         spacer.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        let footer = WorkspaceDetailAdaptiveColumns(views: [
-            row([exactPlayButton, downloadButton]),
-            row([spacer, cancelButton, button(String(localized: "關閉"), #selector(closeSourcePanel), icon: .close)]),
-        ], breakpoint: 520)
+        (exactPlayButton as? WorkspaceDetailActionButton)?.prominent = true
+        let closeButton = button(String(localized: "關閉"), #selector(closeSourcePanel), icon: .close)
+        let leadingActions = [exactPlayButton!, downloadButton!]
+        let trailingActions = [cancelButton!, closeButton]
+        let footerActions = WorkspaceDetailAdaptiveColumns(views: [
+            row(leadingActions),
+            row([spacer] + trailingActions),
+        ], breakpoint: 720)
+        footerActions.minimumHorizontalWidth = {
+            [leadingActions, trailingActions].reduce(CGFloat(32)) { width, group in
+                let visible = group.filter { !$0.isHidden }
+                return width + visible.reduce(0) { $0 + $1.intrinsicContentSize.width }
+                    + CGFloat(max(0, visible.count - 1)) * 8
+            }
+        }
+        let footer = glassBand([footerActions])
         webSourceFooter = footer
         root.addSubview(footer)
         footer.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: root.trailingAnchor),
-            playbackSourceTabs.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
-            playbackSourceTabs.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
-            torrentSourceHost.topAnchor.constraint(equalTo: playbackSourceTabs.bottomAnchor, constant: 12),
+            header.topAnchor.constraint(equalTo: root.topAnchor, constant: 16),
+            header.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
+            header.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
+            torrentSourceHost.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
             torrentSourceHost.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             torrentSourceHost.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             torrentSourceHost.bottomAnchor.constraint(equalTo: root.bottomAnchor),
-            scroll.topAnchor.constraint(equalTo: playbackSourceTabs.bottomAnchor, constant: 12),
+            scroll.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
             scroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -12),
             footer.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 16),
             footer.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -16),
@@ -1869,6 +2463,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     }
     @objc private func showSourcePanel() {
         guard !previewOnly, attached, let parent = view.window, let panel = sourcePanel else { return }
+        closeManagementPanel()
         let opening = !panel.isVisible
         if panel.parent !== parent {
             panel.parent?.removeChildWindow(panel)
@@ -1894,6 +2489,10 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     }
     @objc private func closeSourcePanel() { sourcePanel?.close() }
     func windowWillClose(_ notification: Notification) {
+        if let panel = managementPanel, (notification.object as? NSWindow) === panel {
+            closeManagementPanel()
+            return
+        }
         if let panel = quickDownloadPanel, (notification.object as? NSWindow) === panel {
             closeQuickDownload()
             return
@@ -2000,6 +2599,10 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     @objc private func showCollectionPopover() {
         guard !previewOnly, attached, favoriteWorkButton.isEnabled else { return }
         if collectionPopover.isShown { closeCollectionPopover(); return }
+        if let content = collectionPopover.contentViewController?.view {
+            content.layoutSubtreeIfNeeded()
+            collectionPopover.contentSize = NSSize(width: 240, height: max(236, content.fittingSize.height))
+        }
         collectionPopover.show(relativeTo: favoriteWorkButton.bounds, of: favoriteWorkButton, preferredEdge: .minY)
         if let first = collectionButtons.first(where: \.isEnabled) {
             collectionPopover.contentViewController?.view.window?.makeFirstResponder(first)
@@ -2230,6 +2833,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     }
     @objc private func showQuickDownload() {
         guard !previewOnly, attached, quickDownloadButton.isEnabled, let parent = view.window else { return }
+        closeManagementPanel()
         if let panel = quickDownloadPanel { panel.makeKeyAndOrderFront(nil); return }
         do {
             if work != nil, classification.kind == .anime { _ = try ensureWork() }
@@ -2339,7 +2943,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 placeholder.setAccessibilityHelp(String(localized: "未提供集名的集數尚未更新，不能選擇或播放。"))
                 buttons.append(placeholder)
             }
-            grid.replace(buttons)
+            grid.replace(buttons, rowHeight: 44)
             episodeGroups.addArrangedSubview(grid)
             grid.widthAnchor.constraint(equalTo: episodeGroups.widthAnchor).isActive = true
         }

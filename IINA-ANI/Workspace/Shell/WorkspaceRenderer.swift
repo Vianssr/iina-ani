@@ -3,6 +3,14 @@ import QuartzCore
 
 @MainActor
 final class WorkspaceFixedActions {
+    private(set) var transitionSource: WorkspaceCoverTransitionSource?
+
+    func withTransitionSource(from view: NSView?, _ action: () -> Void) {
+        transitionSource = WorkspaceCoverTransitionSource.capture(from: view)
+        defer { transitionSource = nil }
+        action()
+    }
+
     let settings: () -> Void
     let open: () -> Void
     let openLink: (String) -> Void
@@ -112,6 +120,8 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
     private var selectedPageID: UUID?
     private var renderedPageID: UUID?
     private weak var pageMotionView: NSView?
+    private var detailTransition: WorkspaceDetailTransitionOverlay?
+    private var preparingDetailTransition = false
     private var fixedPage: WorkspacePage?
     private var recoveryPages: [UUID: WorkspacePage] = [:]
     private let fixedPages = WorkspaceBuiltinLayouts.makeDefault().pages
@@ -155,8 +165,9 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             contentRect: NSRect(x: 0, y: 0, width: 1280, height: 800),
             styleMask: [.titled, .closable, .miniaturizable, .resizable],
             backing: .buffered, defer: false)
-        window.title = previewOnly ? String(localized: "IINA-ANI — 工作區預覽") : String(localized: "IINA-ANI — 工作區")
+        window.title = previewOnly ? String(localized: "IINA-ANI — 預覽") : "IINA-ANI"
         window.contentMinSize = NSSize(width: 960, height: 640)
+        window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
@@ -211,6 +222,32 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         rememberNavigation(to: id); fixedPage = page; recoveryPages[id] = page; selectedPageID = id
         renderPages(displayPages(for: host.bounds.width))
     }
+    func showDetail(settings: WorkspaceDetailTransitionSettings, source: WorkspaceCoverTransitionSource? = nil,
+                    _ action: (WorkspaceDetailController) -> Void) {
+        detailTransition?.finish()
+        let source = source ?? dependencies.actions.transitionSource
+        let animated = settings.style != .none && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        let snapshot = animated ? WorkspaceDetailTransitionOverlay.snapshot(of: host, excluding: source) : nil
+        preparingDetailTransition = true
+        defer { preparingDetailTransition = false }
+        // A calendar source may belong to a separate popover window; its screen frame was captured above.
+        calendarPopover.performClose(nil)
+        guard let detail = showProduct("detail.media") as? WorkspaceDetailController else { return }
+        action(detail)
+        detail.prepareTransitionCover(source?.image)
+        host.layoutSubtreeIfNeeded()
+        detail.view.layoutSubtreeIfNeeded()
+        pageMotionView?.layer?.removeAnimation(forKey: "workspace.pageMotion")
+        guard let snapshot else { return }
+        let overlay = WorkspaceDetailTransitionOverlay(frame: host.bounds, snapshot: snapshot)
+        detailTransition = overlay
+        host.addSubview(overlay, positioned: .above, relativeTo: nil)
+        overlay.play(source: source, destination: detail.transitionCover, settings: settings) { [weak self, weak overlay] in
+            guard self?.detailTransition === overlay else { return }
+            self?.detailTransition = nil
+        }
+    }
+
     func showProduct(_ type: WorkspaceComponentID) -> NSViewController? {
         guard !previewOnly else { return nil }
         func find(_ node: WorkspaceNode) -> UUID? {
@@ -223,12 +260,35 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             default: return nil
             }
         }
+        func reveal(_ node: WorkspaceNode, instanceID: UUID) -> Bool {
+            switch node {
+            case .component(let id, _, _, _, _): return id == instanceID
+            case .tabs(let id, _, let pages):
+                for page in pages where reveal(page.root, instanceID: instanceID) {
+                    if let tabs = containerViews[id] as? WorkspaceRetainedTabView,
+                       let item = tabs.tabViewItems.first(where: { $0.identifier as? String == page.id.uuidString }) {
+                        tabs.suppressMotion = preparingDetailTransition
+                        tabs.selectTabViewItem(item)
+                        tabs.suppressMotion = false
+                    }
+                    return true
+                }
+                return false
+            case .grid(_, let children), .horizontalStack(_, let children), .verticalStack(_, let children), .group(_, let children):
+                return children.contains { reveal($0, instanceID: instanceID) }
+            case .split(_, let first, let second, _): return reveal(first, instanceID: instanceID) || reveal(second, instanceID: instanceID)
+            default: return false
+            }
+        }
         let pages = displayPages(for: host.bounds.width)
         let preferred = pages.first { $0.id == selectedPageID }
         if let page = ([preferred].compactMap { $0 } + pages).first(where: { find($0.root) != nil }), let id = find(page.root), !layout.collapsedInstanceIDs.contains(id) {
             rememberNavigation(to: page.id)
             selectedPageID = page.id
             renderPages(pages)
+            _ = reveal(page.root, instanceID: id)
+            host.layoutSubtreeIfNeeded()
+            synchronizePanelVisibility()
             if type.rawValue == "settings.preferences" { return settingsController }
             if let controller = productControllers[id] { return controller }
         }
@@ -242,9 +302,30 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         if let selectedPageID, selectedPageID != id { navigationHistory.append(selectedPageID) }
     }
     @objc private func goBack() {
+        detailTransition?.finish()
+        if detailForBackNavigation()?.goBackInInformation() == true { return }
         guard let id = navigationHistory.popLast() else { return }
         selectedPageID = id
         renderPages(displayPages(for: host.bounds.width))
+    }
+    private func detailForBackNavigation() -> WorkspaceDetailController? {
+        guard let window else { return nil }
+        let visible = productControllers.values.compactMap { $0 as? WorkspaceDetailController }.filter {
+            guard $0.isViewLoaded else { return false }
+            return $0.view.window === window && !$0.view.isHiddenOrHasHiddenAncestor
+                && !$0.view.visibleRect.isEmpty
+        }
+        if let responder = window.firstResponder {
+            let focusedView = (responder as? NSTextView).flatMap {
+                $0.isFieldEditor ? $0.delegate as? NSView : nil
+            } ?? (responder as? NSView)
+            if let focused = visible.first(where: { controller in
+                responder === controller || focusedView.map {
+                    $0 === controller.view || $0.isDescendant(of: controller.view)
+                } == true
+            }) { return focused }
+        }
+        return visible.count == 1 ? visible[0] : nil
     }
     var shareableLayout: WorkspaceLayout { layout }
     func presentNativePreview(_ candidate: WorkspaceLayout) -> WorkspaceWindowController {
@@ -457,6 +538,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
     }
 
     func windowWillClose(_ notification: Notification) {
+        detailTransition?.finish()
         if previewOnly, NSApp.modalWindow === window { NSApp.stopModal(withCode: .cancel) }
         tearDownWorkspace()
     }
@@ -491,7 +573,10 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         renderedPageID = nil
     }
 
-    func windowDidResize(_ notification: Notification) { renderForCurrentWidth() }
+    func windowDidResize(_ notification: Notification) {
+        detailTransition?.finish()
+        renderForCurrentWidth()
+    }
     func windowWillReturnUndoManager(_ window: NSWindow) -> UndoManager? {
         guard let page = activePages.first(where: { $0.id == selectedPageID }) else { return layoutUndoManager }
         let ids = WorkspaceLayoutTraversal.componentInstanceIDs(in: WorkspaceLayout(pages: [page]))
@@ -523,34 +608,73 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         let toolbar = NSStackView()
         if previewOnly { previewToolbar = toolbar }
         toolbar.orientation = .horizontal
-        toolbar.spacing = 8
-        toolbar.edgeInsets = NSEdgeInsets(top: 8, left: 12, bottom: 8, right: 12)
-        toolbar.bindSkin(dependencies.skinAppearance, slot: "background")
-        let entries: [(String, Selector, WorkspaceIcon)] = previewOnly ? [
-            (String(localized: "套用此佈局"), #selector(acceptPreview), .check), (String(localized: "取消"), #selector(cancelPreview), .close),
-        ] : [
-            (String(localized: "返回"), #selector(goBack), .back), (String(localized: "開啟"), #selector(openAction), .openLink),
-            (String(localized: "活動任務"), #selector(tasksAction), .downloads), (String(localized: "編輯佈局"), #selector(editLayoutAction), .layout),
-        ]
-        for (title, action, icon) in entries {
-            let button = WorkspaceSkinButton(title: title, target: self, action: action)
+        toolbar.distribution = .fill
+        toolbar.bindSkin(dependencies.skinAppearance, slot: "toolbar")
+        toolbar.spacing = 12
+        toolbar.alignment = .centerY
+        toolbar.edgeInsets = NSEdgeInsets(top: 12, left: 20, bottom: 12, right: 20)
+        func actionGroup() -> NSStackView {
+            let group = NSStackView()
+            group.orientation = .horizontal
+            group.alignment = .centerY
+            group.spacing = 6
+            group.setHuggingPriority(.required, for: .horizontal)
+            return group
+        }
+        func actionButton(_ title: String, action: Selector, icon: WorkspaceIcon, iconOnly: Bool = false) -> WorkspaceSkinButton {
+            let button = WorkspaceSkinButton(title: iconOnly ? "" : title, target: self, action: action)
+            button.functionIconPosition = iconOnly ? .imageOnly : .imageLeading
+            button.toolTip = title
+            button.setAccessibilityLabel(title)
             button.setFunctionIcon(icon)
             button.bezelStyle = .rounded
             button.bindSkin(dependencies.skinAppearance, slot: "navigation")
             button.updateSkinState()
-            if previewOnly && action == #selector(cancelPreview) { button.keyEquivalent = "\u{1b}" }
-            if previewOnly { previewButtons.append(button) }
-            toolbar.addArrangedSubview(button)
+            button.heightAnchor.constraint(equalToConstant: 36).isActive = true
+            if iconOnly { button.widthAnchor.constraint(equalToConstant: 36).isActive = true }
+            return button
         }
         if !previewOnly {
+            let brand = NSStackView()
+            brand.alignment = .centerY
+            brand.spacing = 9
+            let mark = NSImageView(image: WorkspaceIcon.play.image(size: 22) ?? NSImage())
+            mark.contentTintColor = .labelColor
+            mark.setAccessibilityElement(false)
+            let name = NSTextField(labelWithString: "IINA-ANI")
+            name.bindSkin(dependencies.skinAppearance, slot: "brand")
+            brand.addArrangedSubview(mark)
+            brand.addArrangedSubview(name)
+            brand.addArrangedSubview(NSView())
+            brand.widthAnchor.constraint(equalToConstant: 156).isActive = true
+            toolbar.addArrangedSubview(brand)
+        }
+        if previewOnly {
+            let previewActions = actionGroup()
+            let accept = actionButton(String(localized: "套用此佈局"), action: #selector(acceptPreview), icon: .check)
+            let cancel = actionButton(String(localized: "取消"), action: #selector(cancelPreview), icon: .close)
+            cancel.keyEquivalent = "\u{1b}"
+            previewButtons = [accept, cancel]
+            previewActions.addArrangedSubview(accept)
+            previewActions.addArrangedSubview(cancel)
+            toolbar.addArrangedSubview(previewActions)
+            toolbar.addArrangedSubview(NSView())
+        } else {
+            let searchActions = actionGroup()
+            searchActions.spacing = 8
+            searchActions.setHuggingPriority(.defaultLow, for: .horizontal)
+            searchActions.addArrangedSubview(actionButton(String(localized: "返回"), action: #selector(goBack), icon: .back, iconOnly: true))
             globalSearch.placeholderString = String(localized: "搜尋作品、影片、網址或 magnet")
             globalSearch.target = self
             globalSearch.action = #selector(submitGlobalSearch)
             globalSearch.setAccessibilityLabel(String(localized: "全域搜尋或開啟網址"))
             globalSearch.bindSkin(dependencies.skinAppearance, slot: "search")
             globalSearch.widthAnchor.constraint(greaterThanOrEqualToConstant: 220).isActive = true
+            globalSearch.heightAnchor.constraint(equalToConstant: 36).isActive = true
             globalSearch.setContentHuggingPriority(.defaultLow, for: .horizontal)
-            toolbar.insertArrangedSubview(globalSearch, at: 1)
+            searchActions.addArrangedSubview(globalSearch)
+            searchActions.addArrangedSubview(actionButton(String(localized: "開啟"), action: #selector(openAction), icon: .openLink, iconOnly: true))
+            toolbar.addArrangedSubview(searchActions)
         }
         let capabilities = NSPopUpButton(frame: .zero, pullsDown: true)
         capabilityMenu.autoenablesItems = false
@@ -578,8 +702,8 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             previewDetails.widthAnchor.constraint(equalTo: shell.widthAnchor).isActive = true
         }
         capabilities.menu = capabilityMenu
-        toolbar.addArrangedSubview(capabilities)
         capabilities.bindSkin(dependencies.skinAppearance, slot: "navigation")
+        capabilities.heightAnchor.constraint(equalToConstant: 36).isActive = true
         calendarButton.title = String(localized: "日曆")
         calendarButton.setFunctionIcon(.calendar)
         calendarButton.bezelStyle = .rounded
@@ -588,10 +712,30 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         calendarButton.setAccessibilityLabel(String(localized: "開啟 Bangumi 日曆"))
         calendarButton.isEnabled = !previewOnly
         calendarButton.bindSkin(dependencies.skinAppearance, slot: "navigation")
-        toolbar.addArrangedSubview(calendarButton)
+        calendarButton.heightAnchor.constraint(equalToConstant: 36).isActive = true
+        let activityActions = actionGroup()
+        activityActions.addArrangedSubview(calendarButton)
+        if !previewOnly {
+            activityActions.addArrangedSubview(actionButton(String(localized: "活動任務"), action: #selector(tasksAction), icon: .downloads, iconOnly: true))
+        }
+        toolbar.addArrangedSubview(activityActions)
+        let groupDivider = NSBox()
+        groupDivider.boxType = .separator
+        groupDivider.widthAnchor.constraint(equalToConstant: 1).isActive = true
+        groupDivider.heightAnchor.constraint(equalToConstant: 22).isActive = true
+        toolbar.addArrangedSubview(groupDivider)
+        let configurationActions = actionGroup()
+        if !previewOnly {
+            let layoutButton = actionButton(String(localized: "編輯佈局"), action: #selector(editLayoutAction), icon: .layout)
+            layoutButton.title = String(localized: "佈局")
+            configurationActions.addArrangedSubview(layoutButton)
+        }
+        configurationActions.addArrangedSubview(capabilities)
+        toolbar.addArrangedSubview(configurationActions)
         if !previewOnly { updateCapabilityMenu() }
         toolbar.setHuggingPriority(.required, for: .vertical)
         shell.addArrangedSubview(toolbar)
+        toolbar.widthAnchor.constraint(equalTo: shell.widthAnchor).isActive = true
         if let loadFailureReason {
             let recovery = NSTextField(
                 wrappingLabelWithString: String(localized: "工作區無法讀取，已使用內建佈局；原檔保留供修復。\n\(loadFailureReason)"))
@@ -698,6 +842,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
 
     private func renderPages(_ pages: [WorkspacePage]) {
         guard activePages != pages || renderedPageID != selectedPageID || host.subviews.isEmpty else { return }
+        detailTransition?.finish()
         let previousMotion = activePages.first(where: { $0.id == renderedPageID })?.motion
         activePages = pages
         if !pages.contains(where: { $0.id == selectedPageID }) {
@@ -710,16 +855,22 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         shell.distribution = .fill
         shell.spacing = 0
         shell.translatesAutoresizingMaskIntoConstraints = false
-        let navigationWidth: CGFloat = pages.count > 1 ? 112 : 0
+        let navigationWidth: CGFloat = pages.count > 1 ? 188 : 0
         if pages.count > 1 {
             let nav = NSStackView()
             nav.orientation = .vertical
-            nav.alignment = .width
+            nav.alignment = .leading
+            nav.bindSkin(dependencies.skinAppearance, slot: "sidebar")
             nav.spacing = 6
             nav.widthAnchor.constraint(equalToConstant: navigationWidth).isActive = true
-            nav.edgeInsets = NSEdgeInsets(top: 12, left: 8, bottom: 12, right: 8)
+            nav.edgeInsets = NSEdgeInsets(top: 24, left: 12, bottom: 18, right: 12)
+            let navigationLabel = NSTextField(labelWithString: String(localized: "導覽"))
+            navigationLabel.bindSkin(dependencies.skinAppearance, slot: "sectionLabel")
+            nav.addArrangedSubview(navigationLabel)
+            navigationLabel.widthAnchor.constraint(equalTo: nav.widthAnchor, constant: -24).isActive = true
+            nav.setCustomSpacing(14, after: navigationLabel)
             for page in pages where !layout.hiddenPageIDs.contains(page.id) {
-                if page.id == WorkspacePageID.settings {
+                if page.id == WorkspacePageID.settings && page.id == pages.last?.id {
                     let spacer = NSView()
                     spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
                     nav.addArrangedSubview(spacer)
@@ -732,21 +883,33 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
                     WorkspacePageID.detail: .work, WorkspacePageID.settings: .settings,
                     WorkspacePageID.torrent: .torrent,
                 ]
-                button.functionIconPosition = .imageAbove
-                button.setFunctionIcon(icons[page.id] ?? .layout, size: 32)
+                button.functionIconPosition = .imageLeading
+                button.setFunctionIcon(icons[page.id] ?? .layout, size: 18)
                 button.identifier = NSUserInterfaceItemIdentifier(page.id.uuidString)
                 button.bezelStyle = .regularSquare
                 button.imageScaling = .scaleNone
                 button.imageHugsTitle = true
-                button.alignment = .center
-                button.heightAnchor.constraint(greaterThanOrEqualToConstant: 64).isActive = true
+                button.alignment = .left
+                button.lineBreakMode = .byTruncatingTail
+                button.toolTip = page.displayTitle
+                button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
                 button.state = page.id == selectedPageID ? .on : .off
                 button.setAccessibilityValue(page.id == selectedPageID ? String(localized: "已選取") : String(localized: "未選取"))
                 button.bindSkin(dependencies.skinAppearance, slot: "navigation")
                 button.updateSkinState()
                 nav.addArrangedSubview(button)
-                button.widthAnchor.constraint(equalTo: nav.widthAnchor, constant: -16).isActive = true
+                button.widthAnchor.constraint(equalTo: nav.widthAnchor, constant: -24).isActive = true
             }
+            if pages.last?.id != WorkspacePageID.settings {
+                let spacer = NSView()
+                spacer.setContentHuggingPriority(.defaultLow, for: .vertical)
+                nav.addArrangedSubview(spacer)
+            }
+            let libraryNote = NSTextField(wrappingLabelWithString: String(localized: "每一部，都值得期待。"))
+            libraryNote.bindSkin(dependencies.skinAppearance, slot: "subtitle")
+            libraryNote.maximumNumberOfLines = 2
+            nav.addArrangedSubview(libraryNote)
+            libraryNote.widthAnchor.constraint(equalTo: nav.widthAnchor, constant: -24).isActive = true
             shell.addArrangedSubview(nav)
             nav.heightAnchor.constraint(equalTo: shell.heightAnchor).isActive = true
         }
@@ -756,6 +919,8 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             scroll.hasVerticalScroller = true
             scroll.hasHorizontalScroller = true
             scroll.autohidesScrollers = true
+            scroll.scrollerStyle = .overlay
+            scroll.drawsBackground = false
             scroll.translatesAutoresizingMaskIntoConstraints = false
             let document = WorkspaceDocumentView()
             document.translatesAutoresizingMaskIntoConstraints = false
@@ -763,6 +928,21 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             let root = renderNode(selected.root)
             root.translatesAutoresizingMaskIntoConstraints = false
             document.addSubview(root)
+            let discoveryIntro = selected.id == WorkspacePageID.discover && isDiscoveryFeedPage(selected.root)
+                && !isLayoutEditorPreview
+            let pageInset: CGFloat = discoveryIntro ? 18 : 0
+            let introHeight: CGFloat = discoveryIntro ? 92 : 0
+            if discoveryIntro {
+                let intro = makeDiscoveryHeading(for: selected)
+                intro.translatesAutoresizingMaskIntoConstraints = false
+                document.addSubview(intro)
+                NSLayoutConstraint.activate([
+                    intro.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: 28),
+                    intro.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -28),
+                    intro.topAnchor.constraint(equalTo: document.topAnchor, constant: 24),
+                    intro.heightAnchor.constraint(equalToConstant: 56),
+                ])
+            }
             scroll.documentView = document
             if selected.id == WorkspacePageID.discover, isDiscoveryFeedPage(selected.root),
                case .verticalStack(_, let children) = selected.root {
@@ -778,18 +958,18 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             let fitWidth = document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor)
             fitWidth.priority = .defaultHigh
             let preferredWidth = document.widthAnchor.constraint(
-                greaterThanOrEqualToConstant: requested.width)
+                greaterThanOrEqualToConstant: requested.width + pageInset * 2)
             preferredWidth.priority = .defaultLow
             let preferredHeight = document.heightAnchor.constraint(
-                greaterThanOrEqualToConstant: requested.height)
+                greaterThanOrEqualToConstant: requested.height + introHeight)
             preferredHeight.priority = .defaultLow
             NSLayoutConstraint.activate([
-                root.leadingAnchor.constraint(equalTo: document.leadingAnchor),
-                root.trailingAnchor.constraint(equalTo: document.trailingAnchor),
-                root.topAnchor.constraint(equalTo: document.topAnchor),
+                root.leadingAnchor.constraint(equalTo: document.leadingAnchor, constant: pageInset),
+                root.trailingAnchor.constraint(equalTo: document.trailingAnchor, constant: -pageInset),
+                root.topAnchor.constraint(equalTo: document.topAnchor, constant: introHeight),
                 root.bottomAnchor.constraint(equalTo: document.bottomAnchor),
-                document.widthAnchor.constraint(greaterThanOrEqualToConstant: minimum.width),
-                document.heightAnchor.constraint(greaterThanOrEqualToConstant: minimum.height),
+                document.widthAnchor.constraint(greaterThanOrEqualToConstant: minimum.width + pageInset * 2),
+                document.heightAnchor.constraint(greaterThanOrEqualToConstant: minimum.height + introHeight),
                 document.heightAnchor.constraint(
                     greaterThanOrEqualTo: scroll.contentView.heightAnchor),
                 fitWidth, preferredWidth, preferredHeight,
@@ -817,7 +997,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             scroll.heightAnchor.constraint(equalTo: shell.heightAnchor).isActive = true
         } else {
             shell.addArrangedSubview(
-                WorkspaceStatusView(title: String(localized: "此工作區沒有可見頁面"), detail: String(localized: "仍可使用固定搜尋、開啟、活動任務與恢復入口。")))
+                WorkspaceStatusView(title: String(localized: "沒有可見頁面"), detail: String(localized: "仍可使用固定搜尋、開啟、活動任務與恢復入口。")))
         }
         host.subviews.forEach { $0.removeFromSuperview() }
         host.addSubview(shell)
@@ -828,13 +1008,33 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             shell.bottomAnchor.constraint(equalTo: host.bottomAnchor),
         ])
         host.layoutSubtreeIfNeeded()
-        if let selected = pages.first(where: { $0.id == selectedPageID }),
+        if !preparingDetailTransition, let selected = pages.first(where: { $0.id == selectedPageID }),
            let pageMotionView,
            renderedPageID != selectedPageID || previousMotion != selected.motion {
             WorkspacePageAnimator.play(dependencies.skinAppearance.pageMotion(for: selected), on: pageMotionView)
         }
         synchronizePanelVisibility()
         renderedPageID = selectedPageID
+    }
+
+    private func makeDiscoveryHeading(for page: WorkspacePage) -> NSView {
+        let title = NSTextField(labelWithString: page.displayTitle)
+        title.bindSkin(dependencies.skinAppearance, slot: "pageTitle")
+        let subtitle = NSTextField(labelWithString: String(localized: "接著上次的故事，發現下一部喜歡的作品。"))
+        subtitle.bindSkin(dependencies.skinAppearance, slot: "subtitle")
+        subtitle.lineBreakMode = .byTruncatingTail
+        subtitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        let titles = NSStackView(views: [title, subtitle])
+        titles.orientation = .vertical
+        titles.alignment = .leading
+        titles.spacing = 5
+        let date = WorkspaceDateLabel()
+        date.bindSkin(dependencies.skinAppearance, slot: "subtitle")
+        date.setContentCompressionResistancePriority(.required, for: .horizontal)
+        let row = NSStackView(views: [titles, NSView(), date])
+        row.alignment = .centerY
+        row.spacing = 16
+        return row
     }
 
     // NSTabView removes inactive page views from the window. Reconcile after
@@ -983,7 +1183,7 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
             serviceControllers[id] = controller
             return controller.view
         case .empty:
-            return WorkspaceStatusView(title: String(localized: "空白工作區"), detail: String(localized: "固定搜尋、開啟、活動任務與恢復入口仍可使用。"))
+            return WorkspaceStatusView(title: String(localized: "空白頁面"), detail: String(localized: "固定搜尋、開啟、活動任務與恢復入口仍可使用。"))
         case .grid(_, let children):
             let columns = max(1, Int(ceil(sqrt(Double(children.count)))))
             let rows = stride(from: 0, to: children.count, by: columns).map { start in
@@ -1159,6 +1359,35 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         } else {
             alert.runModal()
         }
+    }
+}
+
+@MainActor
+private final class WorkspaceDateLabel: NSTextField {
+    init() {
+        super.init(frame: .zero)
+        isEditable = false
+        isSelectable = false
+        isBordered = false
+        drawsBackground = false
+        refreshDate()
+        for name in [Notification.Name.NSCalendarDayChanged, NSApplication.didBecomeActiveNotification,
+                     NSLocale.currentLocaleDidChangeNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(dateChanged), name: name, object: nil)
+        }
+    }
+
+    required init?(coder: NSCoder) { nil }
+    deinit { NotificationCenter.default.removeObserver(self) }
+
+    @objc nonisolated private func dateChanged() {
+        Task { @MainActor [weak self] in self?.refreshDate() }
+    }
+
+    private func refreshDate() {
+        let formatter = DateFormatter()
+        formatter.setLocalizedDateFormatFromTemplate("MMM d EEEE")
+        stringValue = formatter.string(from: Date())
     }
 }
 
@@ -1362,6 +1591,7 @@ final class WorkspaceRetainedSplitView: NSSplitView, NSSplitViewDelegate {
 
 @MainActor
 private final class WorkspaceRetainedTabView: NSTabView, NSTabViewDelegate {
+    var suppressMotion = false
     private var configuredSelection: UUID?
     var onEditorPageSelection: ((UUID) -> Void)?
     var onSelectionChange: (() -> Void)?
@@ -1422,7 +1652,7 @@ private final class WorkspaceRetainedTabView: NSTabView, NSTabViewDelegate {
               let id = UUID(uuidString: raw) else { return }
         layoutSubtreeIfNeeded()
         onSelectionChange?()
-        if let view = tabViewItem?.view, let motion = motions[id] {
+        if !suppressMotion, let view = tabViewItem?.view, let motion = motions[id] {
             layoutSubtreeIfNeeded()
             WorkspacePageAnimator.play(motionAppearance?.resolvedPageMotion(motion) ?? motion, on: view)
         }

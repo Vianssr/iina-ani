@@ -50,6 +50,8 @@ final class WorkspaceSkinBinding: NSObject {
     var state: SkinControlState = .normal { didSet { if oldValue != state { refresh() } } }
     private let backgroundLayer = CALayer()
     private let decorationLayer = CALayer()
+    private let initialLabelFont: NSFont?
+    private let initialLabelColor: NSColor?
     private var refreshing = false
 
     init(view: NSView, appearance: SkinAppearance, slot: String, componentID: String?) {
@@ -57,6 +59,8 @@ final class WorkspaceSkinBinding: NSObject {
         self.appearance = appearance
         self.slot = slot
         self.componentID = componentID
+        initialLabelFont = (view as? NSTextField)?.font
+        initialLabelColor = (view as? NSTextField)?.textColor
         super.init()
         view.wantsLayer = true
         backgroundLayer.contentsGravity = .resizeAspectFill
@@ -89,7 +93,13 @@ final class WorkspaceSkinBinding: NSObject {
         }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        view.layer?.backgroundColor = style.background.cgColor
+        let isPlainLabel = (view as? NSTextField).map { !$0.isEditable && !$0.drawsBackground } ?? false
+        let isNativeButton = (view as? WorkspaceSkinButton)?.usesNativeBezel ?? false
+        let isNativeSearch = view is WorkspaceSkinSearchField
+        let hasAuthoredBackground = style.values["background"] != nil || style.assetIDs[.background] != nil
+        // Labels inherit their enclosing surface; native bezels supply their own fill.
+        view.layer?.backgroundColor = (isPlainLabel || isNativeButton || isNativeSearch) && !hasAuthoredBackground
+            ? NSColor.clear.cgColor : style.background.cgColor
         view.layer?.cornerRadius = style.radius
         view.layer?.borderWidth = style.borderWidth
         view.layer?.borderColor = style.borderColor.cgColor
@@ -107,12 +117,28 @@ final class WorkspaceSkinBinding: NSObject {
         if let control = view as? NSControl { control.font = style.font }
         if let label = view as? NSTextField {
             label.textColor = style.foreground
+            let semanticText = ["header", "pageTitle", "brand", "subtitle", "sectionLabel"].contains(slot)
+            if !semanticText, style.values["fontSize"] == nil, style.values["fontFamily"] == nil,
+                let initialLabelFont
+            {
+                label.font = initialLabelFont
+            }
+            if !semanticText, state != .error, style.values["foreground"] == nil,
+                let initialLabelColor, initialLabelColor != .labelColor
+            {
+                label.textColor = initialLabelColor
+            }
             if label.isEditable { label.backgroundColor = style.background }
         }
         if let button = view as? NSButton {
             button.contentTintColor = style.foreground
             button.isBordered = style.assetIDs[.background] == nil
                 && ((button as? WorkspaceSkinButton)?.usesNativeBezel ?? true)
+            if let skinButton = button as? WorkspaceSkinButton,
+                skinButton.usesNativeBezel, !skinButton.usesNativeStateIndicator
+            {
+                button.bezelColor = hasAuthoredBackground ? style.background : nil
+            }
             let preservesImage = (button as? WorkspaceSkinButton).map { $0.usesNativeStateIndicator || $0.preservesNativeImage } ?? false
             if !preservesImage {
                 let iconSize = max(20, (button as? WorkspaceSkinButton)?.functionIconImage?.size.width ?? 20)
@@ -177,20 +203,40 @@ extension NSView {
 @MainActor
 class WorkspaceNavigationButton: WorkspaceSkinButton {
     override var usesNativeBezel: Bool { false }
+    private let selectedMark = CALayer()
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        cell = WorkspaceNavigationButtonCell(textCell: "")
+    }
+
+    required init?(coder: NSCoder) { super.init(coder: coder) }
 
     override func applySkinStyle(_ style: SkinResolvedStyle, state: SkinControlState) {
         guard let binding = workspaceSkinBinding else { return }
-        let normal = binding.appearance.resolve(slot: binding.slot, componentID: binding.componentID, state: .normal)
+        let selected = binding.appearance.resolve(
+            slot: binding.slot, componentID: binding.componentID, state: .selected)
+        let usesDefaultBackground = style.assetIDs[.background] == nil && style.values["background"] == nil
         CATransaction.begin()
         CATransaction.setDisableActions(true)
-        if style.values["radius"] == nil { layer?.cornerRadius = 10 }
-        // Explicit state backgrounds and Skin artwork keep their author-defined appearance.
-        if style.assetIDs[.background] == nil, style.values["background"] == normal.values["background"] {
-            let emphasis: CGFloat = !isEnabled ? 0 : state == .pressed ? 0.16
-                : self.state == .on ? 0.11 : (state == .hover || state == .focus) ? 0.055 : 0
-            layer?.backgroundColor = style.background.blended(withFraction: emphasis, of: style.foreground)?.cgColor
+        if selectedMark.superlayer == nil { layer?.addSublayer(selectedMark) }
+        selectedMark.frame = NSRect(x: 0, y: (bounds.height - 18) / 2, width: 3, height: 18)
+        selectedMark.cornerRadius = 1.5
+        selectedMark.backgroundColor = selected.foreground.cgColor
+        selectedMark.isHidden = !isEnabled || self.state != .on || !usesDefaultBackground
+            || selected.values["background"] != nil || selected.assetIDs[.background] != nil
+        if isEnabled, self.state == .on {
+            if usesDefaultBackground { layer?.backgroundColor = selected.background.cgColor }
+            if style.values["foreground"] == nil { contentTintColor = selected.foreground }
+            if style.values["fontSize"] == nil, style.values["fontFamily"] == nil { font = selected.font }
         }
         CATransaction.commit()
+    }
+}
+
+private final class WorkspaceNavigationButtonCell: NSButtonCell {
+    override func drawInterior(withFrame cellFrame: NSRect, in controlView: NSView) {
+        super.drawInterior(withFrame: cellFrame.insetBy(dx: 12, dy: 0), in: controlView)
     }
 }
 
@@ -354,6 +400,8 @@ final class WorkspaceSkinProgressIndicator: NSProgressIndicator {
 @MainActor
 final class WorkspaceMediaThumbnail: NSView {
     private let imageView = WorkspaceThumbnailImageView()
+    var transitionImageView: NSImageView { imageView }
+    var transitionAspectFill: Bool { imageView.aspectFill }
     private let placeholder = NSTextField(labelWithString: String(localized: "無封面"))
     private var request: SDWebImageCombinedOperation?
 
@@ -365,6 +413,8 @@ final class WorkspaceMediaThumbnail: NSView {
         imageView.translatesAutoresizingMaskIntoConstraints = false
         placeholder.translatesAutoresizingMaskIntoConstraints = false
         placeholder.alignment = .center
+        placeholder.font = .systemFont(ofSize: 11, weight: .medium)
+        placeholder.textColor = .secondaryLabelColor
         placeholder.setAccessibilityLabel(String(localized: "未提供封面"))
         addSubview(imageView); addSubview(placeholder)
         NSLayoutConstraint.activate([
@@ -379,6 +429,7 @@ final class WorkspaceMediaThumbnail: NSView {
             ])
         }
         bindSkin(appearance, slot: "placeholder", componentID: componentID)
+        layer?.masksToBounds = true
         placeholder.bindSkin(appearance, slot: "placeholder", componentID: componentID)
         guard !previewOnly, let url, let address = URL(string: url), ["https", "http", "file"].contains(address.scheme ?? "") else { return }
         placeholder.stringValue = String(localized: "載入中")

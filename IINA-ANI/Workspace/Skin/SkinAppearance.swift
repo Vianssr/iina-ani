@@ -242,18 +242,21 @@ extension SkinAppearanceError: LocalizedError {
         let values = SkinStyleCascade.values(
             theme: themeValues(), style: style, personalTheme: overrides?.theme ?? [:],
             personalStyle: overrides?.slots[slot], state: state)
+        let defaults = Self.defaultStyle(
+            slot: slot, componentID: componentID, state: state, scheme: effectiveColorScheme)
         let background =
-            Self.color(values["background"]) ?? Self.defaultBackground(for: effectiveColorScheme)
+            Self.color(values["background"]) ?? defaults.background
         let foreground =
-            Self.color(values["foreground"]) ?? Self.defaultForeground(for: effectiveColorScheme)
+            Self.color(values["foreground"]) ?? defaults.foreground
         let border =
             Self.color(values["borderColor"]) ?? Self.defaultBorder(for: effectiveColorScheme)
-        let spacing = Self.number(values["spacing"]) ?? 8
-        let radius = Self.number(values["radius"]) ?? 6
+        let spacing = Self.number(values["spacing"]) ?? (slot == "toolbar" ? 12 : 8)
+        let radius = Self.number(values["radius"]) ?? defaults.radius
         let borderWidth = Self.number(values["borderWidth"]) ?? 0
-        let size = Self.number(values["fontSize"]) ?? (slot == "header" && componentID == "detail.media" ? 24 : 13)
-        let family = Self.string(values["fontFamily"]) ?? NSFont.systemFont(ofSize: size).fontName
-        let font = NSFont(name: family, size: size) ?? NSFont.systemFont(ofSize: size)
+        let size = Self.number(values["fontSize"]) ?? defaults.fontSize
+        let defaultFont = NSFont.systemFont(ofSize: size, weight: defaults.fontWeight)
+        let font = Self.string(values["fontFamily"]).flatMap { NSFont(name: $0, size: size) }
+            ?? defaultFont
         let density = SkinDensity(rawValue: Self.string(values["density"]) ?? "regular") ?? .regular
         let assetIDs = Dictionary(
             uniqueKeysWithValues: SkinAssetRole.allCases.compactMap { role in
@@ -308,15 +311,96 @@ extension SkinAppearanceError: LocalizedError {
             blue: CGFloat((value >> 8) & 255) / 255, alpha: CGFloat(value & 255) / 255)
     }
     private static func defaultBorder(for scheme: SkinColorScheme) -> NSColor {
-        NSColor(calibratedWhite: scheme == .dark ? 0.65 : 0.42, alpha: 1)
+        paletteColor(scheme == .dark ? 0x7C8A9C : 0x868175)
     }
-    private static func defaultBackground(for scheme: SkinColorScheme) -> NSColor {
-        scheme == .dark
-            ? NSColor(calibratedWhite: 0.12, alpha: 1) : NSColor(calibratedWhite: 0.96, alpha: 1)
+
+    private struct DefaultStyle {
+        var background: NSColor
+        var foreground: NSColor
+        var radius: CGFloat = 10
+        var fontSize: CGFloat = 13
+        var fontWeight: NSFont.Weight = .regular
     }
-    private static func defaultForeground(for scheme: SkinColorScheme) -> NSColor {
-        scheme == .dark
-            ? NSColor(calibratedWhite: 0.96, alpha: 1) : NSColor(calibratedWhite: 0.08, alpha: 1)
+
+    private static func paletteColor(_ hex: UInt32) -> NSColor {
+        NSColor(
+            srgbRed: CGFloat((hex >> 16) & 255) / 255,
+            green: CGFloat((hex >> 8) & 255) / 255,
+            blue: CGFloat(hex & 255) / 255, alpha: 1)
+    }
+
+    /// Semantic fallbacks stay outside the authored cascade, so a Skin or personal value always wins.
+    private static func defaultStyle(
+        slot: String, componentID: String?, state: SkinControlState, scheme: SkinColorScheme
+    ) -> DefaultStyle {
+        let dark = scheme == .dark
+        let page = paletteColor(dark ? 0x151B25 : 0xF6F4EF)
+        let surface = paletteColor(dark ? 0x202A37 : 0xFCFBF8)
+        let ink = paletteColor(dark ? 0xEEF0F2 : 0x282B30)
+        let muted = paletteColor(dark ? 0xA5B1BF : 0x636760)
+        var style = DefaultStyle(background: surface, foreground: ink)
+        switch slot {
+        case "background", "panel", "toolbar":
+            style.background = page
+            style.radius = 0
+        case "sidebar":
+            style.background = paletteColor(dark ? 0x1A222D : 0xEFEEE8)
+            style.radius = 0
+        case "list":
+            style.background = page
+            style.radius = 0
+        case "pageTitle":
+            style.background = page
+            style.fontSize = 28
+            style.fontWeight = .bold
+        case "header":
+            style.background = page
+            style.fontSize = componentID == "detail.media" ? 26 : 18
+            style.fontWeight = .semibold
+        case "brand":
+            style.background = page
+            style.fontSize = 18
+            style.fontWeight = .semibold
+        case "subtitle", "sectionLabel", "emptyState", "status", "placeholder":
+            style.foreground = muted
+            style.fontSize = slot == "sectionLabel" ? 10.5 : 12.5
+            style.fontWeight = slot == "sectionLabel" ? .semibold : .regular
+        case "navigation":
+            style.background = paletteColor(dark ? 0x1A222D : 0xEFEEE8)
+            style.fontWeight = .medium
+            if state == .selected || state == .pressed {
+                style.background = paletteColor(dark ? 0x3B3226 : 0xF1E2C6)
+                style.foreground = paletteColor(dark ? 0xF3C475 : 0x76501B)
+                style.fontWeight = .semibold
+            } else if state == .hover || state == .focus {
+                style.background = paletteColor(dark ? 0x293341 : 0xE5E3DC)
+            }
+        case "primaryAction", "button", "tabs":
+            style.background = paletteColor(dark ? 0x2A3543 : 0xECE9E1)
+            style.fontWeight = .medium
+            style.radius = 8
+            if state == .hover || state == .focus {
+                style.background = paletteColor(dark ? 0x364351 : 0xE4DFD3)
+            } else if state == .selected || state == .pressed {
+                style.background = paletteColor(dark ? 0x3B3226 : 0xF1E2C6)
+                style.foreground = paletteColor(dark ? 0xF3C475 : 0x76501B)
+            }
+        case "workCard", "row":
+            style.radius = 12
+            style.fontWeight = .medium
+        case "search":
+            style.background = paletteColor(dark ? 0x242F3D : 0xFFFFFF)
+            style.radius = 10
+        case "progress":
+            style.background = paletteColor(dark ? 0x304647 : 0xD9E5DF)
+            style.foreground = paletteColor(dark ? 0x71CDB7 : 0x146E61)
+            style.radius = 3
+        default:
+            break
+        }
+        if state == .disabled { style.foreground = muted }
+        if state == .error { style.foreground = paletteColor(dark ? 0xF09D98 : 0xA84439) }
+        return style
     }
     private static func contrast(_ fg: NSColor, _ bg: NSColor) -> Double {
         func luminance(_ color: NSColor) -> Double {

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DA2210010000000000000002 /* WorkspaceDetailTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2210010000000000000001 /* WorkspaceDetailTransition.swift */; };
 		01010125211DBC27002F0F7F /* StringExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01010124211DBC27002F0F7F /* StringExtension.swift */; };
 		0102924627ACF8AC00CB74B5 /* ControllersVisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0102924527ACF8AB00CB74B5 /* ControllersVisualEffectView.swift */; };
 		0106179D2AF34EFF005C7877 /* JSPlayerURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0106179C2AF34EFF005C7877 /* JSPlayerURL.swift */; };
@@ -164,6 +165,7 @@
 		0A0820010000000000000003 /* SkinAppearance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0820010000000000000002 /* SkinAppearance.swift */; };
 		0A0820010000000000000005 /* SkinArchive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0820010000000000000004 /* SkinArchive.swift */; };
 		0A0820010000000000000007 /* WorkspaceSkinPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0820010000000000000006 /* WorkspaceSkinPresentation.swift */; };
+		67B11F2EC4D94C369E2F0002 /* WorkspaceGlassSurface.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67B11F2EC4D94C369E2F0001 /* WorkspaceGlassSurface.swift */; };
 		0A0820010000000000000009 /* SkinZipBridge.c in Sources */ = {isa = PBXBuildFile; fileRef = 0A0820010000000000000008 /* SkinZipBridge.c */; };
 		0A082001000000000000000b /* SkinStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A082001000000000000000a /* SkinStore.swift */; };
 		0A082001000000000000000d /* WorkspaceSkinController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A082001000000000000000c /* WorkspaceSkinController.swift */; };
@@ -174,6 +176,8 @@
 		0A0840010000000000000003 /* WorkspaceLayoutEditorController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0840010000000000000004 /* WorkspaceLayoutEditorController.swift */; };
 		0A0840010000000000000005 /* WorkspaceSkinManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0840010000000000000006 /* WorkspaceSkinManager.swift */; };
 		0A0900010000000000000001 /* WorkspaceDetailController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0900010000000000000002 /* WorkspaceDetailController.swift */; };
+		9F497BAF72D744629A4E0002 /* WorkspaceDetailShelf.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F497BAF72D744629A4E0001 /* WorkspaceDetailShelf.swift */; };
+		ED54C212F23741EF9A790002 /* WorkspaceDetailInfoPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED54C212F23741EF9A790001 /* WorkspaceDetailInfoPreview.swift */; };
 		0A0900010000000000000003 /* WorkspaceSettingsController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0900010000000000000004 /* WorkspaceSettingsController.swift */; };
 		0A0900010000000000000005 /* WorkspaceTorrentController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0900010000000000000006 /* WorkspaceTorrentController.swift */; };
 		0A0900010000000000000007 /* TorrentPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0900010000000000000008 /* TorrentPreferences.swift */; };
@@ -242,6 +246,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		DA2210010000000000000001 /* WorkspaceDetailTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDetailTransition.swift; sourceTree = "<group>"; };
 		01010124211DBC27002F0F7F /* StringExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtension.swift; sourceTree = "<group>"; };
 		0102924527ACF8AB00CB74B5 /* ControllersVisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllersVisualEffectView.swift; sourceTree = "<group>"; };
 		0106179C2AF34EFF005C7877 /* JSPlayerURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSPlayerURL.swift; sourceTree = "<group>"; };
@@ -394,6 +399,7 @@
 		0A0820010000000000000002 /* SkinAppearance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SkinAppearance.swift"; sourceTree = "<group>"; };
 		0A0820010000000000000004 /* SkinArchive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SkinArchive.swift"; sourceTree = "<group>"; };
 		0A0820010000000000000006 /* WorkspaceSkinPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceSkinPresentation.swift"; sourceTree = "<group>"; };
+		67B11F2EC4D94C369E2F0001 /* WorkspaceGlassSurface.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceGlassSurface.swift"; sourceTree = "<group>"; };
 		0A0820010000000000000008 /* SkinZipBridge.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = "SkinZipBridge.c"; sourceTree = "<group>"; };
 		0A082001000000000000000a /* SkinStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SkinStore.swift"; sourceTree = "<group>"; };
 		0A082001000000000000000c /* WorkspaceSkinController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceSkinController.swift"; sourceTree = "<group>"; };
@@ -404,6 +410,8 @@
 		0A0840010000000000000004 /* WorkspaceLayoutEditorController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceLayoutEditorController.swift"; sourceTree = "<group>"; };
 		0A0840010000000000000006 /* WorkspaceSkinManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceSkinManager.swift"; sourceTree = "<group>"; };
 		0A0900010000000000000002 /* WorkspaceDetailController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceDetailController.swift"; sourceTree = "<group>"; };
+		9F497BAF72D744629A4E0001 /* WorkspaceDetailShelf.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceDetailShelf.swift"; sourceTree = "<group>"; };
+		ED54C212F23741EF9A790001 /* WorkspaceDetailInfoPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceDetailInfoPreview.swift"; sourceTree = "<group>"; };
 		0A0900010000000000000004 /* WorkspaceSettingsController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceSettingsController.swift"; sourceTree = "<group>"; };
 		0A0900010000000000000006 /* WorkspaceTorrentController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WorkspaceTorrentController.swift"; sourceTree = "<group>"; };
 		0A0900010000000000000008 /* TorrentPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TorrentPreferences.swift"; sourceTree = "<group>"; };
@@ -652,6 +660,8 @@
 			isa = PBXGroup;
 			children = (
 				0A0900010000000000000002 /* WorkspaceDetailController.swift */,
+				9F497BAF72D744629A4E0001 /* WorkspaceDetailShelf.swift */,
+				ED54C212F23741EF9A790001 /* WorkspaceDetailInfoPreview.swift */,
 				0A0810020000000000000010 /* WorkspaceFavoritePanelController.swift */,
 				3F9B9F1C8DD94C36B518D001 /* WorkspaceFeedGridLayout.swift */,
 				0A1014010000000000000002 /* WorkspaceQuickDownloadController.swift */,
@@ -686,6 +696,7 @@
 				0A082001000000000000000c /* WorkspaceSkinController.swift */,
 				0A0840010000000000000006 /* WorkspaceSkinManager.swift */,
 				0A0820010000000000000006 /* WorkspaceSkinPresentation.swift */,
+				67B11F2EC4D94C369E2F0001 /* WorkspaceGlassSurface.swift */,
 			);
 			path = "Skin";
 			sourceTree = "<group>";
@@ -945,6 +956,7 @@
 			children = (
 				0A0810020000000000000000 /* WorkspaceApplicationController.swift */,
 				0A081002000000000000000e /* WorkspaceRenderer.swift */,
+				DA2210010000000000000001 /* WorkspaceDetailTransition.swift */,
 				0A081002000000000000000a /* WorkspaceSessionState.swift */,
 			);
 			path = "Shell";
@@ -1190,6 +1202,8 @@
 				0A0810010000000000000001 /* WorkspaceCapability.swift in Sources */,
 				0A0810020000000000000001 /* WorkspaceApplicationController.swift in Sources */,
 				0A0900010000000000000001 /* WorkspaceDetailController.swift in Sources */,
+				9F497BAF72D744629A4E0002 /* WorkspaceDetailShelf.swift in Sources */,
+				ED54C212F23741EF9A790002 /* WorkspaceDetailInfoPreview.swift in Sources */,
 				0A0900010000000000000003 /* WorkspaceSettingsController.swift in Sources */,
 				0A0900010000000000000005 /* WorkspaceTorrentController.swift in Sources */,
 				0A1014010000000000000001 /* WorkspaceQuickDownloadController.swift in Sources */,
@@ -1207,6 +1221,7 @@
 				0A081002000000000000000b /* WorkspaceSessionState.swift in Sources */,
 				0A081002000000000000000d /* WorkspaceTransactions.swift in Sources */,
 				0A081002000000000000000f /* WorkspaceRenderer.swift in Sources */,
+				DA2210010000000000000002 /* WorkspaceDetailTransition.swift in Sources */,
 				0A0810020000000000000011 /* WorkspaceFavoritePanelController.swift in Sources */,
 				0A0810020000000000000013 /* WorkspaceServicePanelController.swift in Sources */,
 				3F9B9F1C8DD94C36B518D002 /* WorkspaceFeedGridLayout.swift in Sources */,
@@ -1214,6 +1229,7 @@
 				0A0820010000000000000003 /* SkinAppearance.swift in Sources */,
 				0A0820010000000000000005 /* SkinArchive.swift in Sources */,
 				0A0820010000000000000007 /* WorkspaceSkinPresentation.swift in Sources */,
+				67B11F2EC4D94C369E2F0002 /* WorkspaceGlassSurface.swift in Sources */,
 				0A0820010000000000000009 /* SkinZipBridge.c in Sources */,
 				0A082001000000000000000b /* SkinStore.swift in Sources */,
 				0A082001000000000000000d /* WorkspaceSkinController.swift in Sources */,

@@ -10,7 +10,7 @@ private final class WorkspaceSettingsCategoryButton: WorkspaceNavigationButton {
     override var font: NSFont? { didSet { invalidateIntrinsicContentSize() } }
     override var intrinsicContentSize: NSSize {
         var size = super.intrinsicContentSize
-        if let font { size.height = max(size.height, font.ascender - font.descender + 36) }
+        if let font { size.height = max(size.height, font.ascender - font.descender + 20) }
         return size
     }
 }
@@ -110,14 +110,15 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
             case .storage: icon = .downloads
             case .about: icon = .info
             }
-            button.functionIconPosition = .imageAbove
-            button.setFunctionIcon(icon, size: 20)
+            button.functionIconPosition = .imageLeading
+            button.setFunctionIcon(icon, size: 18)
             button.bezelStyle = .regularSquare
             button.imageScaling = .scaleNone
             button.imageHugsTitle = true
-            button.alignment = .center
-            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 56).isActive = true
-            button.setContentCompressionResistancePriority(.required, for: .horizontal)
+            button.alignment = .left
+            button.cell?.lineBreakMode = .byTruncatingTail
+            button.heightAnchor.constraint(greaterThanOrEqualToConstant: 44).isActive = true
+            button.setContentCompressionResistancePriority(.defaultHigh, for: .horizontal)
             button.setAccessibilityIdentifier("settings.category.\(index)")
             button.toolTip = String(localized: "捲動至\(group.displayTitle)")
             button.bindSkin(skin, slot: "navigation", componentID: "settings.preferences")
@@ -165,7 +166,7 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
         stack.translatesAutoresizingMaskIntoConstraints = false
         let body = NSView()
         categories.translatesAutoresizingMaskIntoConstraints = false
-        let categoryWidth: CGFloat = 112
+        let categoryWidth: CGFloat = 176
         let preferredCategoryWidth = categories.widthAnchor.constraint(equalToConstant: categoryWidth)
         preferredCategoryWidth.priority = .defaultHigh
         preferredCategoryWidth.isActive = true
@@ -372,6 +373,7 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
         formatter.minimum = NSNumber(value: minimum)
         formatter.maximum = NSNumber(value: maximum)
         formatter.allowsFloats = !integer
+        formatter.maximumFractionDigits = integer ? 0 : 2
         formatter.usesGroupingSeparator = false
         field.formatter = formatter
         field.doubleValue = value
@@ -389,27 +391,31 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
         return control
     }
     private func add(_ id: String, _ category: WorkspaceSettingsGroup, _ title: String,
-                     _ aliases: String, _ help: String, control makeControl: () -> NSView) {
+                     _ aliases: String, _ help: String, showsHeading: Bool = true,
+                     accessibilityID: String? = nil,
+                     control makeControl: () -> NSView) {
         destinations.append(.init(id: id, group: category, title: title, aliases: aliases))
         // Every category shares this document; category controls only move its viewport.
         let control = makeControl()
         if previewOnly, let native = control as? NSControl { native.isEnabled = false }
-        control.setAccessibilityIdentifier("settings.\(id)")
+        control.setAccessibilityIdentifier(accessibilityID ?? "settings.\(id)")
         control.setAccessibilityLabel(title)
         control.toolTip = help
         let heading = NSTextField(wrappingLabelWithString: title)
         heading.bindSkin(skin, slot: "list", componentID: "settings.preferences")
-        let row = NSStackView(views: [heading, control])
+        let row = NSStackView(views: showsHeading ? [heading, control] : [control])
         row.orientation = help.isEmpty ? .horizontal : .vertical
         row.alignment = help.isEmpty ? .centerY : .leading
         row.spacing = 12
-        row.edgeInsets = NSEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+        row.edgeInsets = showsHeading ? NSEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
+            : NSEdgeInsets(top: 2, left: 0, bottom: 2, right: 0)
         row.bindSkin(skin, slot: "list", componentID: "settings.preferences")
         content.addArrangedSubview(row)
         NSLayoutConstraint.activate([
             row.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -32),
-            control.widthAnchor.constraint(lessThanOrEqualTo: row.widthAnchor, constant: -24)
+            control.widthAnchor.constraint(lessThanOrEqualTo: row.widthAnchor, constant: showsHeading ? -24 : 0)
         ])
+        if !showsHeading { control.widthAnchor.constraint(equalTo: row.widthAnchor).isActive = true }
         if !help.isEmpty {
             let explanation = NSTextField(wrappingLabelWithString: help)
             explanation.bindSkin(skin, slot: "list", componentID: "settings.preferences")
@@ -508,6 +514,7 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
                 self.status.stringValue = String(localized: "Language saved. The new language will be used next launch; playback and downloads are not interrupted.")
             }
         }
+        detailTransitionSettings()
         let entries: [(String, String, String, () -> Void)] = [
             ("skin.manage", String(localized: "Skin 管理與預覽"), "skin theme 皮肤 主題 換皮", commands.manageSkins),
             ("skin.import", String(localized: "匯入 .iinaskin"), "import 安装 導入", commands.importSkin),
@@ -531,10 +538,24 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
             "skin.authorLayout": .layout, "skin.remove": .delete, "skin.restore": .refresh,
             "layout.edit": .layout, "layout.generate": .layout, "layout.restore": .refresh,
         ]
+        let appearanceNote = NSTextField(wrappingLabelWithString: String(localized: "先預覽，再決定。外觀與佈局調整不會影響收藏、帳號或下載。"))
+        appearanceNote.font = .systemFont(ofSize: 12)
+        appearanceNote.textColor = .secondaryLabelColor
+        appearanceNote.isSelectable = true
+        appearanceNote.bindSkin(skin, slot: "list", componentID: "settings.preferences")
+        content.addArrangedSubview(appearanceNote)
+        appearanceNote.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -32).isActive = true
         for (id, title, aliases, command) in entries {
-            add(id, .appearance, title, aliases,
-                String(localized: "只修改外觀／排列，不重設收藏、帳號或下載。預覽、取消及確認保存由既有工作區命令處理；分享包不包含私人資料。")) {
-                button("\(title)…", icon: icons[id], action: command)
+            add(id, .appearance, title, aliases, "", showsHeading: false) {
+                let control = WorkspaceNavigationButton(title: "\(title)…", target: self, action: #selector(invokeSettingCommand(_:)))
+                control.setFunctionIcon(icons[id], size: 18)
+                control.alignment = .left
+                control.bezelStyle = .regularSquare
+                control.cell?.lineBreakMode = .byTruncatingTail
+                control.heightAnchor.constraint(greaterThanOrEqualToConstant: 38).isActive = true
+                control.bindSkin(skin, slot: "navigation", componentID: "settings.preferences")
+                actions[ObjectIdentifier(control)] = command
+                return control
             }
         }
         for capability in WorkspaceCapability.allCases where capability.canDisable && capability != .downloads {
@@ -563,6 +584,61 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
                 return control
             }
         }
+    }
+
+    private func detailTransitionSettings() {
+        let settings = prefs.detailTransition
+        add("detail.transition.style", .appearance, String(localized: "詳情頁開啟動畫"),
+            "detail preview transition animation cover cinema netflix iris 動畫 动画 詳情 详情 預覽 预览 封面 影院 光圈",
+            String(localized: "封面從點選位置滑動放大；影院效果將封面推近並降低 gamma；光圈從封面中心展開。動畫結束時顯示詳情預覽；系統開啟減少動態效果時直接顯示。"),
+            accessibilityID: "detail.transition.style") {
+            popup(WorkspaceDetailTransitionStyle.allCases.map(\.displayTitle),
+                  selected: WorkspaceDetailTransitionStyle.allCases.firstIndex(of: settings.style) ?? 1) { [weak self] index in
+                guard WorkspaceDetailTransitionStyle.allCases.indices.contains(index) else { return }
+                self?.saveDetailTransition { $0.style = WorkspaceDetailTransitionStyle.allCases[index] }
+            }
+        }
+        add("detail.transition.curve", .appearance, String(localized: "動畫速率曲線"),
+            "detail transition animation curve easing ease nonlinear 非勻速 非匀速 曲線 曲线 緩動 缓动",
+            String(localized: "三種曲線都採用非勻速變化，控制動畫的起步、推進與停靠節奏。"),
+            accessibilityID: "detail.transition.curve") {
+            popup(WorkspaceDetailTransitionCurve.allCases.map(\.displayTitle),
+                  selected: WorkspaceDetailTransitionCurve.allCases.firstIndex(of: settings.curve) ?? 0) { [weak self] index in
+                guard WorkspaceDetailTransitionCurve.allCases.indices.contains(index) else { return }
+                self?.saveDetailTransition { $0.curve = WorkspaceDetailTransitionCurve.allCases[index] }
+            }
+        }
+        add("detail.transition.duration", .appearance, String(localized: "動畫時長（秒）"),
+            "detail transition animation duration speed 動畫 动画 速度 時長 时长 秒",
+            String(localized: "可調整為 0.2–1.8 秒；設定即改即保存，下次開啟作品時生效。"),
+            accessibilityID: "detail.transition.duration") {
+            number(settings.duration, minimum: 0.2, maximum: 1.8, integer: false) { [weak self] value in
+                self?.saveDetailTransition { $0.duration = value }
+            }
+        }
+        add("detail.transition.gamma", .appearance, String(localized: "影院效果 gamma"),
+            "detail transition cinema netflix gamma brightness 影院 亮度 伽瑪 伽玛",
+            String(localized: "僅影響影院推近效果，範圍 0.35–1；低於 1 會提亮中間調，再疊加暗色遮罩形成影院對比。"),
+            accessibilityID: "detail.transition.gamma") {
+            number(settings.gamma, minimum: 0.35, maximum: 1, integer: false) { [weak self] value in
+                self?.saveDetailTransition { $0.gamma = value }
+            }
+        }
+        add("detail.transition.zoom", .appearance, String(localized: "影院效果放大倍率"),
+            "detail transition cinema netflix zoom scale 影院 放大 倍率 縮放 缩放",
+            String(localized: "僅影響影院推近效果，範圍 1.05–1.5 倍；較大的倍率會帶來更明顯的推近。"),
+            accessibilityID: "detail.transition.zoom") {
+            number(settings.zoom, minimum: 1.05, maximum: 1.5, integer: false) { [weak self] value in
+                self?.saveDetailTransition { $0.zoom = value }
+            }
+        }
+    }
+
+    private func saveDetailTransition(_ update: (inout WorkspaceDetailTransitionSettings) -> Void) {
+        var settings = prefs.detailTransition
+        update(&settings)
+        prefs.detailTransition = settings
+        status.stringValue = String(localized: "詳情頁動畫已保存，下次開啟作品時生效。")
     }
 
     private func sourceSettings() {

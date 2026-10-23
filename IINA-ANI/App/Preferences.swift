@@ -66,6 +66,56 @@ enum AppLanguage: String, CaseIterable {
     }
 }
 
+enum WorkspaceDetailTransitionStyle: String, CaseIterable, Sendable {
+    case none
+    case cover
+    case cinema
+    case iris
+
+    var displayTitle: String {
+        switch self {
+        case .none: return String(localized: "關閉動畫")
+        case .cover: return String(localized: "封面滑動放大")
+        case .cinema: return String(localized: "影院推近")
+        case .iris: return String(localized: "光圈揭幕")
+        }
+    }
+}
+
+enum WorkspaceDetailTransitionCurve: String, CaseIterable, Sendable {
+    case smooth
+    case easeOut
+    case dramatic
+
+    var displayTitle: String {
+        switch self {
+        case .smooth: return String(localized: "柔和加速與減速")
+        case .easeOut: return String(localized: "快速起步、緩慢停靠")
+        case .dramatic: return String(localized: "蓄勢後推進")
+        }
+    }
+}
+
+struct WorkspaceDetailTransitionSettings: Equatable, Sendable {
+    var style: WorkspaceDetailTransitionStyle = .cover
+    var curve: WorkspaceDetailTransitionCurve = .smooth
+    var duration: Double = 0.65
+    var gamma: Double = 0.65
+    var zoom: Double = 1.18
+
+    static let defaults = Self()
+
+    fileprivate var clamped: Self {
+        func bounded(_ value: Double, to range: ClosedRange<Double>, fallback: Double) -> Double {
+            value.isFinite ? min(max(value, range.lowerBound), range.upperBound) : fallback
+        }
+        return Self(style: style, curve: curve,
+                    duration: bounded(duration, to: 0.2...1.8, fallback: Self.defaults.duration),
+                    gamma: bounded(gamma, to: 0.35...1, fallback: Self.defaults.gamma),
+                    zoom: bounded(zoom, to: 1.05...1.5, fallback: Self.defaults.zoom))
+    }
+}
+
 final class Preferences: NSObject, Sendable {
     static let shared = Preferences(defaults: .standard)
 
@@ -85,6 +135,32 @@ final class Preferences: NSObject, Sendable {
             } else {
                 prefs.set([newValue.rawValue], forKey: "AppleLanguages")
             }
+        }
+    }
+
+    var detailTransition: WorkspaceDetailTransitionSettings {
+        get {
+            let fallback = WorkspaceDetailTransitionSettings.defaults
+            func number(_ key: String, fallback: Double) -> Double {
+                guard let stored = prefs.object(forKey: key) as? NSNumber,
+                      CFGetTypeID(stored) != CFBooleanGetTypeID() else { return fallback }
+                return stored.doubleValue
+            }
+            return WorkspaceDetailTransitionSettings(
+                style: WorkspaceDetailTransitionStyle(rawValue: prefs.string(forKey: "workspace.detailTransition.style") ?? "") ?? fallback.style,
+                curve: WorkspaceDetailTransitionCurve(rawValue: prefs.string(forKey: "workspace.detailTransition.curve") ?? "") ?? fallback.curve,
+                duration: number("workspace.detailTransition.duration", fallback: fallback.duration),
+                gamma: number("workspace.detailTransition.gamma", fallback: fallback.gamma),
+                zoom: number("workspace.detailTransition.zoom", fallback: fallback.zoom)
+            ).clamped
+        }
+        set {
+            let value = newValue.clamped
+            prefs.set(value.style.rawValue, forKey: "workspace.detailTransition.style")
+            prefs.set(value.curve.rawValue, forKey: "workspace.detailTransition.curve")
+            prefs.set(value.duration, forKey: "workspace.detailTransition.duration")
+            prefs.set(value.gamma, forKey: "workspace.detailTransition.gamma")
+            prefs.set(value.zoom, forKey: "workspace.detailTransition.zoom")
         }
     }
 	

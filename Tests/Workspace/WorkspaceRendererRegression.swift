@@ -166,6 +166,35 @@ struct WorkspaceRendererRegression {
         check(products()[detailNode.id] === detailPanel && products()[unrelatedNode.id] === unrelatedPanel,
               "top-level navigation retains controller identity")
         check(unrelatedPanel.attaches == 2, "top-level return reattaches its existing owner")
+
+        let originalLayout = controller.shareableLayout
+        outer.selectTabViewItem(item(outer, inactive))
+        let detailAttaches = detailPanel.attaches
+        let unrelatedAttaches = unrelatedPanel.attaches
+        check(controller.showProduct("detail.media") === detailPanel,
+              "fixed detail commands must find the retained product inside nested tabs")
+        check(outer.selectedTabViewItem === item(outer, nested)
+                && inner.selectedTabViewItem === item(inner, detail),
+              "opening a nested product must reveal every selected tab ancestor")
+        check(detailPanel.view.window === controller.window && !detailPanel.view.isHiddenOrHasHiddenAncestor,
+              "revealed detail geometry must belong to the actual destination window")
+        check(detailPanel.attaches == detailAttaches + 1,
+              "revealing the complete nested path must attach the detail owner exactly once")
+        check(unrelatedPanel.attaches == unrelatedAttaches,
+              "revealing nested detail cannot restart a visible sibling owner")
+        _ = controller.showProduct("detail.media")
+        check(detailPanel.attaches == detailAttaches + 1,
+              "repeating the product command must not restart an already visible detail")
+        check(controller.shareableLayout == originalLayout,
+              "product navigation must not overwrite the user's authored tab selection")
+
+        let currentAwayButton = descendants(content, NSButton.self).first { $0.identifier?.rawValue == away.id.uuidString }!
+        invoke(currentAwayButton)
+        check(controller.showProduct("detail.media") === detailPanel
+                && detailPanel.view.window === controller.window,
+              "opening nested detail from another top-level page must reveal the retained destination")
+        check(detailPanel.attaches == detailAttaches + 2,
+              "cross-page product navigation must attach the retained detail once")
     }
 
     static func tabOrder(_ dependencies: WorkspaceWindowDependencies) {

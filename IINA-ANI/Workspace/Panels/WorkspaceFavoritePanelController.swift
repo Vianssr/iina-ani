@@ -47,6 +47,9 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
     private let searchField = WorkspaceSkinSearchField()
     private let tableView = FavoriteTableView()
     private let scrollView = WorkspaceScrollView()
+    private let emptyState = NSStackView()
+    private let emptyTitle = NSTextField(labelWithString: "")
+    private let emptyDetail = NSTextField(wrappingLabelWithString: "")
     private let sortPopup = NSPopUpButton()
     private let actionButton = WorkspaceSkinButton()
     private let urlField = NSTextField()
@@ -108,7 +111,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         panel.orientation = .vertical
         panel.alignment = .leading
         panel.spacing = 8
-        panel.edgeInsets = NSEdgeInsets(top: 12, left: 14, bottom: 12, right: 14)
+        panel.edgeInsets = NSEdgeInsets(top: 18, left: 16, bottom: 14, right: 16)
         panel.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(panel)
         NSLayoutConstraint.activate([
@@ -124,7 +127,12 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         header.spacing = 8
         let heading = NSTextField(labelWithString: title ?? String(localized: "收藏"))
         heading.font = .boldSystemFont(ofSize: 17)
+        heading.lineBreakMode = .byTruncatingTail
+        heading.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         countLabel.textColor = .secondaryLabelColor
+        countLabel.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        countLabel.setContentHuggingPriority(.required, for: .horizontal)
+        countLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
         header.addArrangedSubview(heading)
         header.addArrangedSubview(countLabel)
         let spacer = NSView()
@@ -133,6 +141,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         sortPopup.target = self
         sortPopup.action = #selector(sortChanged)
         sortPopup.selectItem(at: sortIndex)
+        sortPopup.controlSize = .small
         if kind == .works {
             header.addArrangedSubview(WorkspaceDensityButton(
                 instanceID: instanceID, sessionState: sessionState, appearance: skinAppearance,
@@ -156,7 +165,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         panel.addArrangedSubview(header)
         let commands = NSStackView(views: [])
         commands.orientation = .horizontal
-        commands.spacing = 8
+        commands.spacing = 6
         openButton.title = kind == .works ? String(localized: "開啟詳情") : String(localized: "開啟連結")
         openButton.setFunctionIcon(kind == .works ? .work : .openLink)
         openButton.target = self
@@ -183,7 +192,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         commands.addArrangedSubview(NSView())
         commands.addArrangedSubview(actionButton)
         sortPopup.setAccessibilityLabel(String(localized: "收藏排序"))
-        header.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+        header.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
 
         searchField.placeholderString =
             kind == .works ? String(localized: "搜尋作品名稱或別名") : String(localized: "搜尋標題、網址或來源")
@@ -194,7 +203,8 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         searchRow.spacing = 8
         searchField.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         panel.addArrangedSubview(searchRow)
-        searchRow.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+        searchRow.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
+        searchField.heightAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
         if kind == .works {
             collectionFilter.addItems(withTitles: [String(localized: "全部分類")]
                 + BangumiCollectionStatus.displayOrder.map(\.title) + [String(localized: "待同步")])
@@ -214,13 +224,13 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
             let filters = NSStackView(views: [collectionFilter, onlineButton])
             filters.spacing = 6
             panel.addArrangedSubview(filters)
-            filters.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+            filters.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
             onlineStatus.maximumNumberOfLines = 2
             onlineStatus.textColor = .secondaryLabelColor
             onlineStatus.isHidden = true
             let presentation = onlineStatus.presentation(appearance: skinAppearance, componentID: componentID)
             panel.addArrangedSubview(presentation)
-            presentation.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+            presentation.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         }
         if kind == .links {
             liveFilter.addItems(withTitles: [String(localized: "全部狀態"), String(localized: "直播中"), String(localized: "未開播"), String(localized: "影片／未知")])
@@ -247,7 +257,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
             let filters = NSStackView(views: [liveFilter, siteFilter, densityButton, refreshButton])
             filters.spacing = 6
             panel.addArrangedSubview(filters)
-            filters.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+            filters.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         }
 
         statusLabel.textColor = .secondaryLabelColor
@@ -256,7 +266,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         let statusPresentation = statusLabel.presentation(
             appearance: skinAppearance, componentID: componentID)
         panel.addArrangedSubview(statusPresentation)
-        statusPresentation.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28)
+        statusPresentation.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32)
             .isActive =
             true
 
@@ -268,6 +278,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         tableView.rowHeight = 48
         tableView.activate = { [weak self] in self?.activateSelectedRow() }
         tableView.usesAlternatingRowBackgroundColors = false
+        tableView.intercellSpacing = NSSize(width: 0, height: 6)
         tableView.allowsEmptySelection = true
         tableView.allowsMultipleSelection = false
         tableView.delegate = self
@@ -279,6 +290,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         tableView.setDraggingSourceOperationMask(.move, forLocal: true)
         scrollView.documentView = tableView
         scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
         if !previewOnly {
             scrollView.contentView.postsBoundsChangedNotifications = true
             NotificationCenter.default.addObserver(
@@ -290,23 +302,40 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         }
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
-        panel.addArrangedSubview(scrollView)
-        scrollView.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
-        scrollView.heightAnchor.constraint(greaterThanOrEqualToConstant: 100).isActive = true
+        let listContent = NSView()
+        listContent.translatesAutoresizingMaskIntoConstraints = false
+        listContent.addSubview(scrollView)
+        panel.addArrangedSubview(listContent)
+        NSLayoutConstraint.activate([
+            listContent.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32),
+            listContent.heightAnchor.constraint(greaterThanOrEqualToConstant: 100),
+            scrollView.leadingAnchor.constraint(equalTo: listContent.leadingAnchor),
+            scrollView.trailingAnchor.constraint(equalTo: listContent.trailingAnchor),
+            scrollView.topAnchor.constraint(equalTo: listContent.topAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: listContent.bottomAnchor),
+        ])
+        configureEmptyState(in: listContent)
+        let commandDivider = NSBox()
+        commandDivider.boxType = .separator
+        panel.addArrangedSubview(commandDivider)
+        commandDivider.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         panel.addArrangedSubview(commands)
-        commands.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+        commands.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         let note = NSTextField(wrappingLabelWithString: kind == .works
             ? String(localized: "在詳情修改收藏分類；選取待同步作品後可重試同步。移除收藏不刪除下載。")
             : String(localized: "雙擊或按 Return 開啟；手動排序且無篩選時可拖曳。移除不刪除下載。"))
         note.font = .systemFont(ofSize: 11)
         note.textColor = .secondaryLabelColor
+        note.maximumNumberOfLines = 3
         panel.addArrangedSubview(note)
-        note.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+        note.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         if kind == .links { addLinkEditor(to: panel) }
         view = root
         root.bindSkin(skinAppearance, slot: "panel", componentID: componentID)
         panel.bindSkin(skinAppearance, slot: "list", componentID: componentID)
         heading.bindSkin(skinAppearance, slot: "header", componentID: componentID)
+        countLabel.bindSkin(skinAppearance, slot: "emptyState", componentID: componentID)
+        tableView.bindSkin(skinAppearance, slot: "list", componentID: componentID)
         searchField.bindSkin(skinAppearance, slot: "search", componentID: componentID)
         actionButton.bindSkin(skinAppearance, slot: "primaryAction", componentID: componentID)
         actionButton.updateSkinState()
@@ -319,10 +348,61 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
             tableView.isEnabled = false
             urlField.isEnabled = false
             titleField.isEnabled = false
+            updateEmptyState()
         } else if savedStateLoaded {
             refresh()
             startStatusRefresh()
         }
+    }
+
+    private func configureEmptyState(in container: NSView) {
+        let icon = NSImageView(image: (kind == .works ? WorkspaceIcon.favorites : .bookmark).image(size: 24) ?? NSImage())
+        icon.contentTintColor = .tertiaryLabelColor
+        icon.setAccessibilityElement(false)
+        icon.widthAnchor.constraint(equalToConstant: 24).isActive = true
+        icon.heightAnchor.constraint(equalToConstant: 24).isActive = true
+        emptyTitle.font = .systemFont(ofSize: 14, weight: .semibold)
+        emptyTitle.lineBreakMode = .byTruncatingTail
+        let titleRow = NSStackView(views: [icon, emptyTitle])
+        titleRow.alignment = .centerY
+        titleRow.spacing = 8
+        emptyDetail.font = .systemFont(ofSize: 12)
+        emptyDetail.textColor = .secondaryLabelColor
+        emptyDetail.alignment = .center
+        emptyDetail.maximumNumberOfLines = 3
+        emptyState.orientation = .vertical
+        emptyState.alignment = .centerX
+        emptyState.spacing = 10
+        emptyState.addArrangedSubview(titleRow)
+        emptyState.addArrangedSubview(emptyDetail)
+        emptyState.translatesAutoresizingMaskIntoConstraints = false
+        emptyState.isHidden = true
+        container.addSubview(emptyState)
+        let preferredWidth = emptyState.widthAnchor.constraint(equalToConstant: 280)
+        preferredWidth.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            emptyState.centerXAnchor.constraint(equalTo: container.centerXAnchor),
+            emptyState.centerYAnchor.constraint(equalTo: container.centerYAnchor),
+            emptyState.widthAnchor.constraint(lessThanOrEqualTo: container.widthAnchor, constant: -24),
+            emptyState.topAnchor.constraint(greaterThanOrEqualTo: container.topAnchor, constant: 8),
+            emptyState.bottomAnchor.constraint(lessThanOrEqualTo: container.bottomAnchor, constant: -8),
+            emptyDetail.widthAnchor.constraint(equalTo: emptyState.widthAnchor),
+            preferredWidth,
+        ])
+        emptyTitle.bindSkin(skinAppearance, slot: "emptyState", componentID: componentID)
+        emptyDetail.bindSkin(skinAppearance, slot: "emptyState", componentID: componentID)
+    }
+
+    private func updateEmptyState() {
+        emptyState.isHidden = !rows.isEmpty || errorMessage != nil
+        guard !emptyState.isHidden else { return }
+        let filtered = !query.isEmpty || (kind == .works ? collectionFilterIndex != 0
+            : !selectedSite.isEmpty || liveFilterIndex != 0)
+        emptyTitle.stringValue = filtered ? String(localized: "沒有符合條件的收藏")
+            : (kind == .works ? String(localized: "收藏你的下一部作品") : String(localized: "把常看的連結留在這裡"))
+        emptyDetail.stringValue = filtered ? String(localized: "試試其他關鍵詞，或調整上方的篩選條件。")
+            : (kind == .works ? String(localized: "從搜尋或推薦開啟作品詳情，即可加入收藏。")
+                : String(localized: "在下方貼上網址，收藏影片、直播或常用頁面。"))
     }
 
     private var sortIndex: Int {
@@ -354,7 +434,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         editor.addArrangedSubview(titleRow)
         titleRow.widthAnchor.constraint(equalTo: editor.widthAnchor).isActive = true
         panel.addArrangedSubview(editor)
-        editor.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+        editor.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         urlField.widthAnchor.constraint(equalTo: editor.widthAnchor).isActive = true
     }
 
@@ -596,9 +676,12 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         guard !previewOnly else { return }
         let index = tableView.selectedRow
         guard rows.indices.contains(index) else { return }
-        switch rows[index] {
-        case .work(let work): actions.openWork(work.id)
-        case .link(let link): actions.openLink(link.originalURL)
+        let sourceView = tableView.view(atColumn: 0, row: index, makeIfNecessary: false)
+        actions.withTransitionSource(from: sourceView) {
+            switch rows[index] {
+            case .work(let work): actions.openWork(work.id)
+            case .link(let link): actions.openLink(link.originalURL)
+            }
         }
     }
     @objc private func editSelectedRow() {
@@ -684,7 +767,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
             case -99: String(localized: "影片")
             default: String(localized: "狀態未知")
             }
-            subtitle = [state, bookmark?.liveName, bookmark?.liveTitle, link.sourceID, link.originalURL]
+            subtitle = [state, link.sourceID, bookmark?.liveName, bookmark?.liveTitle, link.originalURL]
                 .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
         }
         let cell = NSTableCellView()
@@ -697,13 +780,16 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         else { poster = false }
         let thumbnail = WorkspaceMediaThumbnail(url: coverURL, poster: poster,
             appearance: skinAppearance, componentID: componentID, previewOnly: previewOnly)
+        thumbnail.layer?.masksToBounds = true
         cell.addSubview(thumbnail)
-        thumbnail.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 6).isActive = true
+        thumbnail.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8).isActive = true
         thumbnail.centerYAnchor.constraint(equalTo: cell.centerYAnchor).isActive = true
-        let label = NSTextField(labelWithString: text)
+        let label = NSTextField(wrappingLabelWithString: text)
         label.lineBreakMode = .byTruncatingTail
+        label.maximumNumberOfLines = 2
         label.toolTip = text
-        label.font = .systemFont(ofSize: 13, weight: .medium)
+        label.font = .systemFont(ofSize: 14, weight: .semibold)
+        cell.textField = label
         let detail = NSTextField(labelWithString: subtitle)
         detail.lineBreakMode = .byTruncatingTail
         detail.toolTip = subtitle
@@ -720,13 +806,17 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         let stack = NSStackView(views: [label, detail])
         stack.orientation = .vertical
         stack.alignment = .leading
-        stack.spacing = 1
+        stack.spacing = 6
         stack.translatesAutoresizingMaskIntoConstraints = false
         cell.addSubview(stack)
         NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: 10),
-            stack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -6),
+            stack.leadingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: 12),
+            stack.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -8),
             stack.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            stack.topAnchor.constraint(greaterThanOrEqualTo: cell.topAnchor, constant: 6),
+            stack.bottomAnchor.constraint(lessThanOrEqualTo: cell.bottomAnchor, constant: -6),
+            label.widthAnchor.constraint(equalTo: stack.widthAnchor),
+            detail.widthAnchor.constraint(equalTo: stack.widthAnchor),
         ])
         label.bindSkin(
             skinAppearance, slot: kind == .works ? "workCard" : "linkRow", componentID: componentID)
@@ -828,14 +918,8 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
             let index = rows.firstIndex(where: { identity(of: $0) == selectedIdentity })
         {
             tableView.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
-        } else if rows.isEmpty, errorMessage == nil {
-            let filtered = !query.isEmpty || (kind == .works ? collectionFilterIndex != 0
-                : !selectedSite.isEmpty || liveFilterIndex != 0)
-            statusLabel.stringValue = filtered ? String(localized: "沒有符合搜尋或篩選條件的收藏。")
-                : (kind == .works ? String(localized: "尚無作品收藏。從搜尋或推薦開啟詳情，即可收藏作品。")
-                    : String(localized: "尚無連結收藏。在下方貼上網址，或從詳情收藏連結。"))
-            statusLabel.isHidden = false
         }
+        updateEmptyState()
         suppressSelectionChanges = false
         restoreScrollPosition(scrollOffset)
         actionButton.isEnabled =

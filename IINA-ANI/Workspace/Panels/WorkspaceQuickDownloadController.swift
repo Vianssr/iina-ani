@@ -5,6 +5,37 @@ private final class WorkspaceQuickDownloadDocument: NSStackView {
     override var isFlipped: Bool { true }
 }
 
+/// Keep complete action labels available when a narrow window or localization needs more space.
+@MainActor
+private final class WorkspaceQuickDownloadActions: NSStackView {
+    init(buttons: [NSButton]) {
+        super.init(frame: .zero)
+        orientation = .horizontal
+        alignment = .centerY
+        spacing = 8
+        for button in buttons {
+            addArrangedSubview(button)
+            button.translatesAutoresizingMaskIntoConstraints = false
+            button.widthAnchor.constraint(lessThanOrEqualTo: widthAnchor).isActive = true
+        }
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+
+    override func layout() {
+        super.layout()
+        guard bounds.width > 0 else { return }
+        let requiredWidth = arrangedSubviews.reduce(CGFloat.zero) {
+            $0 + max(0, $1.intrinsicContentSize.width)
+        } + spacing * CGFloat(max(0, arrangedSubviews.count - 1))
+        let desired: NSUserInterfaceLayoutOrientation = requiredWidth > bounds.width ? .vertical : .horizontal
+        guard orientation != desired else { return }
+        orientation = desired
+        alignment = desired == .vertical ? .leading : .centerY
+    }
+}
+
 /// Owns only catalogue/discovery and admission UI. Admitted transfers belong to DownloadService.
 @MainActor
 final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetachablePanel {
@@ -74,6 +105,7 @@ final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetacha
     private let sourceStatus = WorkspaceSkinStatusLabel(wrappingLabelWithString: String(localized: "先尋找並明確選擇作品來源，再勾選該來源的集數；不會預選或自動綁定。"))
     private let rowsStack = WorkspaceQuickDownloadDocument()
     private let status = WorkspaceSkinStatusLabel(wrappingLabelWithString: String(localized: "尚未選擇作品來源。"))
+    private let selectionSummary = NSTextField(wrappingLabelWithString: "")
     private let selectAllButton = WorkspaceSkinButton()
     private let clearButton = WorkspaceSkinButton()
     private let findButton = WorkspaceSkinButton()
@@ -111,25 +143,45 @@ final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetacha
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     override func loadView() {
-        let root = NSView()
+        let root = WorkspaceSkinHostView()
+        root.skinAppearance = appearance
+        root.bindSkin(appearance, slot: "panel", componentID: "detail.media")
         view = root
+        let header = WorkspaceGlassSurface(appearance: appearance)
+        let eyebrow = NSTextField(labelWithString: String(localized: "快速下載"))
+        eyebrow.bindSkin(appearance, slot: "sectionLabel", componentID: "detail.media")
         let heading = NSTextField(wrappingLabelWithString: downloadTitle)
         heading.bindSkin(appearance, slot: "header", componentID: "detail.media")
+        heading.maximumNumberOfLines = 2
+        heading.toolTip = downloadTitle
         tabs.selectedSegment = 0
         tabs.target = self
         tabs.action = #selector(tabChanged)
+        tabs.segmentStyle = .rounded
+        tabs.controlSize = .large
         tabs.setAccessibilityLabel(String(localized: "快速下載方式"))
-        for item in [heading, tabs, host] {
+        let headerContent = NSStackView(views: [eyebrow, heading, tabs])
+        headerContent.orientation = .vertical
+        headerContent.alignment = .leading
+        headerContent.spacing = 8
+        headerContent.setCustomSpacing(12, after: heading)
+        headerContent.translatesAutoresizingMaskIntoConstraints = false
+        header.contentView.addSubview(headerContent)
+        for item in [header, host] {
             item.translatesAutoresizingMaskIntoConstraints = false
             root.addSubview(item)
         }
         NSLayoutConstraint.activate([
-            heading.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 14),
-            heading.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -14),
-            heading.topAnchor.constraint(equalTo: root.topAnchor, constant: 12),
-            tabs.leadingAnchor.constraint(equalTo: heading.leadingAnchor),
-            tabs.topAnchor.constraint(equalTo: heading.bottomAnchor, constant: 10),
-            host.topAnchor.constraint(equalTo: tabs.bottomAnchor, constant: 10),
+            header.leadingAnchor.constraint(equalTo: root.leadingAnchor, constant: 18),
+            header.trailingAnchor.constraint(equalTo: root.trailingAnchor, constant: -18),
+            header.topAnchor.constraint(equalTo: root.topAnchor, constant: 16),
+            headerContent.leadingAnchor.constraint(equalTo: header.contentView.leadingAnchor, constant: 18),
+            headerContent.trailingAnchor.constraint(equalTo: header.contentView.trailingAnchor, constant: -18),
+            headerContent.topAnchor.constraint(equalTo: header.contentView.topAnchor, constant: 12),
+            headerContent.bottomAnchor.constraint(equalTo: header.contentView.bottomAnchor, constant: -12),
+            heading.widthAnchor.constraint(equalTo: headerContent.widthAnchor),
+            tabs.widthAnchor.constraint(equalTo: headerContent.widthAnchor),
+            host.topAnchor.constraint(equalTo: header.bottomAnchor, constant: 8),
             host.leadingAnchor.constraint(equalTo: root.leadingAnchor),
             host.trailingAnchor.constraint(equalTo: root.trailingAnchor),
             host.bottomAnchor.constraint(equalTo: root.bottomAnchor),
@@ -144,8 +196,8 @@ final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetacha
         let document = WorkspaceQuickDownloadDocument()
         document.orientation = .vertical
         document.alignment = .leading
-        document.spacing = 10
-        document.edgeInsets = NSEdgeInsets(top: 10, left: 14, bottom: 14, right: 14)
+        document.spacing = 14
+        document.edgeInsets = NSEdgeInsets(top: 10, left: 18, bottom: 18, right: 18)
         let scroll = WorkspaceScrollView()
         scroll.hasVerticalScroller = true
         scroll.autohidesScrollers = true
@@ -154,48 +206,95 @@ final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetacha
         scroll.translatesAutoresizingMaskIntoConstraints = false
         document.translatesAutoresizingMaskIntoConstraints = false
         online.addSubview(scroll)
+        let footer = WorkspaceGlassSurface(appearance: appearance, cornerRadius: 16)
+        footer.translatesAutoresizingMaskIntoConstraints = false
+        online.addSubview(footer)
         NSLayoutConstraint.activate([
             scroll.leadingAnchor.constraint(equalTo: online.leadingAnchor),
             scroll.trailingAnchor.constraint(equalTo: online.trailingAnchor),
             scroll.topAnchor.constraint(equalTo: online.topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: online.bottomAnchor),
+            scroll.bottomAnchor.constraint(equalTo: footer.topAnchor, constant: -8),
+            footer.leadingAnchor.constraint(equalTo: online.leadingAnchor, constant: 18),
+            footer.trailingAnchor.constraint(equalTo: online.trailingAnchor, constant: -18),
+            footer.bottomAnchor.constraint(equalTo: online.bottomAnchor, constant: -16),
             document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
         ])
         configure(selectAllButton, title: String(localized: "全選"), action: #selector(selectAllEpisodes), icon: .check)
         configure(clearButton, title: String(localized: "清除勾選"), action: #selector(clearChecks), icon: .close)
         configure(findButton, title: String(localized: "尋找作品來源"), action: #selector(findSources), icon: .search)
         configure(retryCatalogButton, title: String(localized: "重新讀取所選來源集數"), action: #selector(retryCatalog), icon: .refresh)
-        configure(submitButton, title: String(localized: "下載勾選且就緒的集數"), action: #selector(submit), icon: .downloads)
+        configure(submitButton, title: String(localized: "下載勾選且就緒的集數"), action: #selector(submit), icon: .downloads, slot: "primaryAction")
         configure(cancelButton, title: String(localized: "取消未提交操作"), action: #selector(cancelPending), icon: .close)
         sources.target = self
         sources.action = #selector(sourceChanged)
         sources.setAccessibilityLabel(String(localized: "作品下載來源，不預選"))
         sources.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        let selectionActions = NSStackView(views: [selectAllButton, clearButton])
-        let downloadActions = NSStackView(views: [submitButton, cancelButton])
-        for actions in [selectionActions, downloadActions] {
-            actions.orientation = .horizontal
-            actions.spacing = 8
-        }
+        let selectionActions = WorkspaceQuickDownloadActions(buttons: [selectAllButton, clearButton])
+        let downloadActions = WorkspaceQuickDownloadActions(buttons: [submitButton, cancelButton])
+        let sourceActions = WorkspaceQuickDownloadActions(buttons: [findButton, retryCatalogButton])
         rowsStack.orientation = .vertical
         rowsStack.alignment = .leading
-        rowsStack.spacing = 12
-        for item in [sourceStatus, findButton, sources, retryCatalogButton, status, selectionActions, downloadActions, rowsStack] {
+        rowsStack.spacing = 8
+        let sourceSection = section(
+            title: String(localized: "作品來源"), items: [sources, sourceStatus, sourceActions])
+        let episodeSection = section(
+            title: String(localized: "選擇下載集數"), items: [status, selectionActions, rowsStack])
+        for item in [sourceSection, episodeSection] {
             document.addArrangedSubview(item)
             item.translatesAutoresizingMaskIntoConstraints = false
-            item.widthAnchor.constraint(equalTo: document.widthAnchor, constant: -28).isActive = true
+            item.widthAnchor.constraint(equalTo: document.widthAnchor, constant: -36).isActive = true
         }
         sourceStatus.bindSkin(appearance, slot: "status", componentID: "detail.media")
         status.bindSkin(appearance, slot: "status", componentID: "detail.media")
+        selectionSummary.bindSkin(appearance, slot: "subtitle", componentID: "detail.media")
+        let footerContent = NSStackView(views: [selectionSummary, downloadActions])
+        footerContent.orientation = .vertical
+        footerContent.alignment = .leading
+        footerContent.spacing = 9
+        footerContent.translatesAutoresizingMaskIntoConstraints = false
+        footer.contentView.addSubview(footerContent)
+        NSLayoutConstraint.activate([
+            footerContent.leadingAnchor.constraint(equalTo: footer.contentView.leadingAnchor, constant: 16),
+            footerContent.trailingAnchor.constraint(equalTo: footer.contentView.trailingAnchor, constant: -16),
+            footerContent.topAnchor.constraint(equalTo: footer.contentView.topAnchor, constant: 12),
+            footerContent.bottomAnchor.constraint(equalTo: footer.contentView.bottomAnchor, constant: -12),
+            selectionSummary.widthAnchor.constraint(equalTo: footerContent.widthAnchor),
+            downloadActions.widthAnchor.constraint(equalTo: footerContent.widthAnchor),
+        ])
     }
 
-    private func configure(_ button: WorkspaceSkinButton, title: String, action: Selector, icon: WorkspaceIcon) {
+    private func section(title: String, items: [NSView]) -> NSView {
+        let card = NSView()
+        card.bindSkin(appearance, slot: "workCard", componentID: "detail.media")
+        let heading = NSTextField(labelWithString: title)
+        heading.font = .systemFont(ofSize: 13, weight: .semibold)
+        heading.bindSkin(appearance, slot: "text", componentID: "detail.media")
+        let content = NSStackView(views: [heading] + items)
+        content.orientation = .vertical
+        content.alignment = .leading
+        content.spacing = 12
+        content.translatesAutoresizingMaskIntoConstraints = false
+        card.addSubview(content)
+        NSLayoutConstraint.activate([
+            content.leadingAnchor.constraint(equalTo: card.leadingAnchor, constant: 16),
+            content.trailingAnchor.constraint(equalTo: card.trailingAnchor, constant: -16),
+            content.topAnchor.constraint(equalTo: card.topAnchor, constant: 16),
+            content.bottomAnchor.constraint(equalTo: card.bottomAnchor, constant: -16),
+        ])
+        for item in items {
+            item.translatesAutoresizingMaskIntoConstraints = false
+            item.widthAnchor.constraint(equalTo: content.widthAnchor).isActive = true
+        }
+        return card
+    }
+
+    private func configure(_ button: WorkspaceSkinButton, title: String, action: Selector, icon: WorkspaceIcon, slot: String = "button") {
         button.title = title
         button.setFunctionIcon(icon)
         button.bezelStyle = .rounded
         button.target = self
         button.action = action
-        button.bindSkin(appearance, slot: "button", componentID: "detail.media")
+        button.bindSkin(appearance, slot: slot, componentID: "detail.media")
     }
 
     private func embed(_ page: NSView) {
@@ -455,7 +554,11 @@ final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetacha
             stack.orientation = .vertical
             stack.alignment = .leading
             stack.spacing = 4
+            stack.edgeInsets = NSEdgeInsets(top: 10, left: 12, bottom: 10, right: 12)
             row.check.title = (isDownloaded(row) ? String(localized: "✓ 已下載 · ") : "") + row.label
+            row.check.font = .systemFont(ofSize: 13, weight: .medium)
+            row.check.lineBreakMode = .byTruncatingTail
+            row.check.toolTip = row.label
             row.check.tag = index
             row.check.target = self
             row.check.action = #selector(checkChanged(_:))
@@ -468,7 +571,7 @@ final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetacha
             for item in [row.check, row.status] {
                 stack.addArrangedSubview(item)
                 item.translatesAutoresizingMaskIntoConstraints = false
-                item.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+                item.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -24).isActive = true
             }
             rowsStack.addArrangedSubview(stack)
             stack.translatesAutoresizingMaskIntoConstraints = false
@@ -621,6 +724,10 @@ final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetacha
         let discovering = discoveryTask != nil
         let loading = catalogTask != nil
         let checked = rows.filter { $0.check.state == .on && $0.submittedID == nil }
+        let readyCount = checked.filter { $0.ready != nil }.count
+        selectionSummary.stringValue = checked.isEmpty
+            ? String(localized: "勾選集數後即可加入下載佇列。")
+            : String(localized: "已選 \(checked.count) 集 · \(readyCount) 集就緒")
         sources.isEnabled = attached && !discovering && !choices.isEmpty
         findButton.isEnabled = attached && !submitting && !discovering && work?.classification.kind == .anime
         retryCatalogButton.isEnabled = attached && !submitting && !discovering && !loading && selectedSource != nil

@@ -18,7 +18,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     private let dependencies: WorkspaceWindowDependencies
     private let previewOnly: Bool
     private let heading = NSTextField(labelWithString: "")
-    private let count = NSTextField(labelWithString: "0")
+    private let count = WorkspacePanelCountBadge(labelWithString: "0")
     private let status = WorkspaceSkinStatusLabel(wrappingLabelWithString: "")
     private let queryField = WorkspaceSkinSearchField()
     private let table = NSTableView()
@@ -48,6 +48,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
     private let sourceFilter = NSPopUpButton()
     private var sourceIDs: [String] = [""]
     private var searchSnapshot: BrowseSearchSnapshot?
+    private var searchTitles: [String] = []
     private var searchGeneration: UInt64 = 0
     private var filter = ""
     private let revealButton = WorkspaceSkinButton()
@@ -108,7 +109,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         switch kind {
         case .schedule: title = String(localized: "全週放送 · Bangumi 日曆")
         case .updates: title = String(localized: "收藏更新")
-        case .recommendations: title = String(localized: "Trends · Bangumi")
+        case .recommendations: title = String(localized: "熱度趨勢")
         case .continuing: title = String(localized: "繼續觀看")
         case .feed: title = String(localized: "推薦")
         case .followed: title = String(localized: "Bilibili 關注動態")
@@ -137,8 +138,8 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         panelStack = panel
         panel.orientation = .vertical
         panel.alignment = .leading
-        panel.spacing = isDiscovery ? 4 : 8
-        panel.edgeInsets = NSEdgeInsets(top: isDiscovery ? 8 : 12, left: 10, bottom: isDiscovery ? 8 : 12, right: 10)
+        panel.spacing = 10
+        panel.edgeInsets = NSEdgeInsets(top: 12, left: 16, bottom: 12, right: 16)
         panel.translatesAutoresizingMaskIntoConstraints = false
         root.addSubview(panel)
         NSLayoutConstraint.activate([
@@ -151,14 +152,25 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         let header = NSStackView(views: [])
         header.orientation = .horizontal
         header.alignment = .centerY
-        header.spacing = 8
-        heading.stringValue = title ?? String(localized: "Workspace")
-        heading.font = .boldSystemFont(ofSize: 17)
+        header.spacing = 10
+        heading.stringValue = title ?? "IINA-ANI"
+        heading.font = .systemFont(ofSize: 19, weight: .semibold)
         heading.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         heading.lineBreakMode = .byTruncatingTail
         count.textColor = .secondaryLabelColor
+        count.font = .monospacedDigitSystemFont(ofSize: 11, weight: .semibold)
+        count.alignment = .center
+        count.setContentCompressionResistancePriority(.required, for: .horizontal)
+        count.setAccessibilityLabel(String(localized: "已載入項目數"))
         header.addArrangedSubview(heading)
         header.addArrangedSubview(count)
+        if kind == .recommendations || kind == .schedule {
+            let source = NSTextField(labelWithString: "BANGUMI")
+            source.font = .systemFont(ofSize: 9, weight: .semibold)
+            source.textColor = .tertiaryLabelColor
+            source.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            header.addArrangedSubview(source)
+        }
         header.addArrangedSubview(NSView())
         primary.bezelStyle = .rounded
         primary.target = self
@@ -182,7 +194,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             if kind == .search { header.addArrangedSubview(cancelButton) }
         }
         panel.addArrangedSubview(header)
-        header.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -20).isActive = true
+        header.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         if kind == .schedule {
             let weekdays = NSStackView(views: weekdayNames.map { name in
                 let label = NSTextField(labelWithString: name)
@@ -194,7 +206,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             weekdays.distribution = .fillEqually
             weekdays.spacing = 0
             panel.addArrangedSubview(weekdays)
-            weekdays.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+            weekdays.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         }
 
         if kind == .search {
@@ -203,8 +215,11 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             queryField.sendsSearchStringImmediately = false
             queryField.target = self
             queryField.action = #selector(primaryAction)
+            queryField.controlSize = .large
+            queryField.font = .systemFont(ofSize: 15)
             panel.addArrangedSubview(queryField)
-            queryField.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+            queryField.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
+            queryField.heightAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
             category.addItems(withTitles: BrowseContentFilter.allCases.map(\.title))
             category.target = self
             category.action = #selector(filterChanged)
@@ -236,7 +251,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             appearance: dependencies.skinAppearance, componentID: componentID)
         if kind != .feed {
             panel.addArrangedSubview(statusPresentation)
-            statusPresentation.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
+            statusPresentation.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         }
         if kind == .followed {
             let buttons: [(String, Selector, WorkspaceIcon?)] = [(String(localized: "開啟影片"), #selector(activateSelection), .play),
@@ -256,7 +271,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             downloadSelection.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             downloadSelection.bindSkin(dependencies.skinAppearance, slot: "header", componentID: componentID)
             panel.addArrangedSubview(downloadSelection)
-            downloadSelection.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -20).isActive = true
+            downloadSelection.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
             let taskActions = NSStackView(views: [primary, secondary, cancelButton])
             taskActions.orientation = .horizontal
             taskActions.spacing = 8
@@ -321,7 +336,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         }
         scroll.translatesAutoresizingMaskIntoConstraints = false
         panel.addArrangedSubview(scroll)
-        scroll.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -20).isActive = true
+        scroll.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         scroll.heightAnchor.constraint(greaterThanOrEqualToConstant: kind == .continuing || kind == .updates ? 0 : 120).isActive = true
         if kind == .feed {
             // Loading must not insert/remove space above the cards. Keep a footer
@@ -332,7 +347,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             footer.addSubview(statusPresentation)
             panel.addArrangedSubview(footer)
             NSLayoutConstraint.activate([
-                footer.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28),
+                footer.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32),
                 footer.heightAnchor.constraint(greaterThanOrEqualToConstant: 32),
                 statusPresentation.leadingAnchor.constraint(equalTo: footer.leadingAnchor),
                 statusPresentation.trailingAnchor.constraint(equalTo: footer.trailingAnchor),
@@ -431,6 +446,13 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         if !previewOnly, kind == .continuing { reloadHistory() }
         restoreScroll(savedScrollPosition)
         if !previewOnly, kind == .followed { loadFollowed(followedCards.isEmpty ? .init😅 : .new) }
+    }
+
+    override func viewDidLayout() {
+        super.viewDidLayout()
+        // History can arrive while the section still has its compact empty-state
+        // height. Re-measure after its parent applies the populated section height.
+        if isHorizontalDiscovery { updateDiscoveryGeometry() }
     }
 
     func attach() {
@@ -896,10 +918,12 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
 
     private func showSearch(_ result: BrowseSearchSnapshot) {
         rows = []; destinations = []; coverURLs = []; posters = []
+        searchTitles = []
         var failures: [String] = []
         var hasMore = false
         func subjects(_ values: [BangumiSubject]) {
             for subject in values {
+                searchTitles.append(subject.title)
                 rows.append("\(subject.title) · \(subject.classification.kind.title) · Bangumi · \(subject.classification.provenance)")
                 destinations.append(.bangumi(subject.id, subject))
                 coverURLs.append(subject.coverURL); posters.append(subject.classification.kind == .anime)
@@ -907,6 +931,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         }
         func sources(_ values: [SourceSearchResult], _ source: String) {
             for item in values {
+                searchTitles.append(item.title)
                 rows.append("\(item.title) · \(item.classification.kind.title) · \(source) · \(item.classification.provenance)")
                 destinations.append(.selection(PlayableSelection(item: item.item, classification: item.classification)))
                 coverURLs.append(item.cover); posters.append(item.classification.kind == .anime)
@@ -914,10 +939,12 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         }
         switch result.route {
         case .bangumi(let id):
+            searchTitles.append("Bangumi · \(id)")
             rows.append(String(localized: "Bangumi subject · \(id) · 載入 subject 類型後分類"))
             destinations.append(.bangumi(id, nil))
             coverURLs.append(nil); posters.append(false)
         case .url(let selection):
+            searchTitles.append(selection.item.pageURL)
             rows.append("\(selection.item.pageURL) · \(selection.classification.kind.title) · \(selection.classification.provenance)")
             destinations.append(.selection(selection))
             coverURLs.append(nil); posters.append(selection.classification.kind == .anime)
@@ -1080,19 +1107,27 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         guard !previewOnly else { return }
         if kind == .downloads { openCompletedFile(); return }
         guard destinations.indices.contains(selectedIndex), let destination = destinations[selectedIndex] else { return }
-        switch destination {
-        case .bangumi(let id, let subject): dependencies.actions.openBangumi(id, subject)
-        case .work(let id): dependencies.actions.openWork(id)
-        case .update(let update): dependencies.actions.openUpdate(update)
-        case .selection(let value): dependencies.actions.openSelection(value)
-        case .address(let value): dependencies.actions.openLink(value)
-        case .resume(let entry):
+        if case .resume(let entry) = destination {
             guard operation == nil else { return }
             operation = Task { [weak self] in
                 guard let self else { return }
                 defer { self.operation = nil }
                 do { try await self.dependencies.resumePlayback(entry) }
                 catch { if self.attached { self.showError(error) } }
+            }
+            return
+        }
+        let sourceView: NSView? = isDiscovery
+            ? cards.item(at: IndexPath(item: selectedIndex, section: 0))?.view
+            : table.view(atColumn: 0, row: selectedIndex, makeIfNecessary: false)
+        dependencies.actions.withTransitionSource(from: sourceView) {
+            switch destination {
+            case .bangumi(let id, let subject): dependencies.actions.openBangumi(id, subject)
+            case .work(let id): dependencies.actions.openWork(id)
+            case .update(let update): dependencies.actions.openUpdate(update)
+            case .selection(let value): dependencies.actions.openSelection(value)
+            case .address(let value): dependencies.actions.openLink(value)
+            case .resume: break
             }
         }
     }
@@ -1155,19 +1190,19 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             let density = dependencies.sessionState.state(for: instanceID).density
             let layout = NSCollectionViewFlowLayout()
             layout.scrollDirection = .horizontal
-            layout.minimumInteritemSpacing = 4
-            layout.minimumLineSpacing = 4
-            layout.itemSize = NSSize(width: CGFloat((kind == .continuing ? 256 : 112) + density * 20),
+            layout.minimumInteritemSpacing = 10
+            layout.minimumLineSpacing = 10
+            layout.itemSize = NSSize(width: CGFloat((kind == .continuing ? 316 : 122) + density * 20),
                 height: 120)
             return layout
         }
         let item = NSCollectionLayoutItem(layoutSize: NSCollectionLayoutSize(
             widthDimension: .fractionalWidth(1), heightDimension: .fractionalHeight(1)))
-        let width = CGFloat((kind == .continuing ? 256 : kind == .recommendations ? 112 : 180) + dependencies.sessionState.state(for: instanceID).density * 20)
+        let width = CGFloat(180 + dependencies.sessionState.state(for: instanceID).density * 20)
         let group = NSCollectionLayoutGroup.horizontal(layoutSize: NSCollectionLayoutSize(
             widthDimension: .absolute(width), heightDimension: .fractionalHeight(1)), subitems: [item])
         let section = NSCollectionLayoutSection(group: group)
-        section.interGroupSpacing = 4
+        section.interGroupSpacing = 10
         let configuration = NSCollectionViewCompositionalLayoutConfiguration()
         configuration.scrollDirection = .horizontal
         return NSCollectionViewCompositionalLayout(section: section, configuration: configuration)
@@ -1239,24 +1274,44 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             return cell
         }
         let cell = NSTableCellView()
-        let label = NSTextField(wrappingLabelWithString: rows[row])
-        label.maximumNumberOfLines = 3
+        let rowTitle = searchTitles.indices.contains(row) ? searchTitles[row] : visibleRowTitle(row)
+        let label = NSTextField(wrappingLabelWithString: rowTitle)
+        label.font = .systemFont(ofSize: 15, weight: .semibold)
+        label.maximumNumberOfLines = 2
+        label.lineBreakMode = .byTruncatingTail
+        let prefix = rowTitle + " · "
+        let detail = NSTextField(wrappingLabelWithString: rows[row].hasPrefix(prefix) ? String(rows[row].dropFirst(prefix.count)) : rows[row])
+        detail.font = .systemFont(ofSize: 12)
+        detail.textColor = .secondaryLabelColor
+        detail.maximumNumberOfLines = 2
+        detail.lineBreakMode = .byTruncatingTail
+        let isPoster = posters.indices.contains(row) ? posters[row] : true
         let thumbnail = WorkspaceMediaThumbnail(url: coverURLs.indices.contains(row) ? coverURLs[row] : nil,
-            poster: posters.indices.contains(row) ? posters[row] : true,
-            appearance: dependencies.skinAppearance, componentID: componentID, previewOnly: previewOnly)
+            poster: isPoster, appearance: dependencies.skinAppearance, componentID: componentID,
+            previewOnly: previewOnly, fixedSize: false)
         cell.addSubview(thumbnail)
-        thumbnail.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 8).isActive = true
+        thumbnail.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 12).isActive = true
         thumbnail.centerYAnchor.constraint(equalTo: cell.centerYAnchor).isActive = true
+        thumbnail.widthAnchor.constraint(equalToConstant: isPoster ? 50 : 112).isActive = true
+        thumbnail.heightAnchor.constraint(equalToConstant: isPoster ? 76 : 64).isActive = true
         label.toolTip = rows[row]
         label.setAccessibilityHelp(rows[row])
-        label.translatesAutoresizingMaskIntoConstraints = false
-        cell.addSubview(label)
+        let labels = NSStackView(views: [label, detail])
+        labels.orientation = .vertical
+        labels.alignment = .leading
+        labels.spacing = 6
+        labels.translatesAutoresizingMaskIntoConstraints = false
+        cell.addSubview(labels)
         NSLayoutConstraint.activate([
-            label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 112),
-            label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -7),
-            label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            labels.leadingAnchor.constraint(equalTo: thumbnail.trailingAnchor, constant: 14),
+            labels.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -14),
+            labels.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+            label.widthAnchor.constraint(equalTo: labels.widthAnchor),
+            detail.widthAnchor.constraint(equalTo: labels.widthAnchor),
         ])
         label.bindSkin(dependencies.skinAppearance, slot: rowSlot, componentID: componentID)
+        detail.bindSkin(dependencies.skinAppearance, slot: rowSlot, componentID: componentID)
+        cell.setAccessibilityLabel(rows[row])
         return cell
     }
     private func visibleRowTitle(_ row: Int) -> String {
@@ -1362,7 +1417,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             cards.translatesAutoresizingMaskIntoConstraints = false
             panel.insertArrangedSubview(cards, at: contentIndex)
             expandedFeedHeight = cards.heightAnchor.constraint(equalToConstant: 120)
-            expandedFeedWidth = cards.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -20)
+            expandedFeedWidth = cards.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32)
             expandedFeedHeight?.isActive = true
             expandedFeedWidth?.isActive = true
             page.contentView.postsBoundsChangedNotifications = true
@@ -1398,9 +1453,11 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             guard let self else { return }
             self.feedHeightUpdateScheduled = false
             if self.isHorizontalDiscovery, let layout = self.cards.collectionViewLayout as? NSCollectionViewFlowLayout {
+                let viewportHeight = self.scroll.contentView.bounds.height
+                guard !self.scroll.isHidden, viewportHeight > 0 else { return }
                 let density = self.dependencies.sessionState.state(for: self.instanceID).density
-                let size = NSSize(width: CGFloat((self.kind == .continuing ? 256 : 112) + density * 20),
-                    height: max(1, self.scroll.contentView.bounds.height))
+                let size = NSSize(width: CGFloat((self.kind == .continuing ? 316 : 122) + density * 20),
+                    height: viewportHeight)
                 if layout.itemSize != size { layout.itemSize = size; layout.invalidateLayout() }
                 return
             }
@@ -1539,6 +1596,25 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         let offset = min(max(0, position), Double(maximum))
         scroll.contentView.scroll(to: isHorizontalDiscovery ? NSPoint(x: offset, y: 0) : NSPoint(x: 0, y: offset))
         scroll.reflectScrolledClipView(scroll.contentView)
+    }
+}
+
+@MainActor
+private final class WorkspacePanelCountBadge: NSTextField {
+    override var intrinsicContentSize: NSSize {
+        let size = super.intrinsicContentSize
+        return NSSize(width: max(26, size.width + 14), height: max(20, size.height + 3))
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        NSColor.secondaryLabelColor.withAlphaComponent(0.08).setFill()
+        NSBezierPath(roundedRect: bounds, xRadius: bounds.height / 2, yRadius: bounds.height / 2).fill()
+        super.draw(dirtyRect)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        needsDisplay = true
     }
 }
 
@@ -1705,6 +1781,7 @@ private final class WorkspaceDiscoveryCardView: NSView {
     private let overlay = NSView()
     private let filter = NSVisualEffectView()
     private let titleLabel = NSTextField(wrappingLabelWithString: "")
+    private let detailHint = NSTextField(labelWithString: String(localized: "連按兩下查看詳情"))
     private let captionLabel = NSTextField(labelWithString: "")
     private var captionHeight: NSLayoutConstraint!
     private var tracking: NSTrackingArea?
@@ -1720,13 +1797,19 @@ private final class WorkspaceDiscoveryCardView: NSView {
             child.translatesAutoresizingMaskIntoConstraints = false
             addSubview(child)
         }
+        coverContainer.wantsLayer = true
+        coverContainer.layer?.cornerRadius = 9
+        coverContainer.layer?.masksToBounds = true
+        overlay.wantsLayer = true
+        overlay.layer?.cornerRadius = 9
+        overlay.layer?.masksToBounds = true
         filter.material = .hudWindow
         filter.blendingMode = .withinWindow
         filter.state = .active
         filter.appearance = NSAppearance(named: .vibrantDark)
         filter.wantsLayer = true
-        filter.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.18).cgColor
-        filter.alphaValue = 0.55
+        filter.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.24).cgColor
+        filter.alphaValue = 0.68
         filter.translatesAutoresizingMaskIntoConstraints = false
         filter.setAccessibilityElement(false)
         overlay.addSubview(filter)
@@ -1734,40 +1817,48 @@ private final class WorkspaceDiscoveryCardView: NSView {
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         titleLabel.textColor = .white
-        titleLabel.alignment = .center
-        titleLabel.maximumNumberOfLines = 0
+        titleLabel.alignment = .left
+        titleLabel.maximumNumberOfLines = 3
         titleLabel.lineBreakMode = .byWordWrapping
         overlay.addSubview(titleLabel)
+        detailHint.translatesAutoresizingMaskIntoConstraints = false
+        detailHint.font = .systemFont(ofSize: 9, weight: .medium)
+        detailHint.textColor = NSColor.white.withAlphaComponent(0.68)
+        detailHint.lineBreakMode = .byTruncatingTail
+        overlay.addSubview(detailHint)
         captionLabel.font = .systemFont(ofSize: 12, weight: .medium)
         captionLabel.textColor = .labelColor
         captionLabel.alignment = .center
         captionLabel.lineBreakMode = .byTruncatingTail
         setAccessibilityElement(true)
         setAccessibilityRole(.group)
-        for child in [coverContainer, overlay, titleLabel, captionLabel] { child.setAccessibilityElement(false) }
+        for child in [coverContainer, overlay, titleLabel, detailHint, captionLabel] { child.setAccessibilityElement(false) }
         setAccessibilityChildren([])
         captionHeight = captionLabel.heightAnchor.constraint(equalToConstant: 0)
         captionHeight.isActive = true
         NSLayoutConstraint.activate([
-            coverContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            coverContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            coverContainer.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            coverContainer.bottomAnchor.constraint(equalTo: captionLabel.topAnchor, constant: -2),
+            coverContainer.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 1),
+            coverContainer.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -1),
+            coverContainer.topAnchor.constraint(equalTo: topAnchor, constant: 1),
+            coverContainer.bottomAnchor.constraint(equalTo: captionLabel.topAnchor, constant: -1),
             captionLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
             captionLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -2),
-            captionLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
-            overlay.leadingAnchor.constraint(equalTo: leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: trailingAnchor),
-            overlay.topAnchor.constraint(equalTo: topAnchor),
-            overlay.bottomAnchor.constraint(equalTo: bottomAnchor),
+            captionLabel.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -1),
+            overlay.leadingAnchor.constraint(equalTo: coverContainer.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: coverContainer.trailingAnchor),
+            overlay.topAnchor.constraint(equalTo: coverContainer.topAnchor),
+            overlay.bottomAnchor.constraint(equalTo: coverContainer.bottomAnchor),
             filter.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
             filter.trailingAnchor.constraint(equalTo: overlay.trailingAnchor),
             filter.topAnchor.constraint(equalTo: overlay.topAnchor),
             filter.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
-            titleLabel.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 12),
-            titleLabel.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -12),
+            titleLabel.leadingAnchor.constraint(equalTo: overlay.leadingAnchor, constant: 10),
+            titleLabel.trailingAnchor.constraint(equalTo: overlay.trailingAnchor, constant: -10),
             titleLabel.topAnchor.constraint(greaterThanOrEqualTo: overlay.topAnchor, constant: 10),
-            titleLabel.bottomAnchor.constraint(equalTo: captionLabel.topAnchor, constant: -8),
+            titleLabel.bottomAnchor.constraint(equalTo: detailHint.topAnchor, constant: -7),
+            detailHint.leadingAnchor.constraint(equalTo: titleLabel.leadingAnchor),
+            detailHint.trailingAnchor.constraint(equalTo: titleLabel.trailingAnchor),
+            detailHint.bottomAnchor.constraint(equalTo: overlay.bottomAnchor, constant: -10),
         ])
     }
 
@@ -1844,7 +1935,7 @@ private final class WorkspaceDiscoveryCardView: NSView {
     }
 
     override func layout() {
-        let width = max(1, bounds.width - 24)
+        let width = max(1, bounds.width - 22)
         if titleLabel.preferredMaxLayoutWidth != width { titleLabel.preferredMaxLayoutWidth = width }
         super.layout()
     }
@@ -1986,41 +2077,66 @@ private final class WorkspaceResumeCardView: NSView {
     private let episode = NSTextField(labelWithString: "")
     private let position = NSTextField(labelWithString: "")
     private let progress = WorkspaceSkinProgressIndicator()
+    private let playIndicator = NSImageView()
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        title.font = .systemFont(ofSize: 13, weight: .semibold)
+        wantsLayer = true
+        layer?.masksToBounds = true
+        cover.wantsLayer = true
+        cover.layer?.cornerRadius = 7
+        cover.layer?.masksToBounds = true
+        title.font = .systemFont(ofSize: 14, weight: .semibold)
         title.maximumNumberOfLines = 2
         title.lineBreakMode = .byTruncatingTail
         episode.font = .systemFont(ofSize: 12)
+        episode.textColor = .secondaryLabelColor
         episode.lineBreakMode = .byTruncatingTail
         position.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
         position.textColor = .secondaryLabelColor
         progress.isIndeterminate = false
         progress.minValue = 0; progress.maxValue = 1
+        playIndicator.image = WorkspaceIcon.play.image(size: 14)
+        playIndicator.imageScaling = .scaleNone
+        playIndicator.contentTintColor = .white
+        playIndicator.wantsLayer = true
+        playIndicator.layer?.backgroundColor = NSColor.black.withAlphaComponent(0.6).cgColor
+        playIndicator.layer?.cornerRadius = 15
+        playIndicator.setAccessibilityElement(false)
         let labels = NSStackView(views: [title, episode, position, progress])
         labels.orientation = .vertical; labels.alignment = .leading; labels.spacing = 5
-        for child in [cover, labels] {
+        for child in [cover, labels, playIndicator] {
             child.translatesAutoresizingMaskIntoConstraints = false
             addSubview(child)
         }
         NSLayoutConstraint.activate([
-            cover.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 2),
-            cover.topAnchor.constraint(equalTo: topAnchor, constant: 2),
-            cover.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -2),
+            cover.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 8),
+            cover.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            cover.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
             cover.widthAnchor.constraint(equalTo: cover.heightAnchor, multiplier: 2.0 / 3),
-            labels.leadingAnchor.constraint(equalTo: cover.trailingAnchor, constant: 8),
-            labels.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -6),
+            labels.leadingAnchor.constraint(equalTo: cover.trailingAnchor, constant: 12),
+            labels.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
             labels.centerYAnchor.constraint(equalTo: centerYAnchor),
             labels.topAnchor.constraint(greaterThanOrEqualTo: topAnchor, constant: 4),
             labels.bottomAnchor.constraint(lessThanOrEqualTo: bottomAnchor, constant: -4),
+            title.widthAnchor.constraint(equalTo: labels.widthAnchor),
+            episode.widthAnchor.constraint(equalTo: labels.widthAnchor),
+            position.widthAnchor.constraint(equalTo: labels.widthAnchor),
             progress.widthAnchor.constraint(equalTo: labels.widthAnchor),
             progress.heightAnchor.constraint(equalToConstant: 4),
+            playIndicator.centerXAnchor.constraint(equalTo: cover.centerXAnchor),
+            playIndicator.centerYAnchor.constraint(equalTo: cover.centerYAnchor),
+            playIndicator.widthAnchor.constraint(equalToConstant: 30),
+            playIndicator.heightAnchor.constraint(equalToConstant: 30),
         ])
         setAccessibilityElement(true); setAccessibilityRole(.group)
         setAccessibilityChildren([])
     }
     required init?(coder: NSCoder) { nil }
+
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        super.hitTest(point) == nil ? nil : self
+    }
 
     static func timestamp(_ seconds: Double) -> String {
         let value = Int(max(0, seconds).rounded(.down))
