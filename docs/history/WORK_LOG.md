@@ -1366,3 +1366,11 @@
 - 保留用於遷移的舊 Core Data 模型、仍被設定頁與 HTTP 路由使用的彈幕 test.htm、播放使用的 empty.m4a、虎牙／抖音 JS、來源解析器、圖示與授權資料。使用者原先刪除的兩份規劃文件維持既有狀態，不算作本輪隔離刪除。
 - 驗證：隔離後 Debug App 建置成功；Skin appearance、WorkLibrary、W5 favorites（含備份／還原與 LibraryPersistence 整合）回歸全部通過；工程 plist、本機 Markdown 連結、懸空 Xcode 引用與 diff 空白檢查通過。刪除前再次核對隔離檔案 SHA-256。
 - 隔離檔案內容與臨時工程備份已移除；清單與驗證日誌留於忽略的 `.build/`。本輪未改功能或資料模型、未搬動使用者資料，未執行正式 App UI／實播驗收。
+
+## 2026-10-24 — v0.10.1 GitHub 開發預覽版
+
+- 發布 https://github.com/Vianssr/iina-ani/releases/tag/v0.10.1 ，標記為 Pre-release，來源固定為 `f951ec1bb09813451e5c5f90abcc82a051f72cf9`，未標為 Latest。
+- 使用 Release／arm64／macOS 13.5 deployment target 建置，明確以空值覆蓋 Bangumi OAuth client ID／secret；核對產物兩項 OAuth 欄位皆為空，沒有 Local.xcconfig 或 Debug dylib。公開 App 的 Bangumi 登入／續期不可用，需自行配置原始碼建置。
+- App 與 LayoutScript helper 採 ad-hoc 簽署，沒有 Developer ID 簽署／Apple 公證。核對 Mach-O 架構及動態依賴，執行 codesign 深層嚴格驗證與 ZIP 完整性檢查。壓縮包附 GPL、圖示授權、第三方授權、安裝說明及建置資訊。
+- 上傳 `IINA-ANI-0.10.1-macOS-arm64.zip`（17,607,665 bytes）與 `SHA256SUMS.txt`，發布前核對 GitHub 附件狀態、大小及伺服器 SHA-256；ZIP 為 `f084028c217d6aa2bc6baebff32b7c754112a8b7052bd1a585032fc138132b05`。發布後確認 isDraft=false、isPrerelease=true。
+- Release 建置成功；來源的 Debug／Skin／作品庫／收藏與遷移回歸沿用本輪先前通過結果。未執行 Release 正式 UI 全鏈、Intel 或最低 macOS 實機驗收。發佈說明已揭露未公證、無自動更新、Core Data 舊目錄仍共用及其他舊 Bundle ID 資料未自動遷移。
