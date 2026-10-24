@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DA2410260000000000000002 /* TraceMoeSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2410260000000000000001 /* TraceMoeSearchService.swift */; };
+		DA2410260000000000000004 /* ImageSearchWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2410260000000000000003 /* ImageSearchWindowController.swift */; };
 		DA2210010000000000000002 /* WorkspaceDetailTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2210010000000000000001 /* WorkspaceDetailTransition.swift */; };
 		01010125211DBC27002F0F7F /* StringExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01010124211DBC27002F0F7F /* StringExtension.swift */; };
 		0102924627ACF8AC00CB74B5 /* ControllersVisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0102924527ACF8AB00CB74B5 /* ControllersVisualEffectView.swift */; };
@@ -249,6 +251,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		DA2410260000000000000001 /* TraceMoeSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceMoeSearchService.swift; sourceTree = "<group>"; };
+		DA2410260000000000000003 /* ImageSearchWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSearchWindowController.swift; sourceTree = "<group>"; };
 		DA2210010000000000000001 /* WorkspaceDetailTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDetailTransition.swift; sourceTree = "<group>"; };
 		01010124211DBC27002F0F7F /* StringExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtension.swift; sourceTree = "<group>"; };
 		0102924527ACF8AB00CB74B5 /* ControllersVisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllersVisualEffectView.swift; sourceTree = "<group>"; };
@@ -665,6 +669,7 @@
 		25703C987061D93EB19FFE11 /* Panels */ = {
 			isa = PBXGroup;
 			children = (
+				DA2410260000000000000003 /* ImageSearchWindowController.swift */,
 				0A0900010000000000000002 /* WorkspaceDetailController.swift */,
 				9F497BAF72D744629A4E0001 /* WorkspaceDetailShelf.swift */,
 				ED54C212F23741EF9A790001 /* WorkspaceDetailInfoPreview.swift */,
@@ -874,6 +879,7 @@
 		B91339DD53AF466C628132E3 /* Discovery */ = {
 			isa = PBXGroup;
 			children = (
+				DA2410260000000000000001 /* TraceMoeSearchService.swift */,
 				01B881362C4128E900E44B97 /* BilibiliDynamicManger.swift */,
 				0A0700010000000000000000 /* BrowseSearchService.swift */,
 				0A0700010000000000000002 /* DiscoveryService.swift */,
@@ -1187,6 +1193,8 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA2410260000000000000002 /* TraceMoeSearchService.swift in Sources */,
+				DA2410260000000000000004 /* ImageSearchWindowController.swift in Sources */,
 				0A03000100000001 /* SourceCapabilities.swift in Sources */,
 				0A03000100000003 /* SourceConfiguration.swift in Sources */,
 				0A03000100000005 /* ConfiguredSource.swift in Sources */,

@@ -5,6 +5,7 @@ import Cocoa
 final class WorkspaceApplicationController: NSObject {
     private unowned let delegate: AppDelegate
     private var workspace: WorkspaceWindowController?
+    private var imageSearchWindow: ImageSearchWindowController?
     private var settingsCommands: WorkspaceSettingsCommands {
         WorkspaceSettingsCommands(
             manageSkins: { [unowned self] in self.withSkin { $0.choosePackage() } },
@@ -37,6 +38,7 @@ final class WorkspaceApplicationController: NSObject {
         let entries: [(String, Selector, String, NSEvent.ModifierFlags)] = [
             (String(localized: "顯示主視窗"), #selector(showWorkspace), "1", [.command, .shift]),
             (String(localized: "搜尋"), #selector(searchWorkspace), "f", [.command]),
+            (String(localized: "截圖識圖…"), #selector(showImageSearch), "i", [.command, .shift]),
             (String(localized: "Bilibili 關注動態"), #selector(showFollowed), "", [.command]),
             (String(localized: "Bilibili 推薦影片"), #selector(showBilibiliRecommendations), "", [.command]),
             ("YouTube", #selector(showYouTube), "", [.command]),
@@ -118,6 +120,7 @@ final class WorkspaceApplicationController: NSObject {
             actions: WorkspaceFixedActions(
                 settings: { [unowned self] in self.showSettings() },
                 open: { [unowned self] in self.openAddress() },
+                imageSearch: { [unowned self] in self.showImageSearch() },
                 openLink: { [unowned self] in self.openLink($0) },
                 openWork: { [unowned self] id in self.withDetail { $0.openWork(id) } },
                 openBangumi: { [unowned self] id, subject in self.withDetail { $0.openBangumi(id, subject: subject) } },
@@ -186,6 +189,16 @@ final class WorkspaceApplicationController: NSObject {
     func openSkinPackage(at url: URL) {
         do { try skinController().openPackage(at: url) }
         catch { NSAlert(error: error).runModal() }
+    }
+
+    @objc private func showImageSearch() {
+        if imageSearchWindow == nil {
+            imageSearchWindow = ImageSearchWindowController { [weak self] title in
+                self?.perform { $0.searchAnimeTitle(title) }
+            }
+        }
+        imageSearchWindow?.showWindow(nil)
+        imageSearchWindow?.window?.makeKeyAndOrderFront(nil)
     }
 
     @objc func showWorkspace() { perform { _ in } }

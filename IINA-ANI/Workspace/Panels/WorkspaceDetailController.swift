@@ -1783,11 +1783,15 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         scheduleCommentsViewportUpdate()
     }
 
-    @objc private func commentsPreferenceChanged() {
-        let vertical = Preferences.shared.detailCommentsVertical
-        guard commentsVertical != vertical else { return }
-        commentsVertical = vertical
-        renderComments()
+    @objc nonisolated private func commentsPreferenceChanged() {
+        // Defaults notifications run on the writer's thread, including account actors.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            let vertical = Preferences.shared.detailCommentsVertical
+            guard self.commentsVertical != vertical else { return }
+            self.commentsVertical = vertical
+            self.renderComments()
+        }
     }
 
     @objc private func commentsViewportChanged() { scheduleCommentsViewportUpdate() }

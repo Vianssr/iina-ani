@@ -1,6 +1,967 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "圖片不可超過 25 MB，請先縮小圖片。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images must not exceed 25 MB. Resize the image first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片不可超过 25 MB，请先缩小图片。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖片不可超過 25 MB，請先縮小圖片。"
+          }
+        }
+      }
+    },
+    "無法讀取此圖片，請選擇其他圖片或重新貼上。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to read this image. Choose another image or paste it again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取此图片，请选择其他图片或重新粘贴。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法讀取此圖片，請選擇其他圖片或重新貼上。"
+          }
+        }
+      }
+    },
+    "尚未選擇圖片": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No image selected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未选择图片"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未選擇圖片"
+          }
+        }
+      }
+    },
+    "選擇或貼上動畫截圖，再按上傳；選圖不會自動上傳。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose or paste an anime screenshot, then click Upload. Selecting an image does not upload it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择或粘贴动画截图，再按上传；选图不会自动上传。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇或貼上動畫截圖，再按上傳；選圖不會自動上傳。"
+          }
+        }
+      }
+    },
+    "選取結果以查看詳情與操作。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select a result to view details and actions."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择结果以查看详情与操作。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選取結果以查看詳情與操作。"
+          }
+        }
+      }
+    },
+    "截圖識圖": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anime Screenshot Search"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截图识图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截圖識圖"
+          }
+        }
+      }
+    },
+    "選擇圖片…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Image…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择图片…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇圖片…"
+          }
+        }
+      }
+    },
+    "貼上圖片": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste Image"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴图片"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "貼上圖片"
+          }
+        }
+      }
+    },
+    "待上傳的本機圖片預覽": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local preview of the image to upload"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待上传的本地图片预览"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待上傳的本機圖片預覽"
+          }
+        }
+      }
+    },
+    "按下上傳後，截圖會傳送至第三方 trace.moe，服務會記錄 IP 位址，僅限非商業使用（另獲授權者除外）。僅供動畫畫面辨識，結果可能有誤，不保證提供可播放來源。選圖與貼上僅在本機處理；上傳前會縮圖並移除原始中繼資料。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clicking Upload sends your screenshot to the third-party service trace.moe, which logs IP addresses. Non-commercial use only unless separately authorized. This identifies anime scenes only; results may be incorrect and do not guarantee a playable source. Choosing and pasting images happens locally. Images are resized and original metadata is removed before upload."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下上传后，截图会发送至第三方 trace.moe，服务会记录 IP 地址，仅限非商业使用（另获授权者除外）。仅供动画画面识别，结果可能有误，不保证提供可播放来源。选图与粘贴仅在本地处理；上传前会缩图并移除原始元数据。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下上傳後，截圖會傳送至第三方 trace.moe，服務會記錄 IP 位址，僅限非商業使用（另獲授權者除外）。僅供動畫畫面辨識，結果可能有誤，不保證提供可播放來源。選圖與貼上僅在本機處理；上傳前會縮圖並移除原始中繼資料。"
+          }
+        }
+      }
+    },
+    "上傳至 trace.moe 並識圖": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload to trace.moe and Search"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上传至 trace.moe 并识图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上傳至 trace.moe 並識圖"
+          }
+        }
+      }
+    },
+    "服務條款": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terms of Service"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务条款"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服務條款"
+          }
+        }
+      }
+    },
+    "trace.moe 識圖結果": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "trace.moe screenshot search results"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "trace.moe 识图结果"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "trace.moe 識圖結果"
+          }
+        }
+      }
+    },
+    "開啟 AniList": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open AniList"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 AniList"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟 AniList"
+          }
+        }
+      }
+    },
+    "在瀏覽器預覽片段": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview Clip in Browser"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在浏览器预览片段"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在瀏覽器預覽片段"
+          }
+        }
+      }
+    },
+    "搜尋此作品": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search This Title"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索此作品"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋此作品"
+          }
+        }
+      }
+    },
+    "選擇動畫截圖": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose an Anime Screenshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择动画截图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇動畫截圖"
+          }
+        }
+      }
+    },
+    "剪貼簿沒有可讀取的圖片，請複製圖片後再試。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The clipboard contains no readable image. Copy an image and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪贴板没有可读取的图片，请复制图片后再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪貼簿沒有可讀取的圖片，請複製圖片後再試。"
+          }
+        }
+      }
+    },
+    "正在本機處理圖片…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Processing image locally…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在本地处理图片…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在本機處理圖片…"
+          }
+        }
+      }
+    },
+    "正在縮圖並移除原始中繼資料，尚未上傳。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resizing and removing original metadata. Nothing has been uploaded."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在缩图并移除原始元数据，尚未上传。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在縮圖並移除原始中繼資料，尚未上傳。"
+          }
+        }
+      }
+    },
+    "本機 JPEG 預覽 · %@\n最長邊不超過 1280 像素": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local JPEG preview · %@\nLongest edge: up to 1280 pixels"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地 JPEG 预览 · %@\n最长边不超过 1280 像素"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機 JPEG 預覽 · %@\n最長邊不超過 1280 像素"
+          }
+        }
+      }
+    },
+    "圖片已就緒，尚未上傳。請確認圖片內容與隱私說明後再按上傳。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image ready; not uploaded. Review the image and privacy disclosure before clicking Upload."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片已就绪，尚未上传。请确认图片内容与隐私说明后再按上传。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖片已就緒，尚未上傳。請確認圖片內容與隱私說明後再按上傳。"
+          }
+        }
+      }
+    },
+    "圖片處理失敗": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image processing failed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片处理失败"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圖片處理失敗"
+          }
+        }
+      }
+    },
+    "正在上傳至 trace.moe 並辨識…": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uploading to trace.moe and identifying…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在上传至 trace.moe 并识别…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在上傳至 trace.moe 並辨識…"
+          }
+        }
+      }
+    },
+    "找不到相符動畫，請換用清晰、未裁切的動畫截圖再試。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching anime found. Try a clear, uncropped anime screenshot."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到相符动画，请换用清晰、未裁切的动画截图再试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到相符動畫，請換用清晰、未裁切的動畫截圖再試。"
+          }
+        }
+      }
+    },
+    "找到 %lld 個候選結果。相似度低於 90%% 的結果可能不正確，請自行核對。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Found %lld candidate results. Matches below 90%% similarity may be incorrect; please verify them."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到 %lld 个候选结果。相似度低于 90%% 的结果可能不正确，请自行核对。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找到 %lld 個候選結果。相似度低於 90%% 的結果可能不正確，請自行核對。"
+          }
+        }
+      }
+    },
+    "trace.moe 辨識失敗，可能是連線、服務限額或圖片格式問題。請稍後重試。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "trace.moe search failed. This may be a connection, service quota, or image format issue. Try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "trace.moe 识别失败，可能是连接、服务限额或图片格式问题。请稍后重试。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "trace.moe 辨識失敗，可能是連線、服務限額或圖片格式問題。請稍後重試。"
+          }
+        }
+      }
+    },
+    "已取消圖片處理": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image processing canceled"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消图片处理"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消圖片處理"
+          }
+        }
+      }
+    },
+    "已取消。若圖片已傳送，取消無法撤回 trace.moe 已收到的內容。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Canceled. Canceling cannot withdraw any image trace.moe has already received."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消。若图片已发送，取消无法撤回 trace.moe 已收到的内容。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消。若圖片已傳送，取消無法撤回 trace.moe 已收到的內容。"
+          }
+        }
+      }
+    },
+    "未提供作品名稱；無法直接搜尋此作品。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No title provided; this result cannot be searched directly."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未提供作品名称；无法直接搜索此作品。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未提供作品名稱；無法直接搜尋此作品。"
+          }
+        }
+      }
+    },
+    "低信心：請核對作品與畫面。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low confidence: verify the title and scene."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低置信度：请核对作品与画面。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低信心：請核對作品與畫面。"
+          }
+        }
+      }
+    },
+    "辨識結果僅供參考。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identification results are for reference only."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "识别结果仅供参考。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辨識結果僅供參考。"
+          }
+        }
+      }
+    },
+    "%@\n%@ · %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@\n%@ · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@\n%@ · %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@\n%@ · %@"
+          }
+        }
+      }
+    },
+    "低信心：相似度低於 90%，可能辨識錯誤。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low confidence: below 90% similarity; may be incorrect."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低置信度：相似度低于 90%，可能识别错误。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低信心：相似度低於 90%，可能辨識錯誤。"
+          }
+        }
+      }
+    },
+    "請核對作品與畫面。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please verify the title and scene."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请核对作品与画面。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請核對作品與畫面。"
+          }
+        }
+      }
+    },
+    "%@ · %@ · %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %@ · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %@ · %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %@ · %@"
+          }
+        }
+      }
+    },
+    "集數：%@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Episode: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "集数：%@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "集數：%@"
+          }
+        }
+      }
+    },
+    "集數未知": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown episode"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "集数未知"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "集數未知"
+          }
+        }
+      }
+    },
+    "%@ · %@–%@ · 相似度 %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %@–%@ · Similarity %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %@–%@ · 相似度 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %@–%@ · 相似度 %@"
+          }
+        }
+      }
+    },
+    "截圖識圖…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Search by Screenshot…" } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "截图识图…" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "截圖識圖…" } }
+      }
+    },
+    "Choose a screenshot to search." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Choose a screenshot to search." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "请选择要搜索的截图。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "請選擇要搜尋的截圖。" } }
+      }
+    },
+    "The screenshot is too large. Choose an image smaller than 25 MB." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The screenshot is too large. Choose an image smaller than 25 MB." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "截图过大。请选择小于 25 MB 的图片。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "截圖過大。請選擇小於 25 MB 的圖片。" } }
+      }
+    },
+    "trace.moe is receiving too many searches. Wait a moment and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe is receiving too many searches. Wait a moment and try again." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe 收到的搜索请求过多。请稍候重试。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe 收到的搜尋請求過多。請稍候重試。" } }
+      }
+    },
+    "The trace.moe search quota or concurrent search limit has been reached. Try again later." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "The trace.moe search quota or concurrent search limit has been reached. Try again later." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "已达到 trace.moe 搜索配额或并发搜索上限。请稍后重试。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "已達到 trace.moe 搜尋配額或並行搜尋上限。請稍後重試。" } }
+      }
+    },
+    "trace.moe returned an invalid search response." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe returned an invalid search response." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe 返回了无效的搜索响应。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe 傳回了無效的搜尋回應。" } }
+      }
+    },
+    "trace.moe could not complete the search. Try again later." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe could not complete the search. Try again later." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe 无法完成搜索。请稍后重试。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "trace.moe 無法完成搜尋。請稍後重試。" } }
+      }
+    },
+    "Could not connect to trace.moe. Check your connection and try again." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : { "stringUnit" : { "state" : "translated", "value" : "Could not connect to trace.moe. Check your connection and try again." } },
+        "zh-Hans" : { "stringUnit" : { "state" : "translated", "value" : "无法连接到 trace.moe。请检查网络连接后重试。" } },
+        "zh-Hant" : { "stringUnit" : { "state" : "translated", "value" : "無法連線至 trace.moe。請檢查網路連線後重試。" } }
+      }
+    },
     "\n%lld 個目錄項目缺少有效同來源身份，未列入下載。" : {
       "extractionState" : "manual",
       "localizations" : {

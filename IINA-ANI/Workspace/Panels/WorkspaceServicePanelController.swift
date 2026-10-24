@@ -250,8 +250,17 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             queryField.action = #selector(primaryAction)
             queryField.controlSize = .large
             queryField.font = .systemFont(ofSize: 15)
-            panel.addArrangedSubview(queryField)
-            queryField.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
+            let imageSearch = WorkspaceSkinButton(
+                title: String(localized: "截圖識圖…"), target: self, action: #selector(openImageSearch))
+            imageSearch.bezelStyle = .rounded
+            imageSearch.isEnabled = !previewOnly
+            imageSearch.setAccessibilityIdentifier("search.imageSearch")
+            imageSearch.setContentCompressionResistancePriority(.required, for: .horizontal)
+            imageSearch.bindSkin(dependencies.skinAppearance, slot: "primaryAction", componentID: componentID)
+            let searchRow = NSStackView(views: [queryField, imageSearch])
+            searchRow.spacing = 8
+            panel.addArrangedSubview(searchRow)
+            searchRow.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
             queryField.heightAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
             category.addItems(withTitles: BrowseContentFilter.allCases.map(\.title))
             category.target = self
@@ -584,12 +593,25 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         }
     }
 
+    @objc private func openImageSearch() {
+        guard !previewOnly, attached else { return }
+        dependencies.actions.imageSearch()
+    }
+
     func submitSearch(_ input: String) {
         guard !previewOnly else { return }
         _ = view
         queryField.stringValue = input
         if kind == .youtube { searchYouTube() } else { search() }
     }
+    func submitAnimeTitle(_ title: String) {
+        guard !previewOnly, kind == .search else { return }
+        _ = view
+        queryField.stringValue = title
+        category.selectItem(at: BrowseContentFilter.allCases.firstIndex(of: .anime) ?? 0)
+        filterChanged()
+    }
+
     func focusSearch() {
         guard !previewOnly else { return }
         guard kind == .search || kind == .youtube, isViewLoaded else { return }

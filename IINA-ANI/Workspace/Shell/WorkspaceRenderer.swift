@@ -13,6 +13,7 @@ final class WorkspaceFixedActions {
 
     let settings: () -> Void
     let open: () -> Void
+    let imageSearch: () -> Void
     let openLink: (String) -> Void
     let openWork: (UUID) -> Void
     let openBangumi: (Int, BangumiSubject?) -> Void
@@ -20,13 +21,14 @@ final class WorkspaceFixedActions {
     let openUpdate: (DiscoveryFavoriteUpdate) -> Void
     let openDownload: (UUID) async throws -> Void
 
-    init(settings: @escaping () -> Void, open: @escaping () -> Void,
+    init(settings: @escaping () -> Void, open: @escaping () -> Void, imageSearch: @escaping () -> Void,
          openLink: @escaping (String) -> Void, openWork: @escaping (UUID) -> Void,
          openBangumi: @escaping (Int, BangumiSubject?) -> Void, openSelection: @escaping (PlayableSelection) -> Void,
          openUpdate: @escaping (DiscoveryFavoriteUpdate) -> Void,
          openDownload: @escaping (UUID) async throws -> Void) {
         self.settings = settings
         self.open = open
+        self.imageSearch = imageSearch
         self.openLink = openLink
         self.openWork = openWork
         self.openBangumi = openBangumi
@@ -772,6 +774,17 @@ final class WorkspaceWindowController: NSWindowController, NSWindowDelegate, NSP
         host.widthAnchor.constraint(equalTo: shell.widthAnchor).isActive = true
         host.bottomAnchor.constraint(equalTo: shell.bottomAnchor).isActive = true
         host.setContentHuggingPriority(.defaultLow, for: .vertical)
+    }
+
+    func searchAnimeTitle(_ title: String) {
+        guard !previewOnly else { return }
+        globalSearch.stringValue = title
+        focusSearch()
+        guard let page = activePages.first(where: { $0.id == selectedPageID }) else { return }
+        let types = WorkspaceLayoutTraversal.componentTypes(in: WorkspaceLayout(pages: [page]))
+        if let id = types.first(where: { $0.value == "search.results" })?.key {
+            serviceControllers[id]?.submitAnimeTitle(title)
+        }
     }
 
     @objc private func submitGlobalSearch() {

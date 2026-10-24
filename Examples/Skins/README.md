@@ -2,6 +2,8 @@
 
 本目錄對應目前 `SkinModel`／`SkinPackageValidator`／`SkinArchive`／`SkinStore`，不是計畫中的未開放格式。`minimal/` 是無 components、無自訂素材的局部 token 覆蓋，附淡入（fade）頁面動效；`full/` 包含 19 個公開槽 × 8 狀態、七組件 header 覆蓋、26 個原創 PNG 素材（兩個明暗背景及三角色各八狀態），附滑入（slide）頁面動效。兩者都有明暗變體、原創展示圖及作者 Layout。展示圖只是幾何作者圖，不是假造 App screenshot，也不取代原生預覽。
 
+使用者操作及各項功能解說見 [Skin 功能指南](../../docs/SKIN_GUIDE.md)；本文集中維護作者檔案格式、組件契約與打包限制。
+
 ## 產生、打包及匯入
 
 在 repository 根目錄執行：

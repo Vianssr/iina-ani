@@ -63,7 +63,7 @@ struct WorkspaceRendererRegression {
         let store = WorkspaceStore(url: root.appendingPathComponent("layout.json"))
         let state = try WorkspaceSessionState(storeURL: nil)
         var products: [UUID: ProductPanel] = [:]
-        let actions = WorkspaceFixedActions(settings: {}, open: {}, openLink: { _ in }, openWork: { _ in },
+        let actions = WorkspaceFixedActions(settings: {}, open: {}, imageSearch: {}, openLink: { _ in }, openWork: { _ in },
             openBangumi: { _, _ in }, openSelection: { _ in }, openUpdate: { _ in }, openDownload: { _ in })
         let dependencies = WorkspaceWindowDependencies(
             favorites: favorites, actions: actions, layoutStore: store,

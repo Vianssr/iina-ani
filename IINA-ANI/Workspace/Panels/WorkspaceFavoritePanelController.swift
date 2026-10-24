@@ -142,18 +142,17 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         sortPopup.action = #selector(sortChanged)
         sortPopup.selectItem(at: sortIndex)
         sortPopup.controlSize = .small
-        if kind == .works {
-            header.addArrangedSubview(WorkspaceDensityButton(
-                instanceID: instanceID, sessionState: sessionState, appearance: skinAppearance,
-                componentID: componentID, previewOnly: previewOnly
-            ) { [weak self] in self?.presentationSettingsDidChange() })
-            refreshButton.title = String(localized: "刷新")
-            refreshButton.target = self; refreshButton.action = #selector(reload(_:))
-            refreshButton.bezelStyle = .rounded
-            refreshButton.bindSkin(skinAppearance, slot: "primaryAction", componentID: componentID)
-            refreshButton.isEnabled = !previewOnly
-            header.addArrangedSubview(refreshButton)
-        }
+        header.addArrangedSubview(WorkspaceDensityButton(
+            instanceID: instanceID, sessionState: sessionState, appearance: skinAppearance,
+            componentID: componentID, previewOnly: previewOnly
+        ) { [weak self] in self?.presentationSettingsDidChange() })
+        refreshButton.title = String(localized: "刷新")
+        refreshButton.target = self
+        refreshButton.action = kind == .works ? #selector(reload(_:)) : #selector(refreshLiveStatus)
+        refreshButton.bezelStyle = .rounded
+        refreshButton.bindSkin(skinAppearance, slot: "primaryAction", componentID: componentID)
+        refreshButton.isEnabled = !previewOnly && (kind == .works || dataManager != nil)
+        header.addArrangedSubview(refreshButton)
         actionButton.setFunctionIcon(.delete)
         refreshButton.setFunctionIcon(.refresh)
         retryButton.setFunctionIcon(.sync)
@@ -240,21 +239,12 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
             siteFilter.addItem(withTitle: String(localized: "全部來源"))
             siteFilter.target = self; siteFilter.action = #selector(linkFilterChanged)
             siteFilter.setAccessibilityLabel(String(localized: "Bookmark site"))
-            refreshButton.title = String(localized: "刷新")
             refreshButton.toolTip = String(localized: "更新連結的直播狀態")
-            refreshButton.target = self; refreshButton.action = #selector(refreshLiveStatus)
-            refreshButton.bezelStyle = .rounded
-            refreshButton.bindSkin(skinAppearance, slot: "primaryAction", componentID: componentID)
-            refreshButton.isEnabled = !previewOnly && dataManager != nil
             liveFilter.isEnabled = !previewOnly; siteFilter.isEnabled = !previewOnly
             for popup in [liveFilter, siteFilter] {
                 popup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
             }
-            let densityButton = WorkspaceDensityButton(
-                instanceID: instanceID, sessionState: sessionState, appearance: skinAppearance,
-                componentID: componentID, previewOnly: previewOnly
-            ) { [weak self] in self?.presentationSettingsDidChange() }
-            let filters = NSStackView(views: [liveFilter, siteFilter, densityButton, refreshButton])
+            let filters = NSStackView(views: [liveFilter, siteFilter])
             filters.spacing = 6
             panel.addArrangedSubview(filters)
             filters.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true

@@ -73,7 +73,7 @@ public struct WorkspaceRegistry: WorkspaceComponentRegistry, Sendable {
             minimumSize: .init(width: 480, height: 320),
             styleSlots: ["panel", "header", "row", "search", "primaryAction", "emptyState"]),
         WorkspaceComponentDescriptor(
-            id: "discovery.updates", defaultSize: .init(width: 760, height: 280),
+            id: "discovery.updates", defaultSize: .init(width: 760, height: 240),
             minimumSize: .init(width: 480, height: 180), dependencies: [.favoriteUpdates],
             styleSlots: ["panel", "header", "row", "emptyState"]),
         WorkspaceComponentDescriptor(

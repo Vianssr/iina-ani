@@ -1,217 +1,145 @@
-# IINA-ANI：IINA+ 重構 fork
+# IINA-ANI 架構
 
-> 本文維護 fork 定位、架構與資料／發佈安全約束。專案入口見 [README](../../README.md)，功能操作見 [使用指南](../USER_GUIDE.md)，工作包狀態、產品契約與未簽收關卡統一見 [前端重構規劃](../plans/FRONTEND_REFACTOR_PLAN.md#plan-status)，逐次交付證據見 [工作記錄](../history/WORK_LOG.md)。規劃與實作交付不等於驗收通過。
+IINA-ANI 是以 Swift、AppKit、Core Data 與 WebKit 組成的 macOS 影音工作區，整合作品資訊、來源解析、播放、彈幕、收藏與下載。
 
-## 1. 專案定位
+## 工程與分層
 
-IINA-ANI 是 [xjbeta/iina-plus](https://github.com/xjbeta/iina-plus) 的非官方重構 fork，以既有站點解析、播放器整合及彈幕能力為起點，在維持可觀察行為的前提下改善結構與可維護性。
+主工程為 `IINA-ANI.xcodeproj`，target 與 scheme 為 `IINA-ANI`，Swift module 為 `IINA_ANI`。`App`、`Workspace`、`Features`、`Infrastructure` 與 `Shared` 是同一 module 內的功能分層；`HuyaKit` 為獨立 Swift Package，`Native` 提供原生核心與輔助程式。
 
-- 沿用現有 Swift 主程式、Core Data 與 WebKit 整合。
-- 沿用外部 IINA／mpv 播放路徑、IINA 彈幕外掛協議及內建 JSPlayer 路徑。
-- 保留 HuyaKit 本地 Swift Package 與 `huyaproxy` CLI 邊界。
-- 不以全面替換儲存引擎或重造播放器為前提。
-- 專案正式名稱為 **IINA-ANI**；文件中的本專案名稱統一使用 `IINA-ANI`。IINA+ 僅用於上游名稱、既有技術識別及歷史記錄。原始碼目錄為 `IINA-ANI/`，工程為 `IINA-ANI.xcodeproj`，target／scheme、App 顯示名稱與產物已更名為 `IINA-ANI`；Bundle ID `com.xjbeta.iina-plus` 與既有資料目錄刻意保留，工程品牌更名不代表獨立發佈。
-- 本專案與 IINA、IINA+、Animeko 無官方隸屬關係。
-
-### 原有追番方向的處理
-
-現行產品重點為一站式追番：瀏覽搜尋、Bangumi 基礎資訊、日常更新、作品／連結收藏、集數與來源選擇、播放、下載及可自訂前端；契約見 [FRONTEND_REFACTOR_PLAN.md](../plans/FRONTEND_REFACTOR_PLAN.md)。後續加入的網站原為測試，定位為可替換背景來源，不以逐站支援、全部清單可用或網站號池為目標。css1 訂閱透過受控轉換／差異預覽／明確套用更新既有來源的公開搜尋規則，不導入帳號、憑證或遠端播放程式；不改原專案帳號能力。W9 已整合頁面及真實服務命令，不能把 UI 交付當成原 M2 帳號下載或集中產品驗收通過。網站下載沿用既有解析器的能力邊界，訂閱更新不擴大下載宣稱。組件自由編排、非基礎能力可選、受限 Layout 腳本與可分享 .iinaskin 沿用既有契約；osu-framework／osu 僅借鑑方法，不引入 framework 或 .osk 匯入，固定來源與取捨見重構文檔附錄 B。
-
-後加番劇搜尋／自動尋源統一由 css1 訂閱啟用：設定中檢查、預覽並明確套用後才宣告該來源搜尋能力，沒有測試模式開關或舊搜尋規則 fallback。`Sources/native-search.json` 與 `Sources/fqdm.json` 保留為轉換基線；實際搜尋使用訂閱的 searchUrl，核准重新導向後以回應網址建立作品／集數候選，不以基線網域覆寫訂閱鏈接。原專案來源、直接網址解析及既有播放／目錄適配器保留。更新失敗／缺項保留先前已套用配置，未套用者不啟用；不自動遷移或刪除隔離測試使用者資料。
-
-目前日常推薦源為 Bangumi：右上角日曆按鈕開啟全週放送（官方 calendar API），採七欄網格。發現頁依序為 Trends → 繼續觀看 → 推薦；Trends 保留 210 pt，橫向海報以獨立間距呈現，推薦使用自適應有效欄數。主殼採 188 pt 文字側欄與搜尋優先工具列；首頁增加隨共同文件捲動的標題／日期，續看以封面、集數、實際播放時間與進度分層。內建外觀使用暖白／墨藍底色、琥珀導覽與青綠進度；作者 Skin 與個人覆寫仍優先。續看是獨立 playback.continue 組件，一行橫向展示作品／集數、實際播放秒數及進度，無資料收為緊湊提示；通知驅動更新。播放歷史 owner 是 AppServices.playbackHistory()，獨立保存在 Playback/history-v1.json，不屬快取／分享佈局；只存原選擇身份與實際觀察秒數，不存短效串流或憑證。resumePlayback 重新解析來源再定位，不以開URL成功當作實播。Bangumi 推薦按 anime/browser/?sort=trends&page=N 延續熱度順序與去重，排期／熱度仍不代表可播放。收藏更新在收藏頁，原作品／連結雙欄保留；全部斷點仍符合舊三／四區或兩區內建形狀者才遷移，自訂 Layout 不覆寫。
-
-側欄的 188 pt 是初始寬度，原生分隔線可調整為 96–320 pt；小於 140 pt 改為 32 pt 圖示上置、文字下置，寬版沿用 18 pt 圖示文字橫排。側欄可獨立捲動，寬度由視窗 controller 持有，切頁保留但不寫入 Layout／Skin 或持久偏好。
-
-主頁三區共用同一個縱向交互容器，Trends／續看不固定在頂部；推薦網格直接納入共同文件，橫向卡片保留各自的左右捲動。編排及 Skin 的原組件身份不變，自訂頁面的獨立推薦組件仍使用原本的面板捲動。
-
-推薦網格使用 WorkspaceFeedGridLayout，欄數、卡寬與水平座標只依 collection 自身寬度計算並快取；不使用外層 clip 寬度重新分配欄間距。捲動、資料刷新及載入更多保持既有欄位座標，只更新內容高度；真正改變可用寬度才重新計算。手動切換組件密度會重建 layout，立即套用新密度；零寬度的切頁暫態不覆寫快取。
-推薦網格只在整列換行邊界保留右側 15 pt，可用寬度一次扣除，不逐卡片增加內距；卡片最小間距仍為 4 pt，取整餘量按固定欄位分配。推薦面板使用 16 pt 外層邊距；網格內的 4 pt 間距、15 pt 右側保留及依 collection 寬度計算的契約維持不變，與 Trends／繼續觀看的橫向卡片排版分開。
-推薦載入／錯誤／末頁提示位於網格下方，頁尾保留至少 32 pt；一般載入提示顯示或收起不再改變網格起點。主頁共同捲動與自訂獨立面板切換時，內容維持在頁尾之前。
-
-`IINA-ANI/Workspace/` 現為唯一主 UI，提供十五種組件、草稿編排、Skin 管理及五組設定；W10 補回 Bilibili 關注動態及直播收藏操作，另有獨立 Bilibili 首頁推薦與 YouTube 瀏覽組件及固定入口，不取代 Bangumi 發現頁。Layout／Skin／私有呈現狀態独立於作品、來源、下載與播放器 owner。固定選單在作者佈局刪除入口後仍可開啟恢復頁，不覆寫原 Layout。移除面板只取消其查詢，不刪收藏、播放歷史或停止已提交任務。Layout 原子保存於 `Workspace/layout-v1.json`，Skin 保存於 `Skins/`，純換皮不換 Layout。舊主視窗／側欄／AppKit 與 SwiftUI 設定頁已移除；JSPlayer、影片＋XML 開啟、登入容器與外掛安裝保留。格式見 [Skin 範例](../../Examples/Skins/README.md)。
-
-YouTube 為瀏覽來源，不宣告原生播放或全域搜尋能力；獨立頁以 `YouTubeBrowseService` 載入首頁／搜尋 JSON bootstrap 及 Innertube 分頁，不執行站方 JavaScript，影片交給系統瀏覽器。`SiteAccounts` 擁有 cookies 的驗證／Keychain 保存／登出；匯入先用隔離 jar 驗證，失敗不發布帳號或覆寫既有憑證。請求固定 HTTPS www.youtube.com 並拒絕重新導向；游標綁定帳號身份，來源或帳號變更取消面板查詢並清除舊列表。沒有嵌入 Google 登入。
-
-`YouTubeBrowserCookies` 僅在 UI 明確同意後一次讀取選定 Chrome／Safari 設定檔，產生記憶體內 Netscape 資料並沿用共同驗證／提交路徑；手動 cookies.txt 仍可選。Chrome 以唯讀 SQLite 查詢先限制 YouTube 網域並排除 partitioned cookies，再經正常 Security API 請求 Chrome Safe Storage、解密 v10 與驗證 schema24 host hash。Safari binarycookies 採有界檔案／偏移解析，只解讀 YouTube 憑證欄位；不繞過 TCC。後台工作可取消，不將原始資料庫或明文匯出落盤，未獲同意不讀設定檔或鑰匙圈；拒絕／格式不支援保留既有帳號與畫面，錯誤不包含秘密或本機路徑。
-
-Torrent 固定採用 **libtorrent-rasterbar 2.1.2**。W11.1–W11.3／MT1／MT2 已完成 arm64／x86_64 靜態核心、Swift／C ABI 所有權、metadata／精確選檔、DownloadService 共享與持久恢復、NIO Range／IINA／mpv 串流。既有限速 peer 的 600 秒影片、未下載 300 秒／570 秒 seek、精確 bytes、雙 reader／取消隔離及停止撤銷證據見[附錄 A.8–A.10](../plans/FRONTEND_REFACTOR_PLAN.md#a-w111)。OpenSSL 3.5.8、隨包 CA／HTTPS tracker 驗證、上傳同意／限速及 private tracker 安全政策維持 §4.8／§5.4 契約；W11.4 UI 狀態見下，不把過去核心實播當成新產品入口驗收。
-
-W11.4 的匯入／精確檔案選取／上傳同意、設定活動限速／停止 P2P 與共享下載頁已隨 W9 實作。BT 現整合在作品的「來源與播放選擇」窗口；全域 magnet／本機種子入口同路由，既有 torrent.import 仍可自訂編排。TorrentSearchService 每次讀取 bt1.json 的 RSS searchUrl，只查詢公開 metadata；結果與影片檔案均明選，上傳同意後才啟動 P2P。2026-10-13 已走正式 AppDelegate／Workspace，驗證作品帶入、640／460 寬窗口、自製非首檔影片 loopback magnet→metadata→mpv 實播及停止；公開 RSS 的 HTTP 403 如實呈現，不繞過站方限制。MT3 全矩陣不因此簽收。
-
-詳情另提供「快速下載」獨立窗口，區分在線源下載與 BT下載：在線先明選作品來源，再列出該來源精確集數供勾選，解析品質／線路後批次提交；換來源清除未提交選擇與解析。BT metadata 以影片核取方塊一次提交多檔，仍保留原本單列播放選擇。兩者共用 DownloadService；窗口只擁有查詢、解析與未提交工作，不擁有已建立的傳輸。部分失敗保留未提交項目，本次窗口內的成功項目不重複提交，不新增來源／帳號能力。
-
-詳情頁以封面、作品名稱、原名、類型／年份／集數及獨立評分建立頂部資訊層級，收藏／快速下載與管理操作分開；選集區顯示目前選擇。主頁頂部右側以最多 180 個 Unicode Character／七行呈現簡介預覽，超出內容以文字 alpha 漸淡並保留完整資訊箭頭；窄版移至同卡片下方。其後為橫向關聯海報、圓形人物頭像及底部縱向完整評論，原資訊分頁改為 controller 內可返回的資訊子頁；主頁與子頁分開持有 scroll view，切換不 reset 查詢／作品／播放狀態，shell 返回優先交給當前可見詳情消費。評論預設於可見主頁捲到底時載入下一頁，追加保留閱讀位置，失敗改為手動重試；Preferences 保存顯示模式，設定可切回橫向短評卡片與手動載入更多。人物及橫向評論卡片點擊可讀全文，來源與快取明細保留於子頁。關聯卡仍走原作品導覽及封面轉場，以被點卡片的實際圖片作為來源。Manage 以獨立 NSPanel 承載既有管理欄位與即時狀態，保留同作品尚未提交的欄位；普通關閉不取消已提交命令，換作品與 detach 則關窗。管理、來源與快速下載窗口的標頭／操作區及收藏選單使用局部玻璃材質：macOS 26 起採 NSGlassEffectView，舊系統採 NSVisualEffectView；降低透明度、增加對比及作者 Skin 背景優先。快速下載的提交區固定於窗口底部，按鈕依可用寬度與本地化文字自適應排列，未改已提交傳輸的 ownership。
-
-詳情開啟由 WorkspaceWindowController 協調封面轉場：導覽前擷取來源圖與螢幕座標，詳情沿用卡片圖作載入期間的封面，疊加短暫 presentation layer，Core Animation 完成後一次清理並交還焦點。設定中的三種效果（滑動放大、Gamma 影院推近、光圈揭幕）、非勻速曲線與時長獨立保存於 Preferences，不改 Layout／Skin 格式或服務 owner。沒有可用來源圖時淡入，減少動態效果時直接呈現；換頁、縮放及關窗清理既有轉場。一般頁面動效在詳情轉場期間抑制，避免雙重變換。
-
-2026-10-14 修正公開磁力 session 的 tracker tier 排程：同時聯絡磁力連結既有 tiers，避免失效前置 tracker 耗盡 metadata 等待期限；不增加 tracker、不延長逾時、不改本機種子匯入。相同公開搜尋資源在修正前 60 秒沒有 peer，修正後 App-linked 核心取得 29 檔 metadata；正式 App 的搜尋→選取→匯入也顯示 29 檔且未預選或自動下載。另一筆合集仍無可用 peer，故不宣稱全部搜尋結果可用。
-
-目前沒有自建 TypeScript IINA 插件的原始碼或建置入口。既有彈幕外掛由 `InstallDeps.sh` 自另一個倉庫下載；`WebFiles/package.json` 僅管理 App 內的網頁資源依賴。
-
-## 2. 上游基線與目前交付
-
-### 2.1 原始碼來源
-
-- 上游：<https://github.com/xjbeta/iina-plus>
-- 基線提交：[`4fbbe9131b8fc6500fea7ecc3e9cea2834910074`](https://github.com/xjbeta/iina-plus/commit/4fbbe9131b8fc6500fea7ecc3e9cea2834910074)，提交日期 2026-09-22。
-- 初次匯入時，`IINA+/` 的 167 個檔案、`IINA+.xcodeproj/` 的 4 個檔案、`HuyaKit/` 的 11 個檔案，均與該基線逐檔雜湊一致；不計 Finder `.DS_Store`。此為匯入歷史，不代表目前重構後的檔案仍相同。
-- 本機最初為沒有 `.git` 的原始碼快照；2026-10-21 依維護者要求初始化 Git，原始碼倉庫為 [Vianssr/iina-ani](https://github.com/Vianssr/iina-ani)，預設分支為 `main`。本機助理指令與私有配置不納入倉庫。
-
-### 2.2 初次匯入整理（歷史）
-
-- 移除舊 `IINA-ANI-dsixzwstckaysndufqdncoiirnlj/` 衍生資料。
-- 移除根目錄的 `CompilationCache.noindex/`、`ModuleCache.noindex/`、`SymbolCache.noindex/`。
-- 移除 Finder `.DS_Store`，加入忽略規則，避免重新納入快取、個人 Xcode 設定及下載依賴。
-- 新增 README，重寫本文件、代理規範與問題回報模板，並標明架構分析屬於上游基線。
-- 保留全部 App／HuyaKit 原始碼、工程資源、依賴鎖檔及授權文件；不以檔名判斷舊 UI、JavaScript 或媒體資源無用而刪除。
-
-**本節僅記錄初次匯入整理，不代表目前交付狀態；後續重構與驗證見工作記錄及重構規劃。**
-
-## 3. 目錄與現有能力
-
-| 路徑 | 現有職責 |
-| --- | --- |
-| `IINA-ANI/App/` | AppDelegate 啟動／關閉、AppServices 組裝根、Preferences 與 MainMenu |
-| `IINA-ANI/Features/Accounts/` | 站點帳號、OAuth、Cookies 管理與登入 UI |
-| `IINA-ANI/Features/Bangumi/` | Bangumi 模型、查詢及作品同步 |
-| `IINA-ANI/Features/Discovery/` | 搜尋、日常聚合及 Bilibili 動態 |
-| `IINA-ANI/Features/Sources/` | registry、來源配置／訂閱／選擇、媒體結果；`Decoders/` 放站點解析器 |
-| `IINA-ANI/Features/Playback/` | 播放協調、參數編碼、進度／歷史；子目錄 `Danmaku/`、`JSPlayer/`、`OpenFiles/` 保留各自協議與 UI |
-| `IINA-ANI/Features/Downloads/` | 共享下載 owner、直連／HLS 後端、任務模型與來源解析 |
-| `IINA-ANI/Features/Torrent/` | native session、metadata 搜尋、下載後端、HTTP Range 與串流播放 |
-| `IINA-ANI/Infrastructure/Persistence/` | Work／Favorite／Bookmark 儲存、遷移與 AppStoragePaths；不改既有磁碟資料位置 |
-| `IINA-ANI/Infrastructure/HTTP/`、`Cache/` | loopback HTTP／WebSocket／虎牙路由及圖片快取；兩者同屬 Infrastructure |
-| `IINA-ANI/Shared/` | extensions、日誌、識別常數、限流與計時工具 |
-| `IINA-ANI/Workspace/Shell/` | 主視窗、renderer 及會話呈現狀態 |
-| `IINA-ANI/Workspace/Panels/`、`Settings/` | 產品面板與設定 UI；兩者同屬 Workspace |
-| `IINA-ANI/Workspace/Layout/`、`Skin/` | Layout 模型／能力／registry／交易／保存／編排／腳本與 Skin 驗證／封存／保存／管理；兩者同屬 Workspace |
-| `IINA-ANI/Core Data/`、`Assets/`、`Sources/`、`WebFiles/` | 保留版本化 schema、圖像、來源 JSON 與網頁資源位置；皆位於 IINA-ANI |
-| `HuyaKit/`、`Native/` | 獨立虎牙套件、Torrent 原生邊界及 LayoutScript helper |
-| `Tests/` | 按功能分類的回歸來源；根層 `run-*.sh` 是穩定執行入口，Fixtures 保留獨立 |
-| `IINA-ANI.xcodeproj/` | 唯一 App 工程入口，Xcode groups 與實體功能目錄對應 |
-| `docs/` | USER_GUIDE、architecture、plans、research、history；歷史驗證與當前能力分開維護 |
-
-這次目錄切分是同一 `IINA_ANI` module 內的責任分類，不新增 target 或套件，也不改 public symbols、Storyboard 名稱、Core Data 版本、Bundle ID、偏好鍵或外掛 wire format。共用資源保留原有位置，避免把原始碼搬移變成資料遷移。
-
-新增程式優先放入對應功能：業務服務放 Features，儲存／傳輸機制放 Infrastructure，主視窗呈現放 Workspace，真正跨功能且不擁有業務狀態的小工具才放 Shared。AppServices 維持唯一組裝根；不要重新建立 `Utils` 雜項集合。
-
-現有主要資料流：
-
-```text
-網址／書籤／Bilibili 動態
-  → Workspace 搜尋／收藏／詳情組件
-  → VideoDecoder＋站點 actor
-  → YouGetJSON／Stream
-  → 選品質／準備 URL 與彈幕檔
-  → Processes → IINA／mpv
-
-直播彈幕 → DanmakuEvent
-  ├─ 本機 WebSocket → IINA 彈幕外掛
-  └─ JavaScript bridge → 內建 JSPlayer
-
-虎牙 .slice → HuyaKit → 本機 FLV 代理 → 播放器
+```mermaid
+flowchart TD
+    App[App：啟動與服務組裝] --> Workspace[Workspace：視窗、面板、佈局與外觀]
+    App --> Features[Features：業務服務]
+    Workspace --> Features
+    Features --> Infrastructure[Infrastructure：儲存、HTTP 與快取]
+    Features --> HuyaKit[HuyaKit：虎牙串流代理]
+    Features --> Torrent[Native：Torrent 核心]
+    Workspace --> LayoutScript[Native：LayoutScript helper]
 ```
 
-上游基線與 fork 現行能力須分開描述，不把後續重構回寫成上游原有能力。
+`Shared` 提供各層共用的 extensions、日誌、識別常數、限流與計時工具。
 
-## 4. 重構目標與約束
+## 目錄結構
 
-以下约束持續適用。2026-10-10 的依賴整理不等於整體產品驗收；當前驗證政策及正式 App 驗收要求以 [重構規劃 §0.2](../plans/FRONTEND_REFACTOR_PLAN.md#plan-status) 為準。
-
-### 4.1 播放流程
-
-網址輸入、選集／品質及捕獲的帳號上下文由 Workspace 詳情持有畫面狀態，經共同 VideoDecoder／Processes 啟播；直播／影片來源窗口只顯示登入狀態，不提供帳號切換。帳號登入／登出集中於設定，css1 訂閱檢查／預覽／套用位於其獨立子窗口。舊 MainViewController 及重複逐站選集分派已移除。HTTP、JSPlayer 與本機影片＋XML 仍沿用各自既有協議與服務，不另建解析或播放 owner.
-
-驗收必須涵蓋取消、錯誤與播放器載入結果；「成功呼叫 URL scheme」不等於播放成功。
-
-### 4.2 站點與資料契約
-
-`YouGetJSON` 已與 `PlaybackEncoder` 分離，HTTP／播放呼叫端已遷移，保留原有外掛 wire format。`VideoDecoder`、下載解析與 Discovery 共用明確注入的來源上下文；不為每個 concrete type 增加 protocol。後續仍須保持站點原始回應、統一媒體結果與播放器參數的界線。
-
-站點擴充沿用已存在的 `SupportSiteProtocol` 與適配器模式；沒有實際需求前不引入動態插件框架。
-
-### 4.3 彈幕與資源生命週期
-
-保留直播事件與點播 XML 的區別。明確規定播放視窗、工作階段、上游 WebSocket、本機訂閱及取消任務的擁有者；用實際關閉、重連、多視窗場景驗證，不把 actor 隔離當作生命週期管理已完成。
-
-### 4.4 資料與設定
-
-保留 Core Data 書籤與現有 UserDefaults 行為。修改資料 schema、Bundle ID、Application Support 路徑或偏好鍵時，先定義遷移及備份策略，不丟失既有收藏或誤讀上游使用者資料。
-
-### 4.5 不在本次範圍
-
-- 刪減直播站點、移除內建播放器或取消舊播放器相容性。
-- 替換 Core Data、另造 IINA 播放核心。
-- 宣稱所有站點正常、所有上游外掛版本相容或最低系統已實測。
-
-## 5. 建置與依賴
-
-完整指令見 [README.md](../USER_GUIDE.md#建置)。
-
-- App target 的 deployment target 是 macOS 13.5，不以 project 層殘留的 10.15 設定作為最低系統承諾。
-- App Swift language mode 是 6.0；HuyaKit 要求 Swift tools 6.4。
-- 工程透過 Swift Package Manager 引入 Swift 依賴；保留 App 與 HuyaKit 的 `Package.resolved`。
-- `InstallDeps.sh` 使用 `gh` 下載外部 `iina-plugin-danmaku.iinaplgz`，再於 `WebFiles/` 執行 `npm install`。
-- 不帶參數會取外掛最新 release；可用第一個參數指定真實 tag。發佈必須記錄外掛版本，不把固定 App commit 誤認為固定全部外部資源。
-- `CI=true` 會讓腳本從外掛 metadata 更新 `IINAApp.swift` 的版本常數；依賴安裝後須明確記錄這類來源變動。
-- 編譯產物使用 `.build/xcode` 或外部 DerivedData，不放回原始碼目錄。
-- Bangumi OAuth 應用 ID／secret 由 `Config/App.xcconfig` 選擇性載入被忽略的 `Config/Local.xcconfig`，透過 Info.plist 注入；來源不帶真實憑證。缺失時登入／續期明確拒絕。這是 Git 衛生措施，非桌面端 secret 保密保證；使用者 token 仍只存 Keychain。
-- W6 HLS 使用外部 FFmpeg 做本機 stream copy／MKV 封裝；直連檔不依賴它。helper 搜尋位置、缺少工具的明確錯誤、架構／最低系統／dylib 與 LGPL／GPL 打包要求見 README「真實下載服務與 FFmpeg」；目前未捆綁 Homebrew 二進位或宣稱發佈驗收。
-
-## 6. fork 身分、安全與發佈邊界
-
-工程與 App 品牌已更名為 IINA-ANI；目前刻意保留上游 Bundle ID 與既有資料目錄，避免更名造成資料遺失或協議變更，但這**不是正式 fork 發佈配置**：
-
-| 項目 | 當前狀態 | 正式發佈前要求 |
-| --- | --- | --- |
-| 工程／App 名稱 | `IINA-ANI`；target／scheme／產物同名，Swift module 為 `IINA_ANI` | 保留合法上游歸屬；工程品牌更名不等於資料身分、簽署或發佈已配置 |
-| Bundle ID | `com.xjbeta.iina-plus` | 配置 fork 自己的穩定 ID，定義資料遷移與共存策略 |
-| 既有資料目錄 | 保留 Core Data 的 `Application Support/IINA+` 與既有偏好／資料佈局，避免遺失資料 | 獨立發佈前定義並驗證資料遷移與共存策略，不因 App 更名直接切換空目錄 |
-| Sparkle feed／公鑰 | W10 已移除 Sparkle、feed／公鑰及檢查更新入口 | 尚無 fork 更新服务；若恢復，須使用自行管理的 feed／簽章，不能導向上游 |
-| 簽署／公證 | 尚未配置 fork 發佈身分 | 使用自己的簽署及公證流程 |
-| 本機服務 | `127.0.0.1`，預設 19080 | 驗證埠衝突、Origin／授權邊界及外掛相容性，不直接暴露到網路 |
-| 外掛 | 上游外部發行包 | 固定並實測相容版本；修改協議需同步外掛端 |
-| fork 倉庫／Issue／更新地址 | 尚未配置 | 使用真實維護地址，不把 fork 問題導向上游 |
-
-開發驗證前應備份既有 IINA+ 資料，避免同時執行上游及 fork。自動更新已在 W10 程式及工程層移除；Bundle ID／Core Data／偏好路徑仍未分離，不把停用更新視為獨立發佈或資料共存驗收。
-
-保留 [LICENSE](../../LICENSE) 的 GPL v3 及所有必要版權聲明，並保留 [LicenseForIcons.pdf](../../LicenseForIcons.pdf)。第三方套件、圖示及外掛分別遵守自己的授權。上游作者資訊不得改成 fork 作者來掩蓋來源；fork 維護資訊應另行追加。
-
-## 7. 驗證方式與完成條件
-
-| 改動 | 必要證據 |
+| 路徑 | 職責 |
 | --- | --- |
-| 文檔／目錄清理 | 檔案與工程引用一致、必要原始碼未被刪除、套件 manifest／工程格式有效 |
-| 播放流程 | 真實網址完成解析、選品質／集數、IINA／mpv 載入，並驗證取消與失敗 |
-| UI | 建置並啟動實際 `IINA-ANI.app`，互動及視窗截圖 |
-| 彈幕 | 直播連線、點播 XML、速度／透明度設定與視窗關閉資源釋放 |
-| 虎牙代理 | 實際拉流、指定品質與線路、播放器斷線後停止工作 |
-| 儲存／資料遷移 | 舊書籤保留、排序不變、重啟後資料一致 |
-| 發佈 | 獨立身分、簽署、公證、安裝、更新及與上游版本的資料邊界 |
+| `IINA-ANI/App/` | AppDelegate、AppServices、Preferences 與 MainMenu |
+| `IINA-ANI/Workspace/Shell/` | 工作區入口、主視窗、頁面渲染、導覽、轉場與組件呈現狀態 |
+| `IINA-ANI/Workspace/Panels/` | 搜尋、發現、詳情、收藏、下載、Torrent 與截圖識圖面板 |
+| `IINA-ANI/Workspace/Settings/` | 偏好設定介面、設定搜尋與外掛設定 |
+| `IINA-ANI/Workspace/Layout/` | 頁面與節點模型、組件登記、能力、驗證、編排、交易、保存與腳本執行 |
+| `IINA-ANI/Workspace/Skin/` | 主題模型、封裝、驗證、保存、樣式解析與外觀控制 |
+| `IINA-ANI/Features/Accounts/` | 站點帳號、OAuth、Cookies、Keychain 與登入介面 |
+| `IINA-ANI/Features/Bangumi/` | Bangumi 模型、查詢與作品同步 |
+| `IINA-ANI/Features/Discovery/` | 搜尋、推薦聚合、Bilibili 動態、YouTube 瀏覽與 trace.moe 識圖 |
+| `IINA-ANI/Features/Sources/` | 來源登記、能力、配置、訂閱、選擇與統一媒體結果；`Decoders/` 存放解析器 |
+| `IINA-ANI/Features/Playback/` | 播放協調、播放器參數、進度與歷史；`Danmaku/`、`JSPlayer/`、`OpenFiles/` 分別處理彈幕、網頁播放器及本機影片入口 |
+| `IINA-ANI/Features/Downloads/` | 下載任務、來源解析、直連與 HLS 後端 |
+| `IINA-ANI/Features/Torrent/` | 原生 session、RSS 搜尋、metadata、下載後端、HTTP Range 與串流播放 |
+| `IINA-ANI/Infrastructure/Persistence/` | 作品、集數、來源映射、收藏、書籤、遷移與儲存路徑 |
+| `IINA-ANI/Infrastructure/HTTP/` | 本機 HTTP、WebSocket 與虎牙路由 |
+| `IINA-ANI/Infrastructure/Cache/` | 圖片快取 |
+| `IINA-ANI/Shared/` | 跨功能共用工具 |
+| `IINA-ANI/Core Data/` | 版本化資料模型 |
+| `IINA-ANI/Assets/`、`Sources/`、`WebFiles/` | 圖像、來源 JSON 與網頁資源 |
+| `HuyaKit/` | 虎牙串流套件與 `huyaproxy` CLI |
+| `Native/` | Torrent C ABI、C++ 核心、建置腳本與 LayoutScript helper |
+| `Config/` | Xcode 配置與本機配置範本 |
+| `Tests/` | 按功能分類的回歸程式、fixtures 與 `run-*.sh` 執行入口 |
+| `Examples/`、`Design/` | Skin／頁面動效範例與設計素材 |
+| `docs/` | 使用指南、Skin 指南、架構文件與工作記錄 |
 
-目前 Xcode 工程及 HuyaKit 未配置自動化 test target。`Tests/run-work-library.sh` 以實際 Core Data 模型及生產型別運行 W1 的身份／映射／遷移回歸；Debug 建置後，`Tests/run-w5-favorites.sh` 運行 W5 收藏身份／獨立操作／刪除隔離及真實舊庫備份／版本化遷移／回滾／冷還原回歸。當前 model 為 Library v0.5，舊 model 保留供遷移；兩類收藏共享既有 Work／來源資料而不共用會員身份。備份與回退風險見 README。只為易回歸的可觀察行為保留測試，不用字串搜尋或 mock 回傳值代替功能驗證。
+## 應用組裝與生命週期
 
-### 初次匯入整理的驗證邊界（歷史）
+`AppDelegate` 負責應用啟動、選單、工作區入口、Core Data container 與關閉流程，並持有 `AppServices`、作品庫和收藏庫。
 
-已完成的檢查：
+`AppServices` 是服務組裝根，注入 `Preferences`、`SourceRegistry`、`SiteAccounts` 與儲存路徑，組裝 `VideoDecoder`、`Processes`、`HttpServer` 和 `TorrentStreamingService`，按需建立 `DownloadService` 與 `PlaybackHistoryStore`。內建 JSPlayer 視窗也由此持有。
 
-- 匯入來源逐檔雜湊比對、Xcode／Swift 工具鏈版本與 HuyaKit manifest 解析。
-- `project.pbxproj`、`Info.plist` 的 `plutil -lint` 及 `InstallDeps.sh` 的 shell 語法檢查。
-- 136 個 Sources／Resources／Copy Files 建置引用檢查：缺少的僅為預期尚未下載的外掛包及 4 個 npm 資源，沒有因本次清理新增缺失。
-- 10 個本地 Markdown 連結有效，程式碼區塊標記成對；舊衍生資料／快取已移除，授權與依賴鎖檔仍保留。
-- 已清除 manifest 驗證產生的 `HuyaKit/.build/`。Finder 若重新產生 `.DS_Store`，由 `.gitignore` 排除。
+工作區 controller 持有目前頁面、選擇、分頁游標及查詢任務。已提交的下載與播放由應用層服務持有；面板移除時釋放其查詢和呈現狀態。AppKit 呈現與服務組裝主要位於 `MainActor`；`SiteAccounts`、`DownloadService` 及站點 actor 管理各自的非同步狀態。
 
-沒有執行外部依賴安裝、完整 App 建置、App 啟動或站點播放；不得把套件 manifest 可解析或來源雜湊一致描述為完整建置通過。
+## 工作區結構
 
-## 8. 文檔維護
+### 主殼與產品面板
 
-- `README.md`：新使用者入口、當前狀態及建置方法。
-- `docs/USER_GUIDE.md`：完整功能操作、依賴、驗證入口與已知限制。
-- `docs/architecture/PROJECT.md`：fork 範圍、架構演進與驗收約束。
-- `docs/plans/FRONTEND_REFACTOR_PLAN.md`：下一階段前端設計、功能整合、工作拆解與完成門檻。
-- `docs/plans/FRONTEND_W0_BASELINE.md`：W0 基線、能力矩陣與歷史驗證限制。
-- 本機助理指令與設定不納入公開原始碼倉庫。
-- `.github/ISSUE_TEMPLATE.md`：fork 問題回報格式，不自動提交任何外部 Issue。
+`WorkspaceApplicationController` 組裝工作區依賴與固定操作入口。主視窗協調側欄、頁面導覽與詳情轉場，`WorkspaceRenderer` 將 Layout 節點轉換為容器與產品面板。
 
-每次改變架構或可觀察行為，同步更新對應文檔；明確區分已實現、已驗證與待實作。新增產品方向不得讓既有功能重構變成未經決定的全面改寫。
+主要面板分工如下：
+
+- `WorkspaceServicePanelController`：發現、搜尋、站點瀏覽、下載與繼續觀看等服務介面。
+- `WorkspaceDetailController`：作品與來源詳情、選集、評論、資訊子頁，以及來源／管理窗口。
+- `WorkspaceFavoritePanelController`：作品收藏、連結收藏與更新資訊。
+- `WorkspaceQuickDownloadController`：在線來源解析、批次選集與下載提交。
+- `WorkspaceTorrentController`：Torrent 搜尋、匯入、metadata 與檔案選取。
+- `ImageSearchWindowController`：本機圖片準備、辨識查詢與結果操作。
+
+詳情主頁與資訊子頁各自持有捲動視圖，共用作品與查詢狀態。`WorkspaceDetailTransition` 處理封面轉場；`WorkspaceFeedGridLayout` 負責推薦網格的欄位與卡片座標。
+
+### Layout、Skin 與呈現狀態
+
+| 結構 | 內容 | 主要實作 |
+| --- | --- | --- |
+| Layout | 頁面、容器、組件實例、尺寸、斷點與頁面動效 | `WorkspaceModel`、`WorkspaceRegistry`、`WorkspaceValidation`、`WorkspaceTransactions`、`WorkspaceStore` |
+| 編排草稿 | 編輯中的節點、操作紀錄與保存交易 | `WorkspaceLayoutEditor`、`WorkspaceLayoutEditorController` |
+| Skin | 色彩、字型、密度、素材、組件狀態樣式與個人覆寫 | `SkinModel`、`SkinPackageValidator`、`SkinArchive`、`SkinStore`、`SkinAppearance` |
+| 組件呈現狀態 | 各組件實例的查詢、篩選、分頁、選擇、捲動位置與密度 | `WorkspaceSessionState` |
+| 應用偏好 | 語言、播放、彈幕、來源、下載與詳情顯示設定 | `Preferences` |
+
+Layout 編排經驗證與交易保存。Skin 套件由封裝與儲存層管理，`SkinAppearance` 將主題及個人覆寫解析為 AppKit 樣式。LayoutScript 由獨立 helper 執行，結果送回 Layout 處理流程。
+
+## 業務服務與資料流
+
+### 搜尋與作品資訊
+
+`BrowseSearchService` 整合 Bangumi 搜尋、來源搜尋與網址解析；`DiscoveryService` 聚合日常推薦及放送資訊。`BangumiService` 提供作品、集數、人物、關聯與評論資料，`BangumiWorkSync` 將作品資訊接入本機作品庫。
+
+`SourceRegistry` 保存來源描述與能力；`SourceSubscriptionService` 處理訂閱配置，來源搜尋使用已套用的規則。`AnimeSourceService` 結合作品、集數與來源映射尋找候選。
+
+Bilibili 動態及 YouTube 瀏覽使用各自的服務。`TraceMoeSearchService` 接收準備完成的圖片並返回辨識候選，結果由窗口送往作品搜尋、AniList 或預覽入口。
+
+### 解析與播放
+
+網址或作品選擇經 `VideoDecoder` 分派至站點解析器，產生 `YouGetJSON`／`Stream`；`PlayableSelection` 記錄來源、集數、線路與品質選擇。`PlaybackEncoder` 負責播放器參數編碼，`Processes` 協調解析後的媒體、彈幕及 IINA／mpv 啟播。
+
+內建 JSPlayer 透過 WebKit 載入網頁播放器。播放進度回傳至 `PlaybackHistoryStore`；續看由 `AppServices.resumePlayback` 依保存的選擇重新取得媒體並定位播放時間。
+
+直播彈幕轉為 `DanmakuEvent`，經本機 WebSocket 傳往 IINA 彈幕外掛，或經 JavaScript bridge 送入 JSPlayer；點播彈幕使用 XML 檔案。虎牙串流由 `HuyaKit` 解析 `.slice`，經本機 FLV 代理提供給播放器。
+
+### 帳號與請求上下文
+
+`SiteAccounts` 管理帳號紀錄、預設帳號、驗證狀態及使用 lease。帳號 metadata 存於 UserDefaults，Cookies 與 OAuth 憑證存於 Keychain。
+
+來源操作透過 `withSource`／`withAccount` 建立 `AccountHTTP.Context`，將來源身份、帳號與請求憑證傳入非同步操作。`BangumiOAuth` 處理 OAuth，`YouTubeBrowserCookies` 與 `YouTubeCookieImport` 處理瀏覽器及檔案的 Cookies 匯入。
+
+### 下載與 Torrent
+
+`DownloadSourceResolver` 將來源選擇轉為下載輸入，`DownloadService` 持有任務紀錄、執行狀態、帳號 lease 與恢復流程。直連下載交由 `DirectDownloader`，HLS 交由 `HLSDownloader`，並透過 FFmpeg 封裝輸出。
+
+Torrent 搜尋由 `TorrentSearchService` 讀取 RSS 配置。匯入與檔案選取取得 metadata 後，下載後端經 C ABI 呼叫 `Native` 中的 libtorrent 核心；同一 Torrent 的檔案任務共用底層傳輸。`TorrentStreamingService` 結合本機 HTTP Range 路由，將選定檔案提供給外部播放器。
+
+## 資料模型與儲存
+
+`WorkLibrary` 管理 `Work`、`Episode`、`WorkSourceLink` 與 `EpisodeSourceMapping`：作品包含集數，來源連結指向站點作品，集數映射連接本機集數與可播放選擇。`FavoriteLibrary` 管理作品收藏與連結收藏。
+
+Core Data 模型位於 `Core Data/DataModel.xcdatamodeld`，目前模型為 `Library v0.5`，包含 `Bookmark`、`WorkRecord`、`EpisodeRecord`、`WorkSourceLinkRecord` 與 `WorkFavoriteRecord`；舊版本模型供遷移使用。
+
+| 資料 | 儲存位置或機制 |
+| --- | --- |
+| 作品、集數、來源映射與收藏 | Core Data，位於 `Application Support/IINA+` |
+| 偏好與帳號 metadata | UserDefaults |
+| 帳號 Cookies、OAuth 憑證 | Keychain |
+| 工作區佈局 | `Workspace/layout-v1.json` |
+| 組件呈現狀態 | `Workspace/instance-state-v1.json` |
+| Skin 套件與配置 | `Skins/` |
+| 播放歷史 | `Playback/history-v1.json` |
+| 下載任務 | `Downloads/tasks-v1.json` |
+| 下載暫存與預設完成目錄 | `Downloads/Temporary/`、`Downloads/Completed/` |
+
+上述 JSON、Skin 與下載路徑相對於應用的 Application Support 根目錄；`AppStoragePaths` 依 Bundle ID 建立該根目錄，目前為 `com.xjbeta.iina-plus`。
+
+## 套件與資源組成
+
+Swift 依賴由 Xcode 的 Swift Package Manager 整合，`HuyaKit/Package.swift` 定義虎牙 library 與 `huyaproxy` executable。`Native` 的 C++ 核心透過 `TorrentBridge.h` 與 Swift 交換 session、metadata、檔案及傳輸狀態。
+
+`WebFiles/package.json` 管理網頁播放器與彈幕所需的 JavaScript 資源；`InstallDeps.sh` 準備這些資源與外部 IINA 彈幕外掛。圖像位於 `Assets/`，來源規則位於 `Sources/`，本地化字串由字串目錄及各網頁／Storyboard 資源提供。
+
+`Config/App.xcconfig` 載入本機配置，將 Bangumi OAuth 應用設定注入 Info.plist。Xcode 建置階段同時整合 Torrent 原生核心與 LayoutScript helper。
