@@ -20,7 +20,7 @@ for module in "$BUILD/Intermediates.noindex/GeneratedModuleMaps/"*.modulemap; do
     FLAGS+=(-Xcc "-fmodule-map-file=$module")
 done
 xcrun momc "$ROOT/IINA-ANI/Core Data/DataModel.xcdatamodeld" "$TEMP_DIR/DataModel.momd"
-for source in FavoriteLibraryRegression BookmarkFavoritesMigrationRegression; do
+for source in FavoriteLibraryRegression BookmarkFavoritesMigrationRegression LibraryPersistenceRegression; do
     xcrun swiftc -swift-version 6 -parse-as-library "${FLAGS[@]}" \
         "$ROOT/Tests/Library/$source.swift" \
         -Xlinker "$APP_BINARY/IINA-ANI.debug.dylib" \
@@ -28,5 +28,9 @@ for source in FavoriteLibraryRegression BookmarkFavoritesMigrationRegression; do
         -Xlinker -rpath -Xlinker "$APP_BINARY" \
         -o "$TEMP_DIR/$source"
     mkdir -p "$TEMP_DIR/$source-home"
-    CFFIXED_USER_HOME="$TEMP_DIR/$source-home" "$TEMP_DIR/$source" "$TEMP_DIR/DataModel.momd"
+    ARGS=("$TEMP_DIR/DataModel.momd")
+    if [[ "$source" == LibraryPersistenceRegression ]]; then
+        ARGS+=("$PRODUCTS/IINA-ANI.app")
+    fi
+    CFFIXED_USER_HOME="$TEMP_DIR/$source-home" "$TEMP_DIR/$source" "${ARGS[@]}"
 done

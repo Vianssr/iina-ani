@@ -84,7 +84,7 @@ struct SkinPackageStoreRegression {
                 throw TestError.layoutIdentityChanged
             }
         }
-        let archive = root.appendingPathComponent("layout-identity.iinaskin")
+        let archive = root.appendingPathComponent("layout-identity.aniskin")
         try SkinArchive.create(from: directory, to: archive)
         let storeURL = root.appendingPathComponent("layout-identity-store")
         let store = SkinStore(rootURL: storeURL)
@@ -99,7 +99,7 @@ struct SkinPackageStoreRegression {
         guard case .unchanged = try store.installReviewed(repeated, select: true) else {
             fatalError("equivalent Layout Skin must deduplicate")
         }
-        let exported = root.appendingPathComponent("layout-identity-export.iinaskin")
+        let exported = root.appendingPathComponent("layout-identity-export.aniskin")
         try store.exportSkin(id: installed.manifest.id, to: exported, mode: .original)
         let clean = SkinStore(rootURL: root.appendingPathComponent("layout-identity-clean"))
         guard case .installed(let imported) = try clean.importSkin(from: exported) else {
@@ -172,7 +172,7 @@ struct SkinPackageStoreRegression {
         maximumXML.append(0x20)
         try maximumXML.write(to: motionURL)
         try reject(.fileTooLarge(path), "XML exceeds 16 KiB")
-        let rejectedArchive = root.appendingPathComponent("page-motion-oversize.iinaskin")
+        let rejectedArchive = root.appendingPathComponent("page-motion-oversize.aniskin")
         try zip([
             Entry(name: "manifest.json", data: Data(contentsOf: manifestURL)),
             Entry(name: "theme.json", data: Data(contentsOf: directory.appendingPathComponent("theme.json"))),
@@ -207,7 +207,7 @@ struct SkinPackageStoreRegression {
                 && reformattedDigest != digest,
             "raw XML bytes participate in Skin identity even for equivalent decoded motion")
         try fadeXML.write(to: motionURL)
-        let archive = root.appendingPathComponent("page-motion.iinaskin")
+        let archive = root.appendingPathComponent("page-motion.aniskin")
         try SkinArchive.create(from: directory, to: archive)
         let storeURL = root.appendingPathComponent("page-motion-store")
         let store = SkinStore(rootURL: storeURL)
@@ -226,7 +226,7 @@ struct SkinPackageStoreRegression {
             ("derived-no-layout", .derived, nil, nil),
         ]
         for (name, mode, layout, expectedLayout) in exports {
-            let destination = root.appendingPathComponent("page-motion-\(name).iinaskin")
+            let destination = root.appendingPathComponent("page-motion-\(name).aniskin")
             try store.exportSkin(
                 id: installed.manifest.id, to: destination, mode: mode, layout: layout,
                 overrides: SkinPersonalOverrides(theme: ["spacing": .number(18)]))
@@ -285,7 +285,7 @@ struct SkinPackageStoreRegression {
             check(installed.pageMotion == motion, "\(path) installation retains actual motion")
             let exports: [(String, SkinExportMode)] = [("original", .original), ("derived", .derived)]
             for (name, mode) in exports {
-                let destination = root.appendingPathComponent("\(id)-\(name).iinaskin")
+                let destination = root.appendingPathComponent("\(id)-\(name).aniskin")
                 try store.exportSkin(id: id, to: destination, mode: mode)
                 let clean = SkinStore(rootURL: root.appendingPathComponent("\(id)-\(name)-store"))
                 guard case .installed(let imported) = try clean.importSkin(from: destination) else {
@@ -330,7 +330,7 @@ struct SkinPackageStoreRegression {
         let storeURL = root.appendingPathComponent("review-store")
         let store = SkinStore(rootURL: storeURL)
         let author = try makePackage("review", "1", 1, nil, root)
-        let archive = root.appendingPathComponent("review.iinaskin")
+        let archive = root.appendingPathComponent("review.aniskin")
         try SkinArchive.create(from: author, to: archive)
         var cancelled: SkinReviewPackage? = try store.prepareReview(archiveURL: archive)
         let stagingURL = cancelled!.package.directoryURL
@@ -403,11 +403,11 @@ struct SkinPackageStoreRegression {
         _ = try store.installReviewed(reloaded, replacing: change, select: true)
         check(try SkinPackageCodec.contentDigest(for: store.selectedPackage()!) == reloaded.digest, "apply installs reviewed snapshot even if author source changed")
         let selected = WorkspaceBuiltinLayouts.makeDefault()
-        let withLayout = root.appendingPathComponent("review-with-layout.iinaskin")
+        let withLayout = root.appendingPathComponent("review-with-layout.aniskin")
         try store.exportSkin(id: "review", to: withLayout, mode: .derived, layout: selected)
         let shared = try store.prepareReview(archiveURL: withLayout)
         check(shared.package.manifest.layout == selected, "selected presentation layout round trips through shared codec")
-        let noLayout = root.appendingPathComponent("review-without-layout.iinaskin")
+        let noLayout = root.appendingPathComponent("review-without-layout.aniskin")
         let importedLayout = try store.installReviewed(shared)
         let derivedID: String
         switch importedLayout {
@@ -496,7 +496,7 @@ struct SkinPackageStoreRegression {
     static func transactions(_ root: URL) throws {
         let store = SkinStore(rootURL: root.appendingPathComponent("store"))
         let v1 = try makePackage("transaction", "1", 0, nil, root)
-        let a1 = root.appendingPathComponent("v1.iinaskin")
+        let a1 = root.appendingPathComponent("v1.aniskin")
         try SkinArchive.create(from: v1, to: a1)
         guard case .installed(let first) = try store.importSkin(from: a1) else {
             fatalError("install")
@@ -507,7 +507,7 @@ struct SkinPackageStoreRegression {
         try store.saveOverrides(overrides, for: "transaction")
         check(try store.loadOverrides(for: "transaction") == overrides, "override persistence")
         let v2 = try makePackage("transaction", "2", 0, nil, root)
-        let a2 = root.appendingPathComponent("v2.iinaskin")
+        let a2 = root.appendingPathComponent("v2.aniskin")
         try SkinArchive.create(from: v2, to: a2)
         var confirmation: SkinReplacementConfirmation?
         do {
@@ -539,9 +539,9 @@ struct SkinPackageStoreRegression {
         check(
             try store.loadOverrides(for: "transaction") == overrides,
             "replacement retains personal overrides")
-        let original = root.appendingPathComponent("original.iinaskin")
+        let original = root.appendingPathComponent("original.aniskin")
         try store.exportSkin(id: "transaction", to: original, mode: .original)
-        let occupied = root.appendingPathComponent("occupied.iinaskin")
+        let occupied = root.appendingPathComponent("occupied.aniskin")
         let preserved = Data([0x41, 0x42])
         try preserved.write(to: occupied)
         fails("existing export target") {
@@ -555,7 +555,7 @@ struct SkinPackageStoreRegression {
             fatalError("original export reimport")
         }
         check(imported.manifest.id == "transaction", "original ID preserved")
-        let derived = root.appendingPathComponent("derived.iinaskin")
+        let derived = root.appendingPathComponent("derived.aniskin")
         try store.exportSkin(id: "transaction", to: derived, mode: .derived, overrides: overrides)
         let cleanDerived = SkinStore(rootURL: root.appendingPathComponent("derived-profile"))
         guard case .installed(let derivedPackage) = try cleanDerived.importSkin(from: derived)
@@ -599,7 +599,7 @@ struct SkinPackageStoreRegression {
             ])
         try SkinPackageCodec.canonicalData(for: components).write(
             to: source.appendingPathComponent("components.json"))
-        let archive = root.appendingPathComponent("cascade.iinaskin")
+        let archive = root.appendingPathComponent("cascade.aniskin")
         try SkinArchive.create(from: source, to: archive)
         let store = SkinStore(rootURL: root.appendingPathComponent("cascade-store"))
         guard case .installed(let package) = try store.importSkin(from: archive) else {
@@ -616,7 +616,7 @@ struct SkinPackageStoreRegression {
         check(
             before.resolve(slot: .primaryAction, componentID: "search.results", state: .pressed)
                 .font.pointSize == 24, "personal state wins over author component")
-        let exported = root.appendingPathComponent("cascade-derived.iinaskin")
+        let exported = root.appendingPathComponent("cascade-derived.aniskin")
         try store.exportSkin(id: "cascade", to: exported, mode: .derived, overrides: personal)
         let clean = SkinStore(rootURL: root.appendingPathComponent("cascade-clean"))
         guard case .installed(let derived) = try clean.importSkin(from: exported) else {
@@ -643,7 +643,7 @@ struct SkinPackageStoreRegression {
         let store = SkinStore(rootURL: root.appendingPathComponent("limits-store"))
         let max = try makePackage(
             "boundary", "1", 4, SkinPackageValidator.maximumPackageBytes, root)
-        let maxArchive = root.appendingPathComponent("maximum.iinaskin")
+        let maxArchive = root.appendingPathComponent("maximum.aniskin")
         try SkinArchive.create(from: max, to: maxArchive)
         guard case .installed(let package) = try store.importSkin(from: maxArchive) else {
             fatalError("maximum valid Skin rejected")
@@ -654,7 +654,7 @@ struct SkinPackageStoreRegression {
         try store.selectSkin(id: "boundary")
         let over = try makePackage(
             "boundary", "2", 4, SkinPackageValidator.maximumPackageBytes + 1, root)
-        let overArchive = root.appendingPathComponent("over-total.iinaskin")
+        let overArchive = root.appendingPathComponent("over-total.aniskin")
         try zip(try entries(over), overArchive)
         fails("package expanded total +1") { _ = try store.importSkin(from: overArchive) }
         check(
@@ -665,19 +665,19 @@ struct SkinPackageStoreRegression {
         image.append(
             Data(repeating: 0, count: SkinPackageValidator.maximumAssetBytes + 1 - image.count))
         try image.write(to: singleOver.appendingPathComponent("asset0.png"))
-        let singleArchive = root.appendingPathComponent("over-single.iinaskin")
+        let singleArchive = root.appendingPathComponent("over-single.aniskin")
         try zip(try entries(singleOver), singleArchive)
         fails("asset max +1") { _ = try store.importSkin(from: singleArchive) }
         let maxCount = try makePackage(
             "count-max", "1", SkinArchive.maximumEntryCount - 2, nil, root)
-        let maxCountArchive = root.appendingPathComponent("count-max.iinaskin")
+        let maxCountArchive = root.appendingPathComponent("count-max.aniskin")
         try SkinArchive.create(from: maxCount, to: maxCountArchive)
         guard case .installed = try store.importSkin(from: maxCountArchive) else {
             fatalError("256-entry valid package rejected")
         }
         let countOver = try makePackage(
             "count-over", "1", SkinArchive.maximumEntryCount - 1, nil, root)
-        let countOverArchive = root.appendingPathComponent("count-over.iinaskin")
+        let countOverArchive = root.appendingPathComponent("count-over.aniskin")
         try zip(try entries(countOver), countOverArchive)
         fails("package count max +1") { _ = try store.importSkin(from: countOverArchive) }
     }

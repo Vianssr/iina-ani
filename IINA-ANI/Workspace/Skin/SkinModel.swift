@@ -43,7 +43,7 @@ public enum SkinJSONValue: Codable, Equatable, Sendable {
 public struct SkinManifest: Codable, Equatable, Sendable {
     public static let currentSchemaVersion = 1
     public static let currentComponentContractVersion = 1
-    public static let currentAppVersion = "0.8.32"
+    public static let currentAppVersion = "0.10.1"
 
     public var schemaVersion: Int
     public var componentContractVersion: Int

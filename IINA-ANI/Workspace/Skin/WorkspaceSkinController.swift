@@ -49,7 +49,7 @@ final class WorkspaceSkinController: NSObject {
         root.submenu = menu
         let entries: [(String, Selector)] = [
             (String(localized: "Skin 管理…"), #selector(choosePackage)),
-            (String(localized: "匯入 .iinaskin…"), #selector(importPackage)),
+            (String(localized: "匯入 .aniskin…"), #selector(importPackage)),
             (String(localized: "明暗模式…"), #selector(chooseScheme)),
             (String(localized: "此 Skin 的文字與密度…"), #selector(editOverrides)),
             (String(localized: "選取作者目錄並預覽…"), #selector(chooseAuthorDirectory)),
@@ -240,7 +240,7 @@ final class WorkspaceSkinController: NSObject {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = [UTType(filenameExtension: "iinaskin") ?? .zip]
+        panel.allowedContentTypes = [UTType(filenameExtension: "aniskin") ?? .zip]
         guard panel.runModal() == .OK, let url = panel.url else { return }
         perform { try openPackage(at: url) }
     }
@@ -331,7 +331,7 @@ final class WorkspaceSkinController: NSObject {
         default: layout = nil
         }
         let panel = NSSavePanel()
-        panel.nameFieldStringValue = derived ? "personal.iinaskin" : "skin.iinaskin"
+        panel.nameFieldStringValue = derived ? "personal.aniskin" : "skin.aniskin"
         guard panel.runModal() == .OK, let url = panel.url else { return }
         try store.exportSkin(id: package.manifest.id, to: url, mode: derived ? .derived : .original,
             layout: derived ? layout : nil, overrides: derived ? store.loadOverrides(for: package.manifest.id) : nil)

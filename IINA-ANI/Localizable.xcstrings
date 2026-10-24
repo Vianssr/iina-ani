@@ -17035,48 +17035,48 @@
         }
       }
     },
-    "匯入 .iinaskin" : {
+    "匯入 .aniskin" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Import .iinaskin"
+            "value" : "Import .aniskin"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导入 .iinaskin"
+            "value" : "导入 .aniskin"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "匯入 .iinaskin"
+            "value" : "匯入 .aniskin"
           }
         }
       }
     },
-    "匯入 .iinaskin…" : {
+    "匯入 .aniskin…" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Import .iinaskin…"
+            "value" : "Import .aniskin…"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "导入 .iinaskin…"
+            "value" : "导入 .aniskin…"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "匯入 .iinaskin…"
+            "value" : "匯入 .aniskin…"
           }
         }
       }
@@ -24027,48 +24027,48 @@
         }
       }
     },
-    "拖入 .iinaskin 可驗證並預覽；作者／授權是未驗證宣告。" : {
+    "拖入 .aniskin 可驗證並預覽；作者／授權是未驗證宣告。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Drop an .iinaskin file to validate and preview. Author and license information is unverified."
+            "value" : "Drop an .aniskin file to validate and preview. Author and license information is unverified."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拖入 .iinaskin 可验证并预览；作者和授权为未经验证的声明。"
+            "value" : "拖入 .aniskin 可验证并预览；作者和授权为未经验证的声明。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拖入 .iinaskin 可驗證並預覽；作者／授權是未驗證宣告。"
+            "value" : "拖入 .aniskin 可驗證並預覽；作者／授權是未驗證宣告。"
           }
         }
       }
     },
-    "拖入 .iinaskin 可驗證並預覽。內建外觀沒有可移除或匯出的包；請選取第三方 Skin。作者／授權是未驗證宣告。" : {
+    "拖入 .aniskin 可驗證並預覽。內建外觀沒有可移除或匯出的包；請選取第三方 Skin。作者／授權是未驗證宣告。" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Drop an .iinaskin file to validate and preview. The built-in appearance has no package to remove or export; select a third-party Skin. Author and license information is unverified."
+            "value" : "Drop an .aniskin file to validate and preview. The built-in appearance has no package to remove or export; select a third-party Skin. Author and license information is unverified."
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拖入 .iinaskin 可验证并预览。内置外观没有可移除或导出的包；请选择第三方 Skin。作者和授权为未经验证的声明。"
+            "value" : "拖入 .aniskin 可验证并预览。内置外观没有可移除或导出的包；请选择第三方 Skin。作者和授权为未经验证的声明。"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "拖入 .iinaskin 可驗證並預覽。內建外觀沒有可移除或匯出的包；請選取第三方 Skin。作者／授權是未驗證宣告。"
+            "value" : "拖入 .aniskin 可驗證並預覽。內建外觀沒有可移除或匯出的包；請選取第三方 Skin。作者／授權是未驗證宣告。"
           }
         }
       }

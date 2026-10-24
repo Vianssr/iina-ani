@@ -15,6 +15,13 @@ struct AppStoragePaths: Sendable {
             Bundle.main.bundleIdentifier ?? "IINA-ANI", isDirectory: true))
     }
 
+    /// Keep the legacy library location until an explicit, verified data migration is provided.
+    static func libraryStoreURL(fileManager: FileManager = .default) throws -> URL {
+        let base = try fileManager.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                       appropriateFor: nil, create: true)
+        return base.appendingPathComponent("IINA+", isDirectory: true).appendingPathComponent("DataModel.sqlite")
+    }
+
     var downloadTemporaryDirectory: URL { applicationSupport.appendingPathComponent("Downloads/Temporary", isDirectory: true) }
     var completedDownloadsDirectory: URL { applicationSupport.appendingPathComponent("Downloads/Completed", isDirectory: true) }
     var downloadTaskStore: URL { applicationSupport.appendingPathComponent("Downloads/tasks-v1.json") }

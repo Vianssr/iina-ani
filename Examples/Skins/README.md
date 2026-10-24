@@ -15,18 +15,18 @@ python3 Examples/Skins/generate.py
 bash Examples/Skins/package.sh /tmp/my-skin-packages
 ```
 
-第二步使用生產 Swift validator 與 ZIP 實作，輸出 `minimal.iinaskin`、`full.iinaskin`，不是以一般 zip 遞迴打包 repository。工具只驗證與打包，不啟動正式 App、遠端服務或播放器，也不修改已安裝 Skin／使用者 profile。
+第二步使用生產 Swift validator 與 ZIP 實作，輸出 `minimal.aniskin`、`full.aniskin`，不是以一般 zip 遞迴打包 repository。工具只驗證與打包，不啟動正式 App、遠端服務或播放器，也不修改已安裝 Skin／使用者 profile。
 
 將生成包由工作區外觀入口選檔、拖入或開包，直接進入真實原生預覽；版本、作者與授權 metadata 在可信預覽頂部呈現，長文字可透過提示及無障礙名稱完整讀取。預設只套外觀，「外觀＋作者 Layout（取代目前排列）」預設不勾選；勾選時同一預覽視窗即呈現作者佈局，按套用才提交。管理頁提供清單、版本／作者／授權、移除、匯出及恢復。作者編輯可直接載入 `minimal/` 或 `full/` 目錄；保存 JSON／素材後明確使用「重新載入並預覽」，不是自動監視／自動提交。重載以隔離 snapshot 通過相同 validator，錯誤定位到檔案／欄位；取消或失敗不取代已套外觀，預覽不執行播放／下載業務命令。不要選本目錄根層（README、工具不是包內容），不要把 `.DS_Store`、授權文字文件或打包腳本塞進作者目錄。
 
 ## 包結構與 manifest
 
-UTF-8 JSON；ZIP Stored 或 Deflate；副檔名 `.iinaskin`。包根直接有 `manifest.json` 和 theme 入口，不能多包一層作者目錄。只有 manifest、theme／components／pageMotion 入口、`preview.png` 及 `assets` 明列的檔案允許入包。
+UTF-8 JSON；ZIP Stored 或 Deflate；副檔名 `.aniskin`。包根直接有 `manifest.json` 和 theme 入口，不能多包一層作者目錄。只有 manifest、theme／components／pageMotion 入口、`preview.png` 及 `assets` 明列的檔案允許入包。
 
 | manifest 欄位 | 精確格式 |
 | --- | --- |
 | `schemaVersion`, `componentContractVersion` | 整數，均為 `1` |
-| `minimumAppVersion` | 1–3 段非負整數版本字串，不高於目前 `0.8.32` |
+| `minimumAppVersion` | 1–3 段非負整數版本字串，不高於目前 `0.10.1` |
 | `id`, `version`, `name`, `license` | 非空字串；穩定 id 區分作者包。**欄位是 `version`，不是 `packageVersion`** |
 | `revision` | 非負整數 |
 | `author` | 可選字串；未驗證作者身份 |

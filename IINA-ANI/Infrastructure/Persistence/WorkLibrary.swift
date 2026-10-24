@@ -147,8 +147,12 @@ final class WorkLibrary {
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
 
-    init(container: NSPersistentContainer) {
-        self.context = container.viewContext
+    init(context: NSManagedObjectContext) {
+        self.context = context
+    }
+
+    convenience init(container: NSPersistentContainer) {
+        self.init(context: container.viewContext)
     }
 
     func upsert(_ work: Work) throws {

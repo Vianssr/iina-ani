@@ -8,7 +8,7 @@ struct PackageExamples {
         try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
         for name in ["minimal", "full"] {
             let package = try SkinPackageValidator.validate(directoryURL: source.appendingPathComponent(name))
-            let archive = destination.appendingPathComponent(name + ".iinaskin")
+            let archive = destination.appendingPathComponent(name + ".aniskin")
             try SkinArchive.create(from: package.directoryURL, to: archive)
             print("Validated and packaged \(name): \(archive.path)")
         }

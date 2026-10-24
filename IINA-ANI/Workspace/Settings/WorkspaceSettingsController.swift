@@ -526,7 +526,7 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
         }
         let entries: [(String, String, String, () -> Void)] = [
             ("skin.manage", String(localized: "Skin 管理與預覽"), "skin theme 皮肤 主題 換皮", commands.manageSkins),
-            ("skin.import", String(localized: "匯入 .iinaskin"), "import 安装 導入", commands.importSkin),
+            ("skin.import", String(localized: "匯入 .aniskin"), "import 安装 導入", commands.importSkin),
             ("skin.scheme", String(localized: "明暗模式"), "dark light system 深色 淺色 系统", commands.colorScheme),
             ("skin.personal", String(localized: "個人字級與密度"), "font text size density 字体 放大 緊湊", commands.personalAppearance),
             ("skin.author", String(localized: "選取作者目錄並預覽"), "author directory 作者", commands.authorPreview),

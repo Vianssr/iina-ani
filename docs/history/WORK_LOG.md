@@ -1333,3 +1333,36 @@
 
 - 整理識圖功能、收藏排版、詳情偏好崩潰修復、回歸測試與文件更新，納入本機 Git 提交；依本次指定僅包含修改與新增檔案，四份已刪除文件保留為未提交。
 - 沿用前次檢查與回歸結果，本輪檢查提交範圍及差異格式，未重跑測試；先前檢查記錄的兩項問題仍待修正。
+
+## 2026-10-24 — 新項目身分與 Skin 副檔名同步
+
+- 依使用者確認採用 Bundle ID `com.LlS.iina-ani`、版本 `0.10.1` 與 `.aniskin`，同步 App 開檔、選檔、拖入、匯出預設檔名、三語文案、範例打包與回歸 fixtures；不保留 `.iinaskin` 使用入口。封裝安全檢查仍拒絕新舊副檔名的巢狀壓縮包。
+- Skin 相容版本常數更新為 `0.10.1`；既有範例 manifest 的最低版本仍為 `0.8.32`，未無故提高要求。
+- 更新 README、使用／Skin 指南及架構儲存說明，清理已刪除規劃／研究文件的連結。Bundle ID 對 Application Support、UserDefaults 與 Keychain service 的影響已註明；Core Data 仍在 `Application Support/IINA+`，未搬動或清除使用者資料。
+- 將本機 AGENT.md 改為導向入口，新增最小 AGENTS.md 與 docs/development 的修改契約、驗證、資料／發佈、工作流程、Context7 及指引整理記錄；根指引維持既有 Git 忽略設定。
+- 驗證：Skin ZIP/store 回歸通過；minimal／full 範例成功打包為 `.aniskin`；Debug App 完整建置成功，產物 Bundle ID／版本／UTType 與四組三語鍵核對通過；plist、文件本機連結與 git diff 空白檢查通過。
+- 執行限制：經 Finder 開啟本次 Debug App，工具清單確認新 Bundle ID 正在執行；UI 工具仍把名稱／路徑解析為舊 ID，直接使用新 ID 則回報 Invalid app，故未取得正式視窗截圖，選檔／拖入／匯出視窗旅程尚未驗收。未重驗播放、最低 macOS、Intel、簽署與公證。
+
+## 2026-10-24 — Core Data 持久化組裝整合
+
+- 新增 `LibraryPersistence`，集中模型載入、SQLite 開啟、遷移前備份、書籤排序／收藏／作品分類遷移、作品庫與收藏庫組裝及待保存變更提交。初始化可注入 store URL／模型／歷史模型 bundle；錯誤向上傳遞，不建立替代空庫。AppDelegate 保留錯誤呈現與退出決策，不再承擔 Core Data 初始化細節。
+- `WorkLibrary`／`FavoriteLibrary` 支援 context 注入；正式組裝共用同一 context 與 WorkLibrary。容器便利初始化保留給既有測試入口。DataManager 由 App 層注入共用 context、收藏庫及 decoder，持久化組裝不依賴播放器解析服務。
+- 收藏面板的 Core Data 變更通知限定至所屬收藏庫 context，避免無關 context 造成刷新。Core Data 路徑集中至 `AppStoragePaths.libraryStoreURL`，仍為 `Application Support/IINA+/DataModel.sqlite`；未搬移、刪除或變更既有資料模型。
+- 新增整合回歸找到並修復最早期書籤遷移的快取問題：排序步驟在 viewContext 註冊舊書籤，背景收藏遷移補入 ID 後自動合併尚未執行，立即讀取可能報 invalidBookmarkModel。現在所有遷移成功後、服務對外提供前 reset viewContext，首次讀取取得完整遷移結果。
+- 驗證：Debug 完整 App 建置成功；`Tests/run-work-library.sh`、`Tests/run-w5-favorites.sh` 全部通過。新整合測試涵蓋新庫、共用資料服務、待保存變更、重開、Bookmark 原版與 v0.3 的完整遷移／備份／排序／身份穩定，以及損壞 SQLite 和無效目錄不被覆寫。既有 v0.3／v0.4 備份／還原、分類、失敗回滾與收藏回歸通過；工程 plist 與差異空白檢查通過。測試使用隔離臨時資料。
+- 限制：UI 工具對新 Bundle ID 仍回報 Invalid app，未完成本次正式 App 收藏窗口／退出操作及截圖驗收；未宣稱編譯與離線測試等於端到端通過。未重驗播放、網路服務、最低系統或 Intel。
+
+## 2026-10-24 — 工作區未提交變更程式碼審查
+
+- 審查相對 HEAD 的修改及新增持久化實作，追蹤 AppDelegate、共用 context、遷移、收藏通知、Skin 副檔名與工程設定；未發現可確認由本次變更新增的程式缺陷。Bundle ID 更名的資料路徑影響仍是既有記錄中的已知限制。
+- 實際驗證：Debug 完整 App 建置成功；`Tests/run-work-library.sh`、`Tests/run-w5-favorites.sh`、`Tests/run-skin-package-store.sh` 通過；`git diff --check` 通過。損壞 SQLite 測例產生預期診斷，資料保留斷言通過。
+- 限制：未啟動正式 App 驗證收藏 UI、退出及 Skin 選檔／拖入／匯出，未驗證帳號或舊 Bundle ID 資料遷移、網路播放、最低系統或 Intel。此次僅追加審查記錄，未修改功能程式。
+
+## 2026-10-24 — 舊檔案隔離與驗證後清理
+
+- 先核對 Swift 呼叫端、Storyboard、Xcode build phases、資源載入、腳本與文件引用，再將 6 份檔案移至 `.build/obsolete-quarantine-20261024/files/`，記錄原路徑／大小／SHA-256；隔離期間完成驗證後才刪除隔離內容。
+- 刪除未使用的 `IINA-ANI/Shared/Extensions/Color+NSColor.swift`，同步移除 Xcode file reference、group 與 Sources build phase 項目。其兩個轉換屬性無呼叫端，其餘同名 color 屬性屬於不同型別。
+- 刪除僅導向 AGENTS.md 的本機舊 AGENT.md、Skin generator 的單一 Python bytecode 快取，以及根目錄／docs／.agents 的三份 Finder `.DS_Store`。本輪合計 30,495 bytes；作業系統日後可能重建 Finder 快取。同步移除文件結構中的舊入口。
+- 保留用於遷移的舊 Core Data 模型、仍被設定頁與 HTTP 路由使用的彈幕 test.htm、播放使用的 empty.m4a、虎牙／抖音 JS、來源解析器、圖示與授權資料。使用者原先刪除的兩份規劃文件維持既有狀態，不算作本輪隔離刪除。
+- 驗證：隔離後 Debug App 建置成功；Skin appearance、WorkLibrary、W5 favorites（含備份／還原與 LibraryPersistence 整合）回歸全部通過；工程 plist、本機 Markdown 連結、懸空 Xcode 引用與 diff 空白檢查通過。刪除前再次核對隔離檔案 SHA-256。
+- 隔離檔案內容與臨時工程備份已移除；清單與驗證日誌留於忽略的 `.build/`。本輪未改功能或資料模型、未搬動使用者資料，未執行正式 App UI／實播驗收。

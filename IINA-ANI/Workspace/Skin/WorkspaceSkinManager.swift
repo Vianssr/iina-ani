@@ -5,7 +5,7 @@ final class WorkspaceSkinManager: NSWindowController, NSTableViewDataSource, NST
     enum Action: Hashable { case preview, remove, exportOriginal, exportDerived, restore, importPackage, authorDirectory, reloadAuthor }
     var action: ((Action, SkinPackage?) -> Void)?
     private let table = NSTableView()
-    private let status = NSTextField(wrappingLabelWithString: String(localized: "拖入 .iinaskin 可驗證並預覽；作者／授權是未驗證宣告。"))
+    private let status = NSTextField(wrappingLabelWithString: String(localized: "拖入 .aniskin 可驗證並預覽；作者／授權是未驗證宣告。"))
     private var packages: [SkinPackage] = []
     private var buttons: [Action: NSButton] = [:]
     init() {
@@ -38,7 +38,7 @@ final class WorkspaceSkinManager: NSWindowController, NSTableViewDataSource, NST
         let primary = NSStackView(views: [button(String(localized: "預覽並套用…"), .preview), button(String(localized: "移除…"), .remove),
                                          button(String(localized: "匯出原包…"), .exportOriginal), button(String(localized: "匯出衍生包…"), .exportDerived),
                                          button(String(localized: "恢復內建…"), .restore)])
-        let author = NSStackView(views: [button(String(localized: "匯入 .iinaskin…"), .importPackage),
+        let author = NSStackView(views: [button(String(localized: "匯入 .aniskin…"), .importPackage),
                                         button(String(localized: "選取作者目錄…"), .authorDirectory), button(String(localized: "重新載入並預覽"), .reloadAuthor)])
         let stack = NSStackView(views: [scroll, primary, author, status])
         stack.orientation = .vertical
@@ -85,7 +85,7 @@ final class WorkspaceSkinManager: NSWindowController, NSTableViewDataSource, NST
         buttons[.reloadAuthor]?.isEnabled = authorDirectory != nil
         buttons[.reloadAuthor]?.toolTip = authorDirectory == nil ? String(localized: "先選取作者目錄") : String(localized: "重新驗證作者目錄並隔離預覽")
         status.stringValue = authorDirectory.map { String(localized: "作者目錄：\($0.path)\n重新載入只建立驗證快照；取消不更動安裝、外觀或工作區。") }
-            ?? String(localized: "拖入 .iinaskin 可驗證並預覽。內建外觀沒有可移除或匯出的包；請選取第三方 Skin。作者／授權是未驗證宣告。")
+            ?? String(localized: "拖入 .aniskin 可驗證並預覽。內建外觀沒有可移除或匯出的包；請選取第三方 Skin。作者／授權是未驗證宣告。")
         updateSelectionActions()
     }
     func tableViewSelectionDidChange(_ notification: Notification) { updateSelectionActions() }
@@ -128,7 +128,7 @@ private final class SkinPackageDropView: NSView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
     private func packageURL(_ sender: NSDraggingInfo) -> URL? {
         guard let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
-              urls.count == 1, let url = urls.first, url.pathExtension.lowercased() == "iinaskin" else { return nil }
+              urls.count == 1, let url = urls.first, url.pathExtension.lowercased() == "aniskin" else { return nil }
         return url
     }
     override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { packageURL(sender) == nil ? [] : .copy }

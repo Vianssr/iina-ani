@@ -288,7 +288,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
                 name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
             NotificationCenter.default.addObserver(
                 self, selector: #selector(favoriteDataChanged(_:)),
-                name: .NSManagedObjectContextObjectsDidChange, object: nil)
+                name: .NSManagedObjectContextObjectsDidChange, object: favorites.changeNotificationSource)
         }
         scrollView.drawsBackground = false
         scrollView.translatesAutoresizingMaskIntoConstraints = false
@@ -464,7 +464,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         guard !previewOnly, !attached, isViewLoaded else { return }
         attached = true
         NotificationCenter.default.addObserver(self, selector: #selector(scrollBoundsChanged(_:)), name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
-        NotificationCenter.default.addObserver(self, selector: #selector(favoriteDataChanged(_:)), name: .NSManagedObjectContextObjectsDidChange, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(favoriteDataChanged(_:)), name: .NSManagedObjectContextObjectsDidChange, object: favorites.changeNotificationSource)
         refresh()
         startStatusRefresh()
     }
@@ -475,7 +475,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         NotificationCenter.default.removeObserver(
             self, name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
         NotificationCenter.default.removeObserver(
-            self, name: .NSManagedObjectContextObjectsDidChange, object: nil)
+            self, name: .NSManagedObjectContextObjectsDidChange, object: favorites.changeNotificationSource)
         requestTask?.cancel()
         requestTask = nil
         statusRefreshTask?.cancel(); statusRefreshTask = nil

@@ -1,21 +1,21 @@
 # IINA-ANI 使用指南
 
-IINA-ANI 以 [xjbeta/iina-plus](https://github.com/xjbeta/iina-plus) 的原始碼為基礎。W9 頁面與 W10 入口切換已實作：Workspace 是唯一主視窗，整合發現、搜尋、詳情、雙欄收藏、下載、五組設定與 Torrent，保留原播放器及彈幕能力。W10／M4 的逐站、最低系統與集中產品驗收仍未簽收；[交付與阻礙](plans/FRONTEND_REFACTOR_PLAN.md#w10-contract)。
+IINA-ANI 以 [xjbeta/iina-plus](https://github.com/xjbeta/iina-plus) 的原始碼為基礎。W9 頁面與 W10 入口切換已實作：Workspace 是唯一主視窗，整合發現、搜尋、詳情、雙欄收藏、下載、五組設定與 Torrent，保留原播放器及彈幕能力。W10／M4 的逐站、最低系統與集中產品驗收仍未簽收，歷史驗證與限制見 [工作記錄](history/WORK_LOG.md)。
 
-這是非官方衍生專案，不是從零建立的 Animeko 移植，也不是 IINA 播放核心的 fork。專案正式名稱為 **IINA-ANI**，文件中的本專案名稱統一使用此名稱；IINA+ 僅用於上游名稱、既有技術識別及歷史記錄。原始碼目錄、Xcode 工程、target／scheme、App 顯示名稱與產物均已更名為 `IINA-ANI`。Bundle ID `com.xjbeta.iina-plus` 與既有資料目錄（包含 Core Data 的 `Application Support/IINA+`）刻意保留，避免既有資料遺失；工程與 App 品牌更名不代表已完成獨立發佈。
+這是非官方衍生專案，不是從零建立的 Animeko 移植，也不是 IINA 播放核心的 fork。專案正式名稱為 **IINA-ANI**，文件中的本專案名稱統一使用此名稱；IINA+ 僅用於上游名稱、既有技術識別及歷史記錄。原始碼目錄、Xcode 工程、target／scheme、App 顯示名稱與產物均已更名為 `IINA-ANI`。目前版本為 `0.10.1`，Bundle ID 為 `com.LlS.iina-ani`。Core Data 仍使用 `Application Support/IINA+`；舊 Bundle ID 的偏好、登入、Layout、Skin、播放歷史與下載任務尚未自動遷移。更名不代表已完成資料隔離或獨立發佈。
 
 Skin 的匯入／預覽、個人覆寫、作者佈局、素材動效、匯出分享與錯誤處理，見 [Skin 功能指南](SKIN_GUIDE.md)；包格式另見 [Skin 作者格式](../Examples/Skins/README.md)。
 
 ## 目前狀態
 
 - Workspace 是唯一主視窗，整合發現、搜尋、詳情、收藏、下載、設定、Layout／Skin 與 Torrent；保留 IINA／mpv、彈幕、JSPlayer 及虎牙代理。
-- 基礎服務、W9／W10 入口切換及 R0–R6 修復已交付；逐工作包狀態與未簽收範圍統一見[重構規劃狀態表](plans/FRONTEND_REFACTOR_PLAN.md#plan-status)，不在此重複交付日誌。
-- [R7 集中結果／受阻報告](plans/FRONTEND_REFACTOR_PLAN.md#r7-acceptance)已交付，但不代表全部旅程通過。兩帳號、完整 VoiceOver／放大字級、遠端 HLS、Torrent 產品全鏈、最低系統／Intel／正式簽署 Sandbox／公證及 M2／M3／MT3／M4／W8.3 關卡仍未簽收；外部腳本匯入保持關閉。
+- 基礎服務、W9／W10 入口切換及 R0–R6 修復已交付；實際交付與未驗證範圍見[工作記錄](history/WORK_LOG.md)。
+- R7 集中結果／受阻報告已交付（見[工作記錄](history/WORK_LOG.md)），但不代表全部旅程通過。兩帳號、完整 VoiceOver／放大字級、遠端 HLS、Torrent 產品全鏈、最低系統／Intel／正式簽署 Sandbox／公證及 M2／M3／MT3／M4／W8.3 關卡仍未簽收；外部腳本匯入保持關閉。
 - 最新詳情／二級來源窗口流程見下方「搜尋與日常更新服務」；名稱模糊與雙編號尋源已完成建置、回歸及真網服務鏈驗證，使用者手動確認本輪修正可用並結案；不據此擴大為全站或所有播放器驗收通過。
 - ani-subs、完整追番管理與觀看進度雙向同步不是目前能力；站點能力宣告不代表已逐站實測。
-- 上游固定基線與 fork 身分見 [PROJECT.md](architecture/PROJECT.md)；逐次改動及驗證限制保留於 [WORK_LOG.md](history/WORK_LOG.md)。
+- 上游來源見 [README](../README.md)，工程架構見 [PROJECT.md](architecture/PROJECT.md)；逐次改動及驗證限制保留於 [WORK_LOG.md](history/WORK_LOG.md)。
 
-> **僅作開發基線，尚未配置獨立發佈。** App 仍使用上游的 `com.xjbeta.iina-plus` Bundle ID；W10 已移除 Sparkle、上游 feed／公鑰及檢查更新入口，禁止以自動更新替換 fork。正式發佈仍需自己的產品身分、資料遷移策略與簽署，不應與上游版本混用資料。詳見 [PROJECT.md](architecture/PROJECT.md)。
+> **僅作開發基線，尚未配置獨立發佈。** App 已使用 `com.LlS.iina-ani` Bundle ID；W10 已移除 Sparkle、上游 feed／公鑰及檢查更新入口，禁止以自動更新替換 fork。正式發佈仍需完成資料遷移策略、簽署與公證，不應與上游版本混用資料。詳見 [PROJECT.md](architecture/PROJECT.md)。
 
 ## 截圖識圖（trace.moe）
 
@@ -33,7 +33,7 @@ Skin 的匯入／預覽、個人覆寫、作者佈局、素材動效、匯出分
 - `AppDelegate` 擁有 `AppServices` 組裝根；服務以 concrete instance／小型 closure 注入，不全面 protocol 化。HTTP 路由與彈幕不再反向取得 `Processes.shared`；HTTP 啟動回傳實際綁定端點並傳遞錯誤，關閉可等待。
 - `VideoDecoder`／下載解析／Discovery 共用明確來源上下文；每個畫面獨立持有解析取消與搜尋分頁狀態。
 - `YouGetJSON` 保留媒體資料，`PlaybackEncoder` 負責既有播放器／外掛編碼；`AppStoragePaths` 提供原有持久目錄，下載任務不再依賴圖片快取目錄推導。
-- **2026-10-11 已恢復正式 App 端到端驗收。** 搜尋失效、重複點擊空白與產品流程改善依[修復計劃 §5.5](plans/FRONTEND_REFACTOR_PLAN.md#repair-plan)執行；計劃不代表修復完成，既有未簽收關卡保留。
+- **2026-10-11 已恢復正式 App 端到端驗收。** 功能修改須操作本次建置的正式 App；具體要求見[建置與驗證指引](development/validation.md)，既有未驗證範圍保留。
 
 ```sh
 # 預設亦為 --unit：播放編碼、來源 registry／本地身份、Range 邊界、偏好快照
@@ -56,7 +56,7 @@ bash Native/LayoutScript/security-regression.sh
 bash Tests/run-workspace-layout-script.sh
 ```
 
-上述離線入口不啟動 App 或播放器、不建立 HTTP listener、不進行真實下載。HTTP 生命週期驗證使用 `--integration`，正式 App 旅程依 §5.5／§8 執行；編譯與單元通過不等於整體驗收。W7.6 歷史證據見 [A.7.1](plans/FRONTEND_REFACTOR_PLAN.md#a-w76)，M1／M2 未簽收項仍保留。
+上述離線入口不啟動 App 或播放器、不建立 HTTP listener、不進行真實下載。HTTP 生命週期驗證使用 `--integration`，正式 App 旅程依[建置與驗證指引](development/validation.md)執行；編譯與單元通過不等於整體驗收。W7.6 歷史驗證與限制見[工作記錄](history/WORK_LOG.md)，M1／M2 未簽收項仍保留。
 
 ## 目錄
 
@@ -69,12 +69,9 @@ bash Tests/run-workspace-layout-script.sh
 | `Design/Icons/` | 40 個功能圖標的 SVG／透明 PNG、明暗預覽與素材對照；主要導航與功能按鈕已接入既有 Asset Catalog 的 `FunctionIcons/` |
 | `HuyaKit/` | 虎牙協議與串流代理套件，包含 `huyaproxy` CLI |
 | `InstallDeps.sh` | 下載外部 IINA 彈幕外掛並安裝網頁依賴 |
-| `docs/architecture/PROJECT.md` | fork 定位、重構範圍、驗證與發佈要求 |
-| `docs/plans/FRONTEND_REFACTOR_PLAN.md` | 下一階段 UI 方向、模塊契約、工作包與驗收標準 |
-| `docs/plans/FRONTEND_W0_BASELINE.md` | W0 已驗收基線、逐入口遷移位置、資料還原與實際驗證限制 |
-| `docs/research/ANIMEKO_TORRENT_REVIEW.md` | 固定版本 Torrent 研究與接入邊界 |
-| `docs/research/websitesforanime.md` | 來源接入結果與未完成驗證 |
+| `docs/architecture/PROJECT.md` | 工程分層、服務組裝、資料流與持久化 |
 | `Examples/Skins/README.md` | Skin 格式、打包與分享契約 |
+| `docs/development/` | 按任務分類的修改、驗證、資料與工作指引 |
 | `docs/history/WORK_LOG.md` | 每次完成工作的交付與驗證記錄 |
 | `LICENSE`、`LicenseForIcons.pdf` | 上游程式及圖示授權資料 |
 
@@ -213,12 +210,12 @@ IINA 彈幕外掛啟播使用每份解析結果的獨立會話網址，並明確
 - 改動站點或播放流程時，實際完成「輸入網址 → 選品質／集數 → 播放器載入」；開啟 URL scheme 不代表已播放。
 - 改動彈幕時，檢查連線、訊息、設定同步及視窗關閉後的資源釋放。
 - 改動 UI 時，建置並啟動此專案的 `IINA-ANI.app`，提供真實視窗證據；不要啟動 Animeko 或使用已刪除的舊工程產物。
-- 沒有配置 XCTest target；`bash Tests/run-work-library.sh` 運行真實 Core Data 模型／持久化／關聯回歸。完成 Debug 建置後，`bash Tests/run-w2-services.sh` 驗證偏好、Keychain／Bili／Douyu 帳號池及 Bangumi 單帳號生命週期、lease、guest pinning、重新授權／取消提交及 owned-cache；`bash Tests/run-w4-bangumi.sh` 驗證 Bangumi 分頁／快取／離線、關聯競態、OAuth 回調／state、續期與單帳號遷移；`bash Tests/run-w5-favorites.sh` 驗證收藏身份／分 P／離線修復、兩類收藏獨立操作、刪除隔離、真實舊 SQLite 的 WAL 備份／遷移／重啟／失敗回滾與還原。各 runner 使用隔離資料，不使用真實有效帳號。`WebFiles/Danmaku/test.htm` 是輔助頁，不是自動化套件。
+- 沒有配置 XCTest target；`bash Tests/run-work-library.sh` 運行真實 Core Data 模型／持久化／關聯回歸。完成 Debug 建置後，`bash Tests/run-w2-services.sh` 驗證偏好、Keychain／Bili／Douyu 帳號池及 Bangumi 單帳號生命週期、lease、guest pinning、重新授權／取消提交及 owned-cache；`bash Tests/run-w4-bangumi.sh` 驗證 Bangumi 分頁／快取／離線、關聯競態、OAuth 回調／state、續期與單帳號遷移；`bash Tests/run-w5-favorites.sh` 另驗證統一持久化初始化、退出前保存、新庫重開、最早期書籤的即時遷移讀取、損壞資料及無效路徑保護，並驗證收藏身份／分 P／離線修復、兩類收藏獨立操作、刪除隔離、真實舊 SQLite 的 WAL 備份／遷移／重啟／失敗回滾與還原。各 runner 使用隔離資料，不使用真實有效帳號。`WebFiles/Danmaku/test.htm` 是輔助頁，不是自動化套件。
 - `bash Tests/run-w6-downloads.sh` 連結生產下載服務，使用隔離 loopback HTTP 與 FFmpeg 生成的實際媒體驗證 Range／ETag 身份、取消、未知總量、跨 host Cookie 邊界、帳號 lease、暫停恢復、授權失效重解析、真實程序中斷恢復，以及 AES-128／fMP4／BYTERANGE／主清單音視訊。需要 `ffmpeg`／`ffprobe`。
-- `bash Tests/run-w7-usecases.sh` 驗證搜尋替換／底層取消、URL 與 Bangumi 隔離、獨立來源分頁、固定日期排期／跨日、持久新增集比較、Bangumi 趨勢排序及分區／過期快取故障隔離；真實站點、播放器與程序重開另見[重構文檔附錄 A.7](plans/FRONTEND_REFACTOR_PLAN.md#a-w7) 的歷史煙霧證據，不以 fixture 代替有效登入。
+- `bash Tests/run-w7-usecases.sh` 驗證搜尋替換／底層取消、URL 與 Bangumi 隔離、獨立來源分頁、固定日期排期／跨日、持久新增集比較、Bangumi 趨勢排序及分區／過期快取故障隔離；真實站點、播放器與程序重開另見[工作記錄](history/WORK_LOG.md)的歷史煙霧證據，不以 fixture 代替有效登入。
 - 問題回報請使用 [ISSUE_TEMPLATE.md](../.github/ISSUE_TEMPLATE.md)，先移除 Cookie、token、私人路徑及帶簽名的串流網址。
 
-- [R0 正式 App 基線](plans/FRONTEND_REFACTOR_PLAN.md#r0-baseline)與 [R1 搜尋修復](plans/FRONTEND_REFACTOR_PLAN.md#r1-search)證據：Bangumi URL 精確詳情路由、search 能力來源選單、取消／分頁／返回及完整局部錯誤，正式 App 搜尋、Bilibili 20→40 筆與普通 URL→mpv 解碼畫面。六站的遠端拒絕／格式錯誤仍如實回報；R2／R3 各有獨立驗收，不由 R1 代簽。
+- [工作記錄](history/WORK_LOG.md)保留 R0 正式 App 基線與 R1 搜尋修復證據：Bangumi URL 精確詳情路由、search 能力來源選單、取消／分頁／返回及完整局部錯誤，正式 App 搜尋、Bilibili 20→40 筆與普通 URL→mpv 解碼畫面。六站的遠端拒絕／格式錯誤仍如實回報；R2／R3 各有獨立驗收，不由 R1 代簽。
 
 ### 搜尋與日常更新服務
 

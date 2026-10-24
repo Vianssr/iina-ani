@@ -31,11 +31,19 @@ final class FavoriteLibrary {
     private let normalizer: (String) throws -> SourceItemRef
     private let works: WorkLibrary
 
-    init(container: NSPersistentContainer,
+    /// Scope UI change observation to this library rather than every Core Data stack.
+    var changeNotificationSource: AnyObject { context }
+
+    init(context: NSManagedObjectContext, works: WorkLibrary,
          normalizer: @escaping (String) throws -> SourceItemRef = SourceRegistry.shared.favoriteItem(for:)) {
-        context = container.viewContext
+        self.context = context
         self.normalizer = normalizer
-        works = WorkLibrary(container: container)
+        self.works = works
+    }
+
+    convenience init(container: NSPersistentContainer,
+                     normalizer: @escaping (String) throws -> SourceItemRef = SourceRegistry.shared.favoriteItem(for:)) {
+        self.init(context: container.viewContext, works: WorkLibrary(context: container.viewContext), normalizer: normalizer)
     }
 
     @discardableResult

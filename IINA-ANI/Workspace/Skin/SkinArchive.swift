@@ -342,7 +342,7 @@ public enum SkinArchive {
             || data.starts(with: [0x28, 0xb5, 0x2f, 0xfd])
             || (data.count >= 262 && data[257..<262].elementsEqual([0x75, 0x73, 0x74, 0x61, 0x72]))
         return [
-            "zip", "iinaskin", "jar", "apk", "7z", "rar", "tar", "gz", "tgz", "bz2", "tbz", "tbz2",
+            "zip", "aniskin", "iinaskin", "jar", "apk", "7z", "rar", "tar", "gz", "tgz", "bz2", "tbz", "tbz2",
             "xz", "txz", "zst", "lz4", "z",
         ].contains(ext) || signatures
     }
@@ -412,7 +412,7 @@ public enum SkinArchive {
         append32(centralOffset, to: &archive)
         append16(0, to: &archive)
         let temporary = url.deletingLastPathComponent().appendingPathComponent(
-            ".\(UUID().uuidString).iinaskin-tmp")
+            ".\(UUID().uuidString).aniskin-tmp")
         defer { try? FileManager.default.removeItem(at: temporary) }
         try archive.write(to: temporary, options: .atomic)
         do { try FileManager.default.moveItem(at: temporary, to: url) } catch {

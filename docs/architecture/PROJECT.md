@@ -51,7 +51,7 @@ flowchart TD
 
 ## 應用組裝與生命週期
 
-`AppDelegate` 負責應用啟動、選單、工作區入口、Core Data container 與關閉流程，並持有 `AppServices`、作品庫和收藏庫。
+`AppDelegate` 負責應用啟動、選單、工作區入口與關閉流程，持有 `AppServices` 和 `LibraryPersistence`；作品庫、收藏庫由後者統一組裝，書籤 DataManager 注入其共用 context 與收藏庫。
 
 `AppServices` 是服務組裝根，注入 `Preferences`、`SourceRegistry`、`SiteAccounts` 與儲存路徑，組裝 `VideoDecoder`、`Processes`、`HttpServer` 和 `TorrentStreamingService`，按需建立 `DownloadService` 與 `PlaybackHistoryStore`。內建 JSPlayer 視窗也由此持有。
 
@@ -118,6 +118,10 @@ Torrent 搜尋由 `TorrentSearchService` 讀取 RSS 配置。匯入與檔案選�
 
 ## 資料模型與儲存
 
+`LibraryPersistence` 封裝 Core Data container、載入錯誤、遷移前備份、書籤排序／收藏／作品分類遷移及退出前保存。儲存 URL 由 `AppStoragePaths.libraryStoreURL` 決定；測試可注入獨立 URL 與模型，初始化失敗不提供部分可用的資料庫，也不退回空白或暫存資料庫。
+
+`WorkLibrary` 與 `FavoriteLibrary` 注入同一個 main-queue context，收藏庫重用同一個作品庫；收藏面板的變更通知僅監聽所屬 context。業務方法仍負責各自保存／回滾，這次未改為全域延遲提交。
+
 `WorkLibrary` 管理 `Work`、`Episode`、`WorkSourceLink` 與 `EpisodeSourceMapping`：作品包含集數，來源連結指向站點作品，集數映射連接本機集數與可播放選擇。`FavoriteLibrary` 管理作品收藏與連結收藏。
 
 Core Data 模型位於 `Core Data/DataModel.xcdatamodeld`，目前模型為 `Library v0.5`，包含 `Bookmark`、`WorkRecord`、`EpisodeRecord`、`WorkSourceLinkRecord` 與 `WorkFavoriteRecord`；舊版本模型供遷移使用。
@@ -134,7 +138,7 @@ Core Data 模型位於 `Core Data/DataModel.xcdatamodeld`，目前模型為 `Lib
 | 下載任務 | `Downloads/tasks-v1.json` |
 | 下載暫存與預設完成目錄 | `Downloads/Temporary/`、`Downloads/Completed/` |
 
-上述 JSON、Skin 與下載路徑相對於應用的 Application Support 根目錄；`AppStoragePaths` 依 Bundle ID 建立該根目錄，目前為 `com.xjbeta.iina-plus`。
+上述 JSON、Skin 與下載路徑相對於應用的 Application Support 根目錄；`AppStoragePaths` 依 Bundle ID 建立該根目錄，目前為 `com.LlS.iina-ani`。
 
 ## 套件與資源組成
 
@@ -143,3 +147,5 @@ Swift 依賴由 Xcode 的 Swift Package Manager 整合，`HuyaKit/Package.swift`
 `WebFiles/package.json` 管理網頁播放器與彈幕所需的 JavaScript 資源；`InstallDeps.sh` 準備這些資源與外部 IINA 彈幕外掛。圖像位於 `Assets/`，來源規則位於 `Sources/`，本地化字串由字串目錄及各網頁／Storyboard 資源提供。
 
 `Config/App.xcconfig` 載入本機配置，將 Bangumi OAuth 應用設定注入 Info.plist。Xcode 建置階段同時整合 Torrent 原生核心與 LayoutScript helper。
+
+Bundle ID 變更未包含自動資料遷移：舊 Bundle ID 目錄中的 Layout、Skin、播放歷史與下載任務不會自動轉入新目錄；UserDefaults 與帳號 Keychain service 亦隨 Bundle ID 改變。Core Data 仍使用上述 `Application Support/IINA+`，因此不能視為已與上游完整隔離。

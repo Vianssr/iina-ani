@@ -24,7 +24,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor private lazy var mainMenu = MainMenu(delegate: self)
 
     @MainActor func makeDataManager() -> DataManager {
-        DataManager(context: persistentContainer.viewContext, favorites: favoriteLibrary, decoder: services.decoder)
+        DataManager(context: persistence.viewContext, favorites: persistence.favorites, decoder: services.decoder)
     }
     override init() {
         let cacheBase = (try? FileManager.default.url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)) ?? FileManager.default.temporaryDirectory
@@ -82,9 +82,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Log("App Version \(version) (Build \(build))")
         Log("macOS " + ProcessInfo().operatingSystemVersionString)
 
-        persistentContainer.persistentStoreDescriptions.forEach {
-            Log("CoreData Path: \($0.url?.path ?? "none")")
-        }
+        _ = persistence // Finish opening and migrating the library before presenting UI.
         
         initImageCache()
         mainMenu.install()
@@ -115,7 +113,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func application(_ sender: NSApplication, openFile filename: String) -> Bool {
         let url = URL(fileURLWithPath: filename)
         switch url.pathExtension.lowercased() {
-        case "iinaskin": workspaceApplication.openSkinPackage(at: url)
+        case "aniskin": workspaceApplication.openSkinPackage(at: url)
         case "torrent": workspaceApplication.openLink(url.absoluteString)
         default: return false
         }
@@ -180,84 +178,28 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         try? FileManager.default.removeItem(at: logDirURL)
     }
     
-    // MARK: - Core Data stack
-    
-    @MainActor lazy var persistentContainer: NSPersistentContainer = {
-        let container = NSPersistentContainer(name: "DataModel")
-        // Product branding must not redirect existing libraries to an empty store.
-        let support = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let storeURL = support.appendingPathComponent("IINA+", isDirectory: true)
-            .appendingPathComponent("DataModel.sqlite")
-        container.persistentStoreDescriptions = [NSPersistentStoreDescription(url: storeURL)]
-        let sourceModel = sourceModelForStore(container: container)
-        let shouldInitializeBookmarkOrder = sourceModel.map(BookmarkOrderMigration.sourceModelLacksOrder) ?? false
-        do {
-            try FileManager.default.createDirectory(at: storeURL.deletingLastPathComponent(),
-                                                    withIntermediateDirectories: true)
-            for description in container.persistentStoreDescriptions {
-                if let url = description.url, description.type == NSSQLiteStoreType {
-                    _ = try BookmarkFavoritesMigration.prepareBackup(storeURL: url)
-                    _ = try WorkClassificationMigration.prepareBackup(storeURL: url)
-                }
-            }
-        } catch {
+    @MainActor private lazy var persistence: LibraryPersistence = {
+        do { return try LibraryPersistence.production() }
+        catch {
             NSApp.presentError(error)
-            fatalError("Library backup failed; the original store has not been opened for migration.")
+            fatalError("Library initialization failed; existing stores and migration backups are retained.")
         }
-        container.persistentStoreDescriptions.forEach { description in
-            description.shouldAddStoreAsynchronously = false
-            description.shouldMigrateStoreAutomatically = true
-            description.shouldInferMappingModelAutomatically = true
-        }
-
-        container.loadPersistentStores { _, error in
-            if let error = error {
-                fatalError("Unresolved error \(error)")
-            }
-            container.viewContext.automaticallyMergesChangesFromParent = true
-            container.viewContext.mergePolicy = NSMergePolicy.mergeByPropertyObjectTrump
-            if shouldInitializeBookmarkOrder, let sourceModel {
-                // Synchronous startup runs on the main actor, as does viewContext.
-                do {
-                    try BookmarkOrderMigration.initializeOrderIfMissing(in: container.viewContext, sourceModel: sourceModel)
-                } catch {
-                    NSApp.presentError(error)
-                    fatalError("Bookmark ordering migration failed; restore the pre-W5 backup before retrying.")
-                }
-            }
-            do {
-                try BookmarkFavoritesMigration.migrate(container: container)
-            } catch {
-                NSApp.presentError(error)
-                fatalError("Favorites migration failed; the pre-W5 backup is retained.")
-            }
-            do {
-                try WorkClassificationMigration.migrate(container: container)
-            } catch {
-                NSApp.presentError(error)
-                fatalError("Work classification migration failed; the pre-R3 backup is retained.")
-            }
-        }
-        return container
     }()
 
-    @MainActor lazy var workLibrary = WorkLibrary(container: persistentContainer)
-    @MainActor lazy var favoriteLibrary = FavoriteLibrary(container: persistentContainer)
-    
+    @MainActor var workLibrary: WorkLibrary { persistence.works }
+    @MainActor var favoriteLibrary: FavoriteLibrary { persistence.favorites }
+
     @MainActor func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        let context = persistentContainer.viewContext
-        if context.hasChanges {
-            do {
-                try context.save()
-            } catch {
-                if sender.presentError(error as NSError) { return .terminateCancel }
-                let alert = NSAlert()
-                alert.messageText = NSLocalizedString("Could not save changes while quitting. Quit anyway?", comment: "Quit without saves error question message")
-                alert.informativeText = NSLocalizedString("Quitting now will lose any changes you have made since the last successful save", comment: "Quit without saves error question info")
-                alert.addButton(withTitle: NSLocalizedString("Quit anyway", comment: "Quit anyway button title"))
-                alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Cancel button title"))
-                if alert.runModal() == .alertSecondButtonReturn { return .terminateCancel }
-            }
+        do {
+            try persistence.saveIfNeeded()
+        } catch {
+            if sender.presentError(error as NSError) { return .terminateCancel }
+            let alert = NSAlert()
+            alert.messageText = NSLocalizedString("Could not save changes while quitting. Quit anyway?", comment: "Quit without saves error question message")
+            alert.informativeText = NSLocalizedString("Quitting now will lose any changes you have made since the last successful save", comment: "Quit without saves error question info")
+            alert.addButton(withTitle: NSLocalizedString("Quit anyway", comment: "Quit anyway button title"))
+            alert.addButton(withTitle: NSLocalizedString("Cancel", comment: "Cancel button title"))
+            if alert.runModal() == .alertSecondButtonReturn { return .terminateCancel }
         }
         Task { @MainActor in
             isTerminating = true
@@ -270,12 +212,4 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     
-    private func sourceModelForStore(container: NSPersistentContainer) -> NSManagedObjectModel? {
-        guard let storeURL = container.persistentStoreDescriptions.first?.url,
-              FileManager.default.fileExists(atPath: storeURL.path),
-              let metadata = try? NSPersistentStoreCoordinator.metadataForPersistentStore(ofType: NSSQLiteStoreType, at: storeURL) else {
-            return nil
-        }
-        return NSManagedObjectModel.mergedModel(from: [Bundle.main], forStoreMetadata: metadata)
-    }
 }
