@@ -34262,25 +34262,25 @@
         }
       }
     },
-    "連按兩下查看詳情" : {
+    "按一下查看詳情" : {
       "extractionState" : "manual",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Double-click for details"
+            "value" : "Click for details"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "双击查看详情"
+            "value" : "单击查看详情"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "連按兩下查看詳情"
+            "value" : "按一下查看詳情"
           }
         }
       }

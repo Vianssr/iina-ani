@@ -1374,3 +1374,15 @@
 - App 與 LayoutScript helper 採 ad-hoc 簽署，沒有 Developer ID 簽署／Apple 公證。核對 Mach-O 架構及動態依賴，執行 codesign 深層嚴格驗證與 ZIP 完整性檢查。壓縮包附 GPL、圖示授權、第三方授權、安裝說明及建置資訊。
 - 上傳 `IINA-ANI-0.10.1-macOS-arm64.zip`（17,607,665 bytes）與 `SHA256SUMS.txt`，發布前核對 GitHub 附件狀態、大小及伺服器 SHA-256；ZIP 為 `f084028c217d6aa2bc6baebff32b7c754112a8b7052bd1a585032fc138132b05`。發布後確認 isDraft=false、isPrerelease=true。
 - Release 建置成功；來源的 Debug／Skin／作品庫／收藏與遷移回歸沿用本輪先前通過結果。未執行 Release 正式 UI 全鏈、Intel 或最低 macOS 實機驗收。發佈說明已揭露未公證、無自動更新、Core Data 舊目錄仍共用及其他舊 Bundle ID 資料未自動遷移。
+
+## 2026-10-26 — 收藏懸浮與 Discover 單擊互動
+
+- 作品／連結收藏列加入 160 ms 背景與邊框色漸變，沿用 Skin 狀態並遵循系統減少動態效果；移除原生列背景覆蓋，讓整列呈現懸浮樣式。僅鍵盤導覽選取顯示常亮框選，滑鼠移入／點擊與失去焦點會退出鍵盤呈現模式；選取資料仍保留供編輯與排序使用。
+- Discover 番劇卡片改為單擊開啟，延遲原生滑鼠事件以避免 collection view 先行消耗單擊；三語提示同步改為單擊。影片獨立頁保留雙擊，收藏列原有雙擊／Return 開啟未變更。
+- 驗證：arm64 Debug 完整 App 建置成功，啟動本次產物並操作正式窗口；確認 Trending 單擊進入作品詳情、作品與連結懸浮高亮、滑鼠點選後移出無常亮框、方向鍵選取出現框線，以及重新移入後框線清除。截圖位於 `.build/discover-single-click.png`、`.build/favorites-hover.png`、`.build/favorites-mouse-selection.png`、`.build/favorites-keyboard.png`、`.build/favorites-link-hover.png`。
+- 限制：未重驗播放、遠端收藏同步、拖曳排序、全部自訂 Skin、系統減少動態效果設定、最低 macOS 或 Intel；本輪未修改收藏內容或清除使用者資料。臨時游標驅動程式於驗證後移除。
+
+## 2026-10-26 — 提交現有工作區變更
+
+- 依要求將現有七個檔案變更整理為同一提交，包含收藏列互動、Discover 單擊、在地化、Skin、Hardened Runtime 工程設定與文件。
+- 本次核對 Git 工作區與變更摘要；功能驗證沿用上節既有記錄，未重新執行建置或 UI 驗收。

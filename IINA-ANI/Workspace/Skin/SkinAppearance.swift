@@ -252,7 +252,8 @@ extension SkinAppearanceError: LocalizedError {
             Self.color(values["borderColor"]) ?? Self.defaultBorder(for: effectiveColorScheme)
         let spacing = Self.number(values["spacing"]) ?? (slot == "toolbar" ? 12 : 8)
         let radius = Self.number(values["radius"]) ?? defaults.radius
-        let borderWidth = Self.number(values["borderWidth"]) ?? 0
+        let borderWidth = Self.number(values["borderWidth"])
+            ?? ((slot == "workRow" || slot == "linkRow") && state == .selected ? 2 : 0)
         let size = Self.number(values["fontSize"]) ?? defaults.fontSize
         let defaultFont = NSFont.systemFont(ofSize: size, weight: defaults.fontWeight)
         let font = Self.string(values["fontFamily"]).flatMap { NSFont(name: $0, size: size) }
@@ -388,6 +389,13 @@ extension SkinAppearanceError: LocalizedError {
         case "workCard", "row":
             style.radius = 12
             style.fontWeight = .medium
+        case "workRow", "linkRow":
+            style.radius = 10
+            if state == .selected {
+                style.background = paletteColor(dark ? 0x3B3226 : 0xF1E2C6)
+            } else if state == .hover {
+                style.background = paletteColor(dark ? 0x293341 : 0xE5E3DC)
+            }
         case "search":
             style.background = paletteColor(dark ? 0x242F3D : 0xFFFFFF)
             style.radius = 10

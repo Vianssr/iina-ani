@@ -358,9 +358,10 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             if kind == .continuing {
                 cards.contextMenu = { [weak self] indexPath in self?.historyMenu(at: indexPath) }
             }
-            let doubleClick = NSClickGestureRecognizer(target: self, action: #selector(activateDiscoveryCard(_:)))
-            doubleClick.numberOfClicksRequired = kind == .continuing ? 1 : 2
-            cards.addGestureRecognizer(doubleClick)
+            let click = NSClickGestureRecognizer(target: self, action: #selector(activateDiscoveryCard(_:)))
+            click.numberOfClicksRequired = isVideoGrid ? 2 : 1
+            click.delaysPrimaryMouseButtonEvents = true
+            cards.addGestureRecognizer(click)
             cards.setAccessibilityLabel(heading.stringValue + (isHorizontalDiscovery ? String(localized: " · 水平內容") : String(localized: " · 垂直內容")))
             scroll.setAccessibilityLabel(heading.stringValue + (kind == .feed || isVideoGrid ? String(localized: " · 向下捲動載入更多") : isHorizontalDiscovery ? String(localized: " · 水平捲動") : String(localized: " · 全週垂直捲動")))
             scroll.documentView = cards
@@ -2467,7 +2468,7 @@ private final class WorkspaceDiscoveryCardView: NSView {
     private let overlay = NSView()
     private let filter = NSVisualEffectView()
     private let titleLabel = NSTextField(wrappingLabelWithString: "")
-    private let detailHint = NSTextField(labelWithString: String(localized: "連按兩下查看詳情"))
+    private let detailHint = NSTextField(labelWithString: String(localized: "按一下查看詳情"))
     private let captionLabel = NSTextField(labelWithString: "")
     private var captionHeight: NSLayoutConstraint!
     private var tracking: NSTrackingArea?

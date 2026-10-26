@@ -4,10 +4,102 @@ import CoreData
 @MainActor
 private final class FavoriteTableView: NSTableView {
     var activate: (() -> Void)?
+    private(set) var keyboardNavigation = false
+
+    func endKeyboardNavigation() {
+        keyboardNavigation = false
+        updateRowPresentation()
+    }
+
+    private func updateRowPresentation() {
+        enumerateAvailableRowViews { row, _ in
+            (row as? FavoriteRowView)?.updatePresentation()
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        endKeyboardNavigation()
+        super.mouseDown(with: event)
+    }
+
+    override func resignFirstResponder() -> Bool {
+        let result = super.resignFirstResponder()
+        if result { endKeyboardNavigation() }
+        return result
+    }
 
     override func keyDown(with event: NSEvent) {
+        if [123, 124, 125, 126, 115, 119, 116, 121].contains(event.keyCode) {
+            keyboardNavigation = true
+        }
         if event.keyCode == 36 || event.keyCode == 76 { activate?() }
         else { super.keyDown(with: event) }
+        updateRowPresentation()
+    }
+}
+
+@MainActor
+private final class FavoriteRowView: NSTableRowView {
+    weak var favoriteTable: FavoriteTableView?
+    private var tracking: NSTrackingArea?
+    private var hovered = false
+
+    override var isSelected: Bool { didSet { updatePresentation() } }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        hovered = window.map {
+            $0.isKeyWindow && visibleRect.contains(convert($0.convertPoint(fromScreen: NSEvent.mouseLocation), from: nil))
+        } ?? false
+        var options: NSTrackingArea.Options = [.activeInKeyWindow, .mouseEnteredAndExited, .inVisibleRect]
+        if hovered { options.insert(.assumeInside) }
+        let area = NSTrackingArea(rect: .zero, options: options, owner: self)
+        addTrackingArea(area)
+        tracking = area
+        updatePresentation()
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        hovered = true
+        favoriteTable?.endKeyboardNavigation()
+        updatePresentation()
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        hovered = false
+        updatePresentation()
+    }
+
+    override func layout() {
+        super.layout()
+        workspaceSkinBinding?.refresh()
+    }
+
+    // Selection remains available to editing and drag operations; only keyboard
+    // navigation receives persistent selection styling.
+    override func drawSelection(in dirtyRect: NSRect) {}
+    override func drawBackground(in dirtyRect: NSRect) {}
+
+    func updatePresentation() {
+        let selected = isSelected && favoriteTable?.keyboardNavigation == true
+        let state: SkinControlState = selected ? .selected : hovered ? .hover : .normal
+        guard let binding = workspaceSkinBinding, binding.state != state else { return }
+        let previousBackground = layer?.presentation()?.backgroundColor ?? layer?.backgroundColor
+        let previousBorder = layer?.presentation()?.borderColor ?? layer?.borderColor
+        binding.state = state
+        guard !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion, let layer else { return }
+        for (key, previous, current) in [
+            ("backgroundColor", previousBackground, layer.backgroundColor),
+            ("borderColor", previousBorder, layer.borderColor),
+        ] {
+            let animation = CABasicAnimation(keyPath: key)
+            animation.fromValue = previous
+            animation.toValue = current
+            animation.duration = 0.16
+            animation.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            layer.add(animation, forKey: key)
+        }
     }
 }
 
@@ -725,9 +817,11 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
     func numberOfRows(in tableView: NSTableView) -> Int { rows.count }
 
     func tableView(_ tableView: NSTableView, rowViewForRow row: Int) -> NSTableRowView? {
-        let view = WorkspaceSkinRowView()
+        let view = FavoriteRowView()
+        view.favoriteTable = self.tableView
         view.bindSkin(
             skinAppearance, slot: kind == .works ? "workRow" : "linkRow", componentID: componentID)
+        view.updatePresentation()
         return view
     }
 

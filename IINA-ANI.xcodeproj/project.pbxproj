@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		CF2410260000000000000002 /* LibraryPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2410260000000000000001 /* LibraryPersistence.swift */; };
 		01010125211DBC27002F0F7F /* StringExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01010124211DBC27002F0F7F /* StringExtension.swift */; };
 		0102924627ACF8AC00CB74B5 /* ControllersVisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0102924527ACF8AB00CB74B5 /* ControllersVisualEffectView.swift */; };
 		0106179D2AF34EFF005C7877 /* JSPlayerURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0106179C2AF34EFF005C7877 /* JSPlayerURL.swift */; };
@@ -200,6 +199,7 @@
 		A1B2C3D4E5F600000000000031 /* LoginWebView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000000032 /* LoginWebView.swift */; };
 		A1B2C3D4E5F600000000000033 /* DouyuLoginSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000000034 /* DouyuLoginSheetView.swift */; };
 		A1B2C3D4E5F600000000000035 /* LoginSheetContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F600000000000036 /* LoginSheetContainer.swift */; };
+		CF2410260000000000000002 /* LibraryPersistence.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF2410260000000000000001 /* LibraryPersistence.swift */; };
 		DA2210010000000000000002 /* WorkspaceDetailTransition.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2210010000000000000001 /* WorkspaceDetailTransition.swift */; };
 		DA2410260000000000000002 /* TraceMoeSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2410260000000000000001 /* TraceMoeSearchService.swift */; };
 		DA2410260000000000000004 /* ImageSearchWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA2410260000000000000003 /* ImageSearchWindowController.swift */; };
@@ -251,7 +251,6 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		CF2410260000000000000001 /* LibraryPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPersistence.swift; sourceTree = "<group>"; };
 		01010124211DBC27002F0F7F /* StringExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtension.swift; sourceTree = "<group>"; };
 		0102924527ACF8AB00CB74B5 /* ControllersVisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllersVisualEffectView.swift; sourceTree = "<group>"; };
 		0106179C2AF34EFF005C7877 /* JSPlayerURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSPlayerURL.swift; sourceTree = "<group>"; };
@@ -441,6 +440,7 @@
 		A1B2C3D4E5F600000000000036 /* LoginSheetContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginSheetContainer.swift; sourceTree = "<group>"; };
 		A7C40A112F60202600100001 /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/OpenFilesWindow.storyboard; sourceTree = "<group>"; };
 		A7C40A112F60202600100002 /* mul */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; name = mul; path = mul.lproj/OpenFilesWindow.xcstrings; sourceTree = "<group>"; };
+		CF2410260000000000000001 /* LibraryPersistence.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibraryPersistence.swift; sourceTree = "<group>"; };
 		DA2210010000000000000001 /* WorkspaceDetailTransition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceDetailTransition.swift; sourceTree = "<group>"; };
 		DA2410260000000000000001 /* TraceMoeSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TraceMoeSearchService.swift; sourceTree = "<group>"; };
 		DA2410260000000000000003 /* ImageSearchWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageSearchWindowController.swift; sourceTree = "<group>"; };
@@ -1518,6 +1518,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				GCC_OPTIMIZATION_LEVEL = 0;
@@ -1564,6 +1565,7 @@
 				COMBINE_HIDPI_IMAGES = YES;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				FRAMEWORK_SEARCH_PATHS = "$(inherited)";
 				INFOPLIST_FILE = "IINA-ANI/Info.plist";
