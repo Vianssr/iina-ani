@@ -11,8 +11,12 @@ if [[ ! -f "$APP/Contents/MacOS/IINA-ANI.debug.dylib" ]]; then
 fi
 TEMP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/iina-dependency-regression.XXXXXX")"
 trap 'rm -rf "$TEMP_DIR"' EXIT
-mkdir -p "$TEMP_DIR/home"
+mkdir -p "$TEMP_DIR/home" "$TEMP_DIR/mpv"
 export CFFIXED_USER_HOME="$TEMP_DIR/home"
+# AppServices launches a second, real mpv process without the initial fixture's
+# --vo/--ao flags. Keep that process independent of user config and display state.
+printf 'vo=null\nao=null\n' > "$TEMP_DIR/mpv/mpv.conf"
+export MPV_HOME="$TEMP_DIR/mpv"
 FLAGS=(-I "$PRODUCTS" -F "$PRODUCTS" -I "$ROOT/Native/include"
     -I "$PACKAGES/SDWebImage/SDWebImage/include"
     -I "$PACKAGES/swift-atomics/Sources/_AtomicsShims/include"

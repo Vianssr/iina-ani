@@ -92,7 +92,9 @@ Layout 編排經驗證與交易保存。Skin 套件由封裝與儲存層管理�
 
 `BrowseSearchService` 整合 Bangumi 搜尋、來源搜尋與網址解析；`DiscoveryService` 聚合日常推薦及放送資訊。`BangumiService` 提供作品、集數、人物、關聯與評論資料，`BangumiWorkSync` 將作品資訊接入本機作品庫。
 
-`SourceRegistry` 保存來源描述與能力；`SourceSubscriptionService` 處理訂閱配置，來源搜尋使用已套用的規則。`AnimeSourceService` 結合作品、集數與來源映射尋找候選。
+`SourceRegistry` 保存來源描述與能力，並提供完整 JSON 的預覽／原子匯入／同 ID 替換；使用者配置覆蓋隨包配置，匯入後停用，清單按 ID 排序。`SourceSubscriptionService` 另外處理搜尋規則訂閱，不冒充完整來源配置。`AnimeSourceService` 結合作品、集數與來源映射尋找候選；已保存的精確映射優先，失效時阻止自動換站。
+
+M6 的兩端搜尋訂閱共用 `SourceSubscriptionRules` 的已審核 host／selector 規則。iOS `MobileSourceSubscription` 將 CSS1 搜尋更新做相容性核對、探測、差異預覽與原子 overlay 保存，不改完整配置的播放規則或來源啟用狀態。`MobileSourceDiscovery` 只在名稱、年份、類型、明確季度及唯一正篇集數證據完整時自動交接；候選不完整／歧義及既有失效映射都阻止自動播放。
 
 Bilibili 動態及 YouTube 瀏覽使用各自的服務。`TraceMoeSearchService` 接收準備完成的圖片並返回辨識候選，結果由窗口送往作品搜尋、AniList 或預覽入口。
 
@@ -102,6 +104,12 @@ Bilibili 動態及 YouTube 瀏覽使用各自的服務。`TraceMoeSearchService`
 
 內建 JSPlayer 透過 WebKit 載入網頁播放器。播放進度回傳至 `PlaybackHistoryStore`；續看由 `AppServices.resumePlayback` 依保存的選擇重新取得媒體並定位播放時間。
 
+M0 的純值契約由兩個 target 共用：`SourceSelection.swift` 的 `PlaybackWorkIdentity`／`PlaybackEpisodeIdentity`／`PlaybackContext` 保留領域與來源身份；`SourceConfiguration` 計算內容 fingerprint，並以宣告、解析器與平台能力的交集產生有效能力。`PlaybackContract.swift` 定義 session／load、分類錯誤與事件狀態；桌面 `PlayerProgressSession` 和 iOS `MPVEngine` 只把實際後端事實轉入共用狀態，解析 URL 或 seek UI 預測不建立觀看進度。M2 的 `ConfirmedSourceMapping` 保存完整上下文與確認時間，配置型頁面只保留宣告的身份 query，不保存媒體 URL 或帳號憑證。兩端都在成功解析後重新核對來源／配置／集數，先提交映射再交接播放；重用時刷新原目錄並重新解析原選擇，不以首集、其他線路或其他來源補缺。M3 在 iOS `SourcePicker → MobileSourceFlow → PlaybackSession` 的完整上下文上接入 `MobilePlaybackHistory`；續播重新解析原選擇，worker 在實際載入後 seek，經命令成功、seek／restart 事件與實際時間確認後才解除歷史寫入保護。桌面歷史沿用原主鍵，增加配置上下文及本地書籤；兩端以 recorder 所有權與刪除版本阻擋舊事件。
+
+M4 的 `MobileSourceContinuation` 將原來源 client 與持久配置權威帶入 iOS 播放工作階段；手動／自然 EOF 下一集都重新取得同分組目錄及原線路／品質，不沿用舊媒體 URL，不自動寫入未確認的 Bangumi 集數映射。session／load／請求修訂及前景狀態共同限制一次性交接。桌面 `Processes` 依播放器 session 管理接續，`PlayerProgressSession` 保留 EOF socket，關閉／換片／重播可以撤銷尚未交接的結果；重播建立新 recorder lease，完季清理另驗證原 owner。iOS 字幕／彈幕附件按當次 `PlaybackEpisode.id` 保存，切集先清空再恢復目前附件，字幕僅在後端匯入成功後登記；檔案授權持有到核心銷毀。彈幕偏好獨立存於 UserDefaults，時間軸只使用實際媒體時間。
+
+M6 的共用完整配置升至 v2 才可選 `danmaku`，宣告固定 `bilibili-xml` provider 與精確播放頁／aid／cid，參與配置 fingerprint；舊 v1 繼續接受原欄位，不接受新彈幕欄位。iOS `MobileBilibiliDanmakuProvider` 以訪客請求核對公開影片 metadata 與 XML chatid，拒絕 redirect、跨集、超限與不支援格式；`MobileAutomaticDanmaku` 以播放集數、load、請求版本及持久來源權威隔離結果。手動附件優先，關閉／取消／切集撤銷舊結果；桌面仍使用原生站點／播放器彈幕路徑，不把配置宣告誤當桌面新後端。
+
 直播彈幕轉為 `DanmakuEvent`，經本機 WebSocket 傳往 IINA 彈幕外掛，或經 JavaScript bridge 送入 JSPlayer；點播彈幕使用 XML 檔案。虎牙串流由 `HuyaKit` 解析 `.slice`，經本機 FLV 代理提供給播放器。
 
 ### 帳號與請求上下文
@@ -109,6 +117,8 @@ Bilibili 動態及 YouTube 瀏覽使用各自的服務。`TraceMoeSearchService`
 `SiteAccounts` 管理帳號紀錄、預設帳號、驗證狀態及使用 lease。帳號 metadata 存於 UserDefaults，Cookies 與 OAuth 憑證存於 Keychain。
 
 來源操作透過 `withSource`／`withAccount` 建立 `AccountHTTP.Context`，將來源身份、帳號與請求憑證傳入非同步操作。`BangumiOAuth` 處理 OAuth，`YouTubeBrowserCookies` 與 `YouTubeCookieImport` 處理瀏覽器及檔案的 Cookies 匯入。
+
+iOS `MobileBangumiAccount` 使用官方 personal access token 與 `/v0/me` 驗證，不內嵌 OAuth client secret；`MobileBangumiKeychain` 以 device-only、解鎖時可用的項目保存權杖。分類寫入只送 `type`，沒有進度、評分、評論或 DELETE。每筆待同步變更持久保存數值 user ID 與本機修訂，無 owner 的離線變更需明確交給目前帳號；帳號 epoch／憑證版本／修訂阻止登出、切換、重入及延遲回應覆寫。遠端匯入先取完所有分頁，再以 Bangumi ID 去重合併；保留本機收藏與待同步修改。桌面 `WorkLibrary` 同樣保存 pending owner，`SiteAccounts` 阻止同一帳號紀錄重新授權成另一位使用者。
 
 ### 下載與 Torrent
 
@@ -122,7 +132,13 @@ Torrent 搜尋由 `TorrentSearchService` 讀取 RSS 配置。匯入與檔案選�
 
 `WorkLibrary` 與 `FavoriteLibrary` 注入同一個 main-queue context，收藏庫重用同一個作品庫；收藏面板的變更通知僅監聽所屬 context。業務方法仍負責各自保存／回滾，這次未改為全域延遲提交。
 
-`WorkLibrary` 管理 `Work`、`Episode`、`WorkSourceLink` 與 `EpisodeSourceMapping`：作品包含集數，來源連結指向站點作品，集數映射連接本機集數與可播放選擇。`FavoriteLibrary` 管理作品收藏與連結收藏。
+`WorkLibrary` 管理 `Work`、`Episode`、`WorkSourceLink` 與 `EpisodeSourceMapping`：作品包含集數，來源連結指向站點作品，集數映射連接本機集數與可播放選擇。M2 在既有映射 payload 增加可選確認上下文與目錄分組，不更換 Core Data 主鍵；舊配置型映射須重新確認。`setPreferredMapping` 在同一次保存中替換該集的首選來源映射，保留其他集數與來源連結，失敗則回滾。`FavoriteLibrary` 管理作品收藏與連結收藏。
+
+兩端共用 `Shared/CollectionStatus.swift` 的五種 `BangumiCollectionStatus` 與 `CollectionStatusFilter`；nil 是未分類，收藏資格獨立，讀取／加入收藏不推測分類。桌面仍用 Core Data，明確清除分類的本機修訂也受舊遠端回應保護，但不提交遠端刪除。
+
+iOS `MobileLibrary` 以 `Application Support/ANI/library.json` v3 保存版本化收藏快照、穩定 `bangumi:<subjectID>` 作品分類、精確來源映射／失效狀態及帳號綁定的待同步修訂。舊 `favorites.json`、v1／v2 作品庫先各自備份，再經驗證暫存檔原子啟用；升級不推測遠端同步意圖。未知版本／壞檔禁止回退覆寫，保存前核對磁碟權威內容，成功後才發布可觀察狀態。映射獨立於收藏及資訊快取，移除收藏不刪映射，明確重新選源才移除該集映射。`CatalogCache/` 的基本資訊／集數快取有獨立時間戳與失敗狀態，不是收藏權威資料；`MobileCoverCache` 使用有容量上限的可清除圖片快取。M6 `MobileCatalogDetails` 按子頁延遲載入公開標籤、關聯與人物資料；短評沿用公開 Bangumi HTML 解析，分頁只接受同作品路徑，舊請求不能回填新子頁。補充資訊失敗不阻塞播放。
+
+`playback-history.json` v1 獨立保存來源上下文或本地內容身份／書籤及實際秒數，原子提交後才發布，壞檔／未知版本禁止覆寫；移除收藏與重建快取均不刪歷史。`MobileLinkLibrary` 以獨立 `link-favorites.json` v1 保存標題與 `SourceItemRef` 公開頁身份，不寫入 Bangumi 作品庫、不解析成媒體；憑證、追蹤及簽名媒體網址不能當作連結身份保存。兩端不共享資料庫。
 
 Core Data 模型位於 `Core Data/DataModel.xcdatamodeld`，目前模型為 `Library v0.5`，包含 `Bookmark`、`WorkRecord`、`EpisodeRecord`、`WorkSourceLinkRecord` 與 `WorkFavoriteRecord`；舊版本模型供遷移使用。
 

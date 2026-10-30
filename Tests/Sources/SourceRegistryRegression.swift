@@ -136,16 +136,27 @@ import Cocoa
             throw Failure.assertion("user configuration hijacked native torrent identity")
         } catch SourceRegistry.RegistryError.duplicateID {}
 
-        var conflict = try JSONSerialization.jsonObject(with: original) as! [String: Any]
-        conflict["id"] = "fqdm"
-        try JSONSerialization.data(withJSONObject: conflict).write(to: user)
+        try original.write(to: user)
+        let bundledFQDM = try Data(contentsOf: builtin.appendingPathComponent("fqdm.json"))
+        var override = try JSONSerialization.jsonObject(with: bundledFQDM) as! [String: Any]
+        override["name"] = "User replacement"
+        let overrideFile = temporary.appendingPathComponent("fqdm.json")
+        try JSONSerialization.data(withJSONObject: override).write(to: overrideFile)
+        try registry.reload(builtinDirectory: builtin, userDirectory: temporary)
+        try require(registry.source(for: "fqdm")?.name == "User replacement",
+                    "a validated user configuration replaces the same bundled ID")
+        let unchangedBundle = try Data(contentsOf: builtin.appendingPathComponent("fqdm.json"))
+        try require(unchangedBundle == bundledFQDM, "replacement must not modify bundled bytes")
+        let duplicate = temporary.appendingPathComponent("duplicate.json")
+        try original.write(to: duplicate)
         do {
             try registry.reload(builtinDirectory: builtin, userDirectory: temporary)
-            throw Failure.assertion("user sources must not replace built-in source identities")
+            throw Failure.assertion("duplicate IDs inside the user directory must be rejected")
         } catch SourceRegistry.RegistryError.duplicateID {}
         try require(registry.matching(url: page)?.id == "internet-archive", "failed reload must retain the last working snapshot")
+        try FileManager.default.removeItem(at: duplicate)
 
-        conflict = try JSONSerialization.jsonObject(with: original) as! [String: Any]
+        var conflict = try JSONSerialization.jsonObject(with: original) as! [String: Any]
         conflict["hosts"] = ["archive.org", "www.bilibili.com"]
         try JSONSerialization.data(withJSONObject: conflict).write(to: user)
         do {
@@ -201,6 +212,114 @@ import Cocoa
             _ = try await decoder.selection(for: page)
             throw Failure.assertion("a removed user source must not survive through a cached adapter")
         } catch VideoGetError.notSupported {}
+        try configurationImports(builtin: builtin, fixture: fixture, directory: temporary.appendingPathComponent("imports"))
+        try configurationImports(builtin: builtin, fixture: fixture,
+            directory: temporary.appendingPathComponent("imports-no-trailing-slash"), directoryHint: false)
         print("PASS: runtime-only sources, durable file identity, reload conflicts, retained snapshots, source disablement and removal")
+    }
+
+    static func configurationImports(builtin: URL, fixture: URL, directory: URL, directoryHint: Bool = true) throws {
+        let files = FileManager.default
+        let sources = directory.appendingPathComponent("sources", isDirectory: directoryHint)
+        try files.createDirectory(at: directory, withIntermediateDirectories: true)
+        let registry = SourceRegistry(builtinDirectory: builtin, userDirectory: sources)
+        let data = try Data(contentsOf: fixture)
+        let rejectedInput = directory.appendingPathComponent("rejected.json")
+        let initialRevision = registry.revision
+        for id in ["native-search", "Native-Search", "bilibili"] {
+            var invalid = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+            invalid["id"] = id
+            try JSONSerialization.data(withJSONObject: invalid).write(to: rejectedInput)
+            do {
+                _ = try registry.prepareConfigurationImport(fileURL: rejectedInput)
+                throw Failure.assertion("reserved or native source ID entered import preview: \(id)")
+            } catch SourceConfiguration.ConfigurationError.invalidConfiguration where id.lowercased() == "native-search" {
+            } catch SourceRegistry.RegistryError.duplicateID(let rejected) where rejected == id {
+            }
+            try require(registry.revision == initialRevision && !files.fileExists(atPath: sources.path),
+                        "rejected IDs must not publish a snapshot or create the source directory")
+        }
+        let draft = try registry.prepareConfigurationImport(fileURL: fixture)
+        try require(draft.previousRevision == nil && registry.source(for: draft.configuration.id) == nil,
+                    "preview must not activate or save an imported source")
+        try require(!files.fileExists(atPath: sources.path), "preview must not create the user source directory")
+        try registry.applyConfigurationImport(draft)
+        let sourceID = draft.configuration.id
+        let destination = sources.appendingPathComponent(sourceID + ".json")
+        let persisted = try Data(contentsOf: destination)
+        try require(persisted == data && registry.source(for: sourceID)?.configurationRevision == draft.configuration.configurationRevision,
+                    "successful import must atomically publish the exact validated bytes")
+        let restarted = SourceRegistry(builtinDirectory: builtin, userDirectory: sources)
+        try require(restarted.source(for: sourceID)?.configurationRevision == draft.configuration.configurationRevision,
+                    "a fresh registry must load the same imported source")
+
+        var updated = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        updated["name"] = "Updated archive"
+        let incoming = directory.appendingPathComponent("incoming.json")
+        try JSONSerialization.data(withJSONObject: updated).write(to: incoming)
+        let replacement = try registry.prepareConfigurationImport(fileURL: incoming)
+        try require(replacement.previousRevision == draft.configuration.configurationRevision,
+                    "replacement preview must identify the prior content revision")
+        try registry.applyConfigurationImport(replacement)
+        try require(registry.source(for: sourceID)?.name == "Updated archive",
+                    "same-ID replacement must publish the new configuration")
+
+        let stale = try registry.prepareConfigurationImport(fileURL: fixture)
+        updated["name"] = "Changed after preview"
+        let external = try JSONSerialization.data(withJSONObject: updated)
+        try external.write(to: destination, options: .atomic)
+        do {
+            try registry.applyConfigurationImport(stale)
+            throw Failure.assertion("a stale preview overwrote a newer source")
+        } catch SourceRegistry.RegistryError.stalePreview {}
+        let afterRejected = try Data(contentsOf: destination)
+        try require(afterRejected == external && registry.source(for: sourceID)?.name == "Updated archive",
+                    "stale import must not alter disk or publish unreviewed data")
+        try registry.reloadCurrent()
+        try require(registry.source(for: sourceID)?.name == "Changed after preview",
+                    "explicit reload uses the registry's own source directory")
+
+        let oldRevision = registry.revision
+        try Data("{}".utf8).write(to: incoming)
+        do {
+            _ = try registry.prepareConfigurationImport(fileURL: incoming)
+            throw Failure.assertion("invalid configuration entered preview")
+        } catch is Failure { throw Failure.assertion("invalid configuration entered preview") }
+        catch {}
+        try require(registry.revision == oldRevision, "rejected input must not publish a snapshot")
+
+        let failingDraft = try registry.prepareConfigurationImport(fileURL: fixture)
+        let savedDirectory = directory.appendingPathComponent("saved-sources", isDirectory: true)
+        try files.moveItem(at: sources, to: savedDirectory)
+        try Data("blocked".utf8).write(to: sources)
+        do {
+            try registry.applyConfigurationImport(failingDraft)
+            throw Failure.assertion("unwritable source directory accepted import")
+        } catch is Failure { throw Failure.assertion("unwritable source directory accepted import") }
+        catch {}
+        try require(registry.revision == oldRevision && registry.source(for: sourceID)?.name == "Changed after preview",
+                    "write-path failure must retain the prior snapshot")
+        try files.removeItem(at: sources)
+        try files.moveItem(at: savedDirectory, to: sources)
+
+        try files.moveItem(at: destination, to: sources.appendingPathComponent("fqdm.json"))
+        do {
+            _ = try registry.prepareConfigurationImport(fileURL: builtin.appendingPathComponent("fqdm.json"))
+            throw Failure.assertion("import would overwrite an unrelated source using the destination filename")
+        } catch SourceRegistry.RegistryError.duplicateID {}
+        let collisionBytes = try Data(contentsOf: sources.appendingPathComponent("fqdm.json"))
+        try require(collisionBytes == external, "filename collision must preserve the unrelated configuration")
+        try files.moveItem(at: sources.appendingPathComponent("fqdm.json"), to: destination)
+        let bundled = try Data(contentsOf: builtin.appendingPathComponent("fqdm.json"))
+        var custom = try JSONSerialization.jsonObject(with: bundled) as! [String: Any]
+        custom["name"] = "Reviewed replacement"
+        try JSONSerialization.data(withJSONObject: custom).write(to: incoming)
+        let builtinDraft = try registry.prepareConfigurationImport(fileURL: incoming)
+        try require(builtinDraft.previousRevision != nil, "bundled source replacement must be shown as replacement")
+        try registry.applyConfigurationImport(builtinDraft)
+        let final = SourceRegistry(builtinDirectory: builtin, userDirectory: sources)
+        try require(final.source(for: "fqdm")?.name == "Reviewed replacement" &&
+                    final.source(for: sourceID)?.name == "Changed after preview",
+                    "bundled replacement must survive restart without dropping another source")
     }
 }

@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import SDWebImage
+import UniformTypeIdentifiers
 
 private final class WorkspaceSettingsDocumentStack: NSStackView {
     override var isFlipped: Bool { true }
@@ -78,6 +79,7 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
     private var busyAccountSource: String?
     private var cacheRefresh: Task<Void, Never>?
     private var subscriptionWindow: WorkspaceSourceSubscriptionController?
+    private var configurationSheet: NSWindow?
     private var cacheText: NSTextField?
     private var sheetController: NSViewController?
 
@@ -654,6 +656,39 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
         add("subscription.manage", .sources, String(localized: "來源訂閱"), "css1 subscription anime check update preview apply 訂閱 番劇 檢查 更新 預覽 套用", String(localized: "在獨立視窗檢查、預覽與套用 css1 來源訂閱。")) {
             button(String(localized: "來源訂閱…"), icon: .subscription) { [weak self] in self?.showSubscription() }
         }
+        add("sources.import", .sources, String(localized: "完整來源配置"),
+            "source configuration json import replace enable 來源 配置 匯入 替換 啟用",
+            String(localized: "完整 JSON 匯入先預覽；同 ID 替換後停用，內容變更需重新確認映射。清單按來源 ID 排序，與搜尋訂閱分開管理。")) {
+            let row = NSStackView(views: [
+                button(String(localized: "匯入來源 JSON…"), icon: .openLink) { [weak self] in self?.importSourceConfiguration() },
+                button(String(localized: "重新載入來源配置"), icon: .refresh) { [weak self] in self?.reloadSourceConfigurations() },
+                button(String(localized: "開啟來源配置資料夾"), icon: .openLink) { [weak self] in
+                    guard let self, !self.previewOnly, let directory = self.services.decoder.registry.configurationDirectory else { return }
+                    do {
+                        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+                        NSWorkspace.shared.open(directory)
+                    } catch { self.status.stringValue = String(localized: "來源配置操作失敗：\(error.localizedDescription)") }
+                }
+            ])
+            row.orientation = .vertical
+            row.alignment = .leading
+            row.spacing = 8
+            return row
+        }
+        let registry = services.decoder.registry.snapshot
+        if registry.loadError != nil {
+            add("sources.error", .sources, String(localized: "完整來源配置"), "source error 配置 錯誤", "") {
+                info(String(localized: "來源配置讀取失敗；保留舊清單，請修復檔案後重新載入。"))
+            }
+        }
+        for configuration in registry.configurations.values.sorted(by: { $0.id < $1.id }) {
+            add("sources.enable.\(configuration.id)", .sources, "\(configuration.name) [\(configuration.id)]",
+                "\(configuration.id) source enable configuration 來源 啟用 配置", sourceConfigurationDescription(configuration)) {
+                toggle(prefs.isSourceEnabled(configuration.id)) { [weak self] enabled in
+                    self?.prefs.setSourceEnabled(enabled, sourceID: configuration.id)
+                }
+            }
+        }
         for (source, title) in [("bilibili", "Bilibili"), ("douyu", String(localized: "鬥魚")), ("bangumi", "Bangumi")] {
             add("account.\(source)", .sources, title, "\(source) login logout account auth 登入 登录 登出 帳號 授權", "") {
                 let account = displayedAccounts[source]
@@ -693,6 +728,70 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
         if let window = controller.window { parent.addChildWindow(window, ordered: .above) }
         controller.showWindow(nil)
         controller.window?.makeKeyAndOrderFront(nil)
+    }
+
+    private func sourceConfigurationDescription(_ configuration: SourceConfiguration) -> String {
+        let supported = configuration.descriptor(on: .macOS).capabilities
+        let available = supported.sorted { $0.rawValue < $1.rawValue }.map(\.displayTitle).joined(separator: ", ")
+        let unavailable = configuration.capabilities.subtracting(supported)
+            .sorted { $0.rawValue < $1.rawValue }.map(\.displayTitle).joined(separator: ", ")
+        return String(localized: "主機：\(configuration.hosts.joined(separator: ", "))\n可用能力：\(available)\n未提供能力：\(unavailable.isEmpty ? String(localized: "無") : unavailable)")
+    }
+
+    private func importSourceConfiguration() {
+        guard !previewOnly, attached, let parent = view.window, parent.attachedSheet == nil else { return }
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.json]
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        configurationSheet = panel
+        panel.beginSheetModal(for: parent) { [weak self] response in
+            guard let self else { return }
+            self.configurationSheet = nil
+            guard self.attached, response == .OK, let file = panel.url else { return }
+            do {
+                let draft = try self.services.decoder.registry.prepareConfigurationImport(fileURL: file)
+                self.previewSourceConfiguration(draft, parent: parent)
+            } catch { self.status.stringValue = String(localized: "來源配置操作失敗：\(error.localizedDescription)") }
+        }
+    }
+
+    private func previewSourceConfiguration(_ draft: SourceRegistry.ConfigurationImport, parent: NSWindow) {
+        guard attached else { return }
+        let configuration = draft.configuration
+        let alert = NSAlert()
+        alert.messageText = String(localized: "預覽來源配置")
+        let change = draft.previousRevision == nil ? String(localized: "新增來源")
+            : String(localized: "替換同 ID 來源；內容變更會使既有映射要求重新確認。")
+        alert.informativeText = "\(configuration.name) [\(configuration.id)]\n\(change)\n"
+            + sourceConfigurationDescription(configuration) + "\n"
+            + String(localized: "匯入後保持停用，請檢查能力後手動啟用。")
+        alert.addButton(withTitle: String(localized: "確認匯入"))
+        alert.addButton(withTitle: String(localized: "取消"))
+        configurationSheet = alert.window
+        alert.beginSheetModal(for: parent) { [weak self] response in
+            guard let self else { return }
+            self.configurationSheet = nil
+            guard self.attached, response == .alertFirstButtonReturn else { return }
+            do {
+                try self.services.decoder.registry.applyConfigurationImport(draft)
+                self.prefs.setSourceEnabled(false, sourceID: configuration.id)
+                self.rebuild()
+                self.status.stringValue = String(localized: "來源配置已匯入並停用；請檢查能力後手動啟用。")
+            } catch { self.status.stringValue = String(localized: "來源配置操作失敗：\(error.localizedDescription)") }
+        }
+    }
+
+    private func reloadSourceConfigurations() {
+        guard !previewOnly, attached else { return }
+        do {
+            try services.decoder.registry.reloadCurrent()
+            rebuild()
+            status.stringValue = String(localized: "來源配置已重新載入。")
+        } catch {
+            rebuild()
+            status.stringValue = String(localized: "來源配置操作失敗：\(error.localizedDescription)")
+        }
     }
 
     private func login(source: String) {
@@ -921,6 +1020,10 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
         dismissSheet()
         subscriptionWindow?.close()
         subscriptionWindow = nil
+        if let configurationSheet, let parent = configurationSheet.sheetParent {
+            parent.endSheet(configurationSheet, returnCode: .cancel)
+        }
+        configurationSheet = nil
     }
 
     private func refreshAccounts() {

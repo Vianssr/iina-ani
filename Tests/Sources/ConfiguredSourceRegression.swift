@@ -3,9 +3,35 @@ import Foundation
 
 private final class CatalogProtocol: URLProtocol, @unchecked Sendable {
     override class func canInit(with request: URLRequest) -> Bool { request.url?.host == "www.fqdm.cc" }
+    final class Requests: @unchecked Sendable {
+        private let lock = NSLock()
+        private var paths: [String] = []
+        private var playerOverride: (String, Int)?
+        func record(_ path: String) { lock.lock(); defer { lock.unlock() }; paths.append(path) }
+        func count(containing value: String) -> Int {
+            lock.lock(); defer { lock.unlock() }
+            return paths.filter { $0.contains(value) }.count
+        }
+        func setOverride(_ key: String?, value: Int = 0) {
+            lock.lock(); defer { lock.unlock() }
+            playerOverride = key.map { ($0, value) }
+        }
+        func playerData() -> Data {
+            lock.lock(); defer { lock.unlock() }
+            var payload: [String: Any] = ["id": "12", "sid": 1, "nid": 2,
+                "points": 0, "trysee": 0, "encrypt": 0, "url": "https://cdn.example/selected.mp4"]
+            if let (key, value) = playerOverride {
+                if key == "id" { payload[key] = String(value) }
+                else { payload[key] = value }
+            }
+            return try! JSONSerialization.data(withJSONObject: ["player": payload])
+        }
+    }
+    static let requests = Requests()
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         guard let url = request.url else { return }
+        Self.requests.record(url.path)
         let html = """
         <div class="module-info-heading"><h1>Fixture work</h1></div>
         <div class="module-tab-item tab-item"><span>First line</span></div>
@@ -21,7 +47,7 @@ private final class CatalogProtocol: URLProtocol, @unchecked Sendable {
         """
         let isPlayer = url.path.contains("/play/")
         let data = isPlayer
-            ? Data(#"{"player":{"id":"12","sid":1,"nid":2,"points":0,"trysee":0,"encrypt":0,"url":"https://cdn.example/selected.mp4"}}"#.utf8)
+            ? Self.requests.playerData()
             : Data(html.utf8)
         let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil,
                                       headerFields: ["Content-Type": isPlayer ? "application/json" : "text/html; charset=utf-8"])!
@@ -86,9 +112,26 @@ private final class CatalogProtocol: URLProtocol, @unchecked Sendable {
         let jsonSession = URLSessionConfiguration.ephemeral
         jsonSession.protocolClasses = [CatalogProtocol.self]
         let jsonSource = ConfiguredSource(configuration: jsonDefinition, site: .configured("fqdm"), requestConfiguration: jsonSession)
+        let otherLineRequests = CatalogProtocol.requests.count(containing: "/sid/2/")
         let resolved = try await jsonSource.decodeUrl(first)
         try require(resolved.streams["First line (1)"]?.url == "https://cdn.example/selected.mp4",
                     "a JSON object path must resolve the selected episode instead of requiring a regex capture")
+        try require(resolved.streams.count == 1 && resolved.streams["Second line (2)"] == nil,
+                    "exact decode never exposes another catalog line as an automatic quality fallback")
+        try require(CatalogProtocol.requests.count(containing: "/sid/2/") == otherLineRequests,
+                    "resolving the exact line must not even fetch an alternative title-matched line")
+        do {
+            _ = try await jsonSource.decodeUrl(second)
+            throw Failure.assertion("wrong player sid must not reuse a matching episode title from another line")
+        } catch { if error is Failure { throw error } }
+        for (key, value) in [("id", 13), ("nid", 1), ("points", 1), ("trysee", 1)] {
+            CatalogProtocol.requests.setOverride(key, value: value)
+            do {
+                _ = try await jsonSource.decodeUrl(first)
+                throw Failure.assertion("wrong work/episode, paid or preview payload must not resolve: \(key)")
+            } catch { if error is Failure { throw error } }
+        }
+        CatalogProtocol.requests.setOverride(nil)
         print("PASS: JSON player paths resolve the selected line and episode")
     }
 }

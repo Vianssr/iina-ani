@@ -299,10 +299,47 @@ struct BangumiWorkSyncRegression {
         let offlineSaved = try library.fetchWork(id: work.id)!
         try require(offlineSaved.collectionStatus == .onHold && offlineSaved.collectionStatusPending,
                     "offline failure must preserve local status for explicit retry")
+        try require(offlineSaved.collectionStatusAccountID == account.id,
+                    "failed collection commands must durably retain their originating account")
+        let otherSuite = suite + ".other"
+        let otherDefaults = UserDefaults(suiteName: otherSuite)!
+        defer { otherDefaults.removePersistentDomain(forName: otherSuite) }
+        let otherPreferences = Preferences(defaults: otherDefaults)
+        let otherAccount = SiteAccount(id: UUID(), sourceID: "bangumi", displayName: "Different account", enabled: true, status: .valid)
+        otherDefaults.set(try JSONEncoder().encode([otherAccount]), forKey: "site-account-metadata-v1")
+        otherPreferences.setDefaultAccountID(otherAccount.id, for: "bangumi")
+        let otherAccounts = SiteAccounts(preferences: otherPreferences, keychainService: otherSuite)
+        let otherService = BangumiService(cache: cache, accounts: otherAccounts, transport: { try await remote.send($0) })
+        let beforeForeignRetry = await remote.requestCount
+        do {
+            _ = try await BangumiWorkSync(library: library, service: otherService)
+                .setCollectionStatus(workID: work.id, status: .onHold)
+            throw Failure("another account retried the first account's durable operation")
+        } catch BangumiError.account { }
+        let afterForeignRetry = await remote.requestCount
+        let stillOwned = try library.fetchWork(id: work.id)!
+        try require(beforeForeignRetry == afterForeignRetry && stillOwned.collectionStatusAccountID == account.id &&
+                    stillOwned.collectionStatusPending,
+                    "switch/restart must neither retarget an operation nor issue a foreign-account write")
         await remote.setOffline(false)
         let retried = try await reopenedSync.setCollectionStatus(workID: work.id, status: .onHold)
         try require(!retried.collectionStatusPending && retried.work.collectionStatus == .onHold,
                     "explicit same-status retry must synchronize and clear pending")
+
+        await remote.suspendNextRequest()
+        let readingBeforeClear = Task { try await sync.refreshCollectionStatus(workID: work.id) }
+        await remote.waitUntilSuspended()
+        let cleared = try library.setCollectionStatus(workID: work.id, status: nil)
+        await remote.release()
+        let readAfterClear = try await readingBeforeClear.value
+        try require(readAfterClear.work == cleared && cleared.collectionStatus == nil && cleared.collectionStatusPending,
+                    "an in-flight remote response cannot restore an explicitly cleared local category")
+        let beforeLocalOnlyRead = await remote.requestCount
+        let localOnlyRead = try await reopenedSync.refreshCollectionStatus(workID: work.id)
+        let afterLocalOnlyRead = await remote.requestCount
+        try require(localOnlyRead.work == cleared && beforeLocalOnlyRead == afterLocalOnlyRead,
+                    "local unclassified edit must not request remote synchronization or collection removal")
+        _ = try await sync.setCollectionStatus(workID: work.id, status: .onHold)
 
         await remote.suspendNextRequest()
         let reading = Task { try await sync.refreshCollectionStatus(workID: work.id) }

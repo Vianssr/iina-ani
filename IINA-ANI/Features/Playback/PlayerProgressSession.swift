@@ -5,6 +5,8 @@ private enum PlayerProgressEvent: Sendable {
     case progress(Double, Double?)
     case ended(Bool, Bool)
     case queue(LocalQueueIPCEvent)
+    case contract(PlaybackEvent.Kind)
+    case reply(Int, String)
 }
 
 private struct PlayerQueueError: LocalizedError {
@@ -18,8 +20,18 @@ final class PlayerProgressSession {
     let id = UUID()
     let socketURL: URL
     let playlistURL: URL?
+    private(set) var playbackState = PlaybackEventState()
+    private(set) var lastPlaybackEvent: PlaybackEvent?
+    var onPlaybackEvent: (@MainActor (PlaybackEvent) -> Void)?
     private let initialStartPosition: Double
+    private let retainsEOF: Bool
+    var selection: PlayableSelection { recorder.selection }
+    var displayTitle: String { recorder.displayTitle }
+    var continuationRecorder: PlaybackProgressRecorder { recorder }
+    var canAdvance: Bool { !finished && channel != nil && playbackState.hasLoadedMedia }
     private var resetInitialResumeOnReady = false
+    private var initialSeekPending = false
+    private var initialSeekStarted = false
     private let directory: URL
     private var recorder: PlaybackProgressRecorder
     private let paths: Set<String>
@@ -29,6 +41,7 @@ final class PlayerProgressSession {
     private let makeRecorder: (@MainActor (PlayableSelection) -> PlaybackProgressRecorder)?
     private let queueItemOptions: (@MainActor (PlayableSelection) -> [String: String])?
     private let onQueueEOF: (@MainActor (PlaybackProgressRecorder) async throws -> PlayableSelection?)?
+    private let autoplayEnabled: @MainActor () -> Bool
     private var channel: Channel?
     private var monitor: Task<Void, Never>?
     private var eventMonitor: Task<Void, Never>?
@@ -40,6 +53,7 @@ final class PlayerProgressSession {
     private var activeIndex: Int?
     private var activeGeneration = 0
     private var pendingAutoplayIndex: Int?
+    private var pendingAdvanceIsAutomatic = false
     private var recorderEnded = false
     private var finished = false
     private var nextRequestID = 0
@@ -55,6 +69,8 @@ final class PlayerProgressSession {
          localQueue: [PlayableSelection] = [],
          nativePlaylist: Bool = false,
          initialStartPosition: Double = 0,
+         retainsEOF: Bool = false,
+         autoplayEnabled: @escaping @MainActor () -> Bool = { true },
          makeRecorder: (@MainActor (PlayableSelection) -> PlaybackProgressRecorder)? = nil,
          onQueueEOF: (@MainActor (PlaybackProgressRecorder) async throws -> PlayableSelection?)? = nil,
          queueItemOptions: (@MainActor (PlayableSelection) -> [String: String])? = nil,
@@ -64,6 +80,9 @@ final class PlayerProgressSession {
         self.localQueue = localQueue; self.makeRecorder = makeRecorder
         self.onQueueEOF = onQueueEOF; self.queueItemOptions = queueItemOptions
         self.initialStartPosition = initialStartPosition
+        self.retainsEOF = retainsEOF
+        self.autoplayEnabled = autoplayEnabled
+        initialSeekPending = initialStartPosition.isFinite && initialStartPosition > 0
         queuePaths = try localQueue.map { selection in
             guard selection.item.sourceID == "local", selection.item.kind == .local,
                   selection.episode == nil, selection.torrent == nil,
@@ -96,6 +115,7 @@ final class PlayerProgressSession {
             try? FileManager.default.removeItem(at: directory)
             throw error
         }
+        beginContractLoad()
     }
 
     func observe() {
@@ -116,15 +136,17 @@ final class PlayerProgressSession {
             while !Task.isCancelled, !finished, ContinuousClock.now < deadline {
                 do {
                     let connection = try await ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
-                        .connectTimeout(.seconds(1)).channelInitializer { [paths, queuePaths, initialQueueIndex] channel in
+                        .connectTimeout(.seconds(1)).channelInitializer { [paths, queuePaths, initialQueueIndex, retainsEOF] channel in
                             if let initialQueueIndex {
                                 return channel.pipeline.addHandler(LocalQueueIPCHandler(
                                     paths: paths, queuePaths: queuePaths, initialIndex: initialQueueIndex,
                                     event: { continuation.yield(.queue($0)) }))
                             }
-                            return channel.pipeline.addHandler(PlaybackIPCHandler(paths: paths, progress: {
+                            return channel.pipeline.addHandler(PlaybackIPCHandler(paths: paths, retainsEOF: retainsEOF, progress: {
                                 continuation.yield(.progress($0, $1))
-                            }, ended: { continuation.yield(.ended($0, $1)) }))
+                            }, ended: { continuation.yield(.ended($0, $1)) },
+                                playbackEvent: { continuation.yield(.contract($0)) },
+                                requestReply: { continuation.yield(.reply($0, $1)) }))
                         }.connect(unixDomainSocketPath: socketURL.path).get()
                     guard !finished, !Task.isCancelled else { try? await connection.close().get(); return }
                     channel = connection
@@ -149,18 +171,102 @@ final class PlayerProgressSession {
         }
     }
 
-    func stop() async { await finish(completed: false) }
+    func stop() async {
+        publish(.stopped)
+        await finish(completed: false)
+    }
+
+    func pauseForTransition() async throws {
+        guard canAdvance else { throw CancellationError() }
+        try await command(["set_property", "pause", true])
+    }
+
+    func stopPlayback() async { await finish(completed: false, stopPlayer: true) }
+
+    func cancelPendingNextEpisode() {
+        eofTask?.cancel(); eofTask = nil
+        pendingAutoplayIndex = nil
+    }
+
+    func nextLocalEpisode() async throws {
+        guard let index = activeIndex, localQueue.indices.contains(index + 1), !finished else {
+            throw PlayerQueueError(message: String(localized: "No next episode is available in this source group."))
+        }
+        let generation = activeGeneration
+        eofTask?.cancel(); eofTask = nil
+        try await command(["set_property", "start", "0"])
+        try Task.checkCancellation()
+        guard !finished, activeGeneration == generation else { throw CancellationError() }
+        pendingAutoplayIndex = index + 1
+        pendingAdvanceIsAutomatic = false
+        try await command(["set_property", "playlist-pos", index + 1])
+    }
+
+    private func beginContractLoad() {
+        publish(.cancelled)
+        playbackState.beginLoad(PlaybackLoadIdentity(sessionID: id))
+        publish(.resolved)
+        publish(.loading)
+    }
+
+    @discardableResult
+    private func publish(_ kind: PlaybackEvent.Kind) -> Bool {
+        guard let identity = playbackState.identity else { return false }
+        let event = PlaybackEvent(identity: identity, sequence: playbackState.lastSequence + 1, kind: kind)
+        guard playbackState.apply(event) else { return false }
+        lastPlaybackEvent = event
+        onPlaybackEvent?(event)
+        return true
+    }
 
     private func receive(_ event: PlayerProgressEvent) {
         guard !finished else { return }
         switch event {
         case let .progress(position, duration):
+            guard playbackState.hasLoadedMedia, !initialSeekPending else { return }
             recorder.update(position: position, duration: duration)
         case let .ended(failed, completed):
+            let naturalEOF = completed && !failed && !initialSeekPending && playbackState.hasLoadedMedia
+            publish(failed ? .failed(.mediaPlayback) : naturalEOF ? .naturalEOF : .stopped)
             if failed { NSLog("Player failed to load the selected media.") }
-            Task { await self.finish(completed: completed) }
+            if naturalEOF, retainsEOF, localQueue.isEmpty {
+                guard !recorderEnded else { return }
+                endRecorder(completed: true)
+                onEOF(recorder)
+            } else {
+                Task { await self.finish(completed: naturalEOF) }
+            }
         case let .queue(event):
             receiveQueue(event)
+        case let .contract(kind):
+            if case .resolved = kind, retainsEOF, playbackState.phase == .ended {
+                guard let makeRecorder else { return }
+                recorder = makeRecorder(recorder.selection)
+                recorderEnded = false
+                beginContractLoad()
+                return
+            }
+            if case .naturalEOF = kind, initialSeekPending { return }
+            publish(kind)
+            if case .loaded = kind { seekAfterInitialLoad() }
+            if case .paused(true) = kind, !initialSeekPending { recorder.flush() }
+        case let .reply(id, error):
+            resolveRequest(id, error: error == "success" ? nil : PlayerQueueError(message: "mpv IPC: " + error))
+        }
+    }
+
+    private func seekAfterInitialLoad() {
+        guard initialSeekPending, !initialSeekStarted else { return }
+        initialSeekStarted = true
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                try await command(["seek", initialStartPosition, "absolute+exact"] as [Any])
+                guard !finished else { return }
+                initialSeekPending = false
+            } catch {
+                if !finished { await failQueue(error) }
+            }
         }
     }
 
@@ -171,6 +277,7 @@ final class PlayerProgressSession {
         case let .loaded(index, generation):
             if pendingAutoplayIndex != index { pendingAutoplayIndex = nil }
             eofTask?.cancel(); eofTask = nil
+            beginContractLoad()
             if usedInitialRecorder {
                 endRecorder(completed: false)
                 guard let makeRecorder else { return }
@@ -199,7 +306,8 @@ final class PlayerProgressSession {
                     }
                 }
             } else if queueConfigured {
-                let unpause = pendingAutoplayIndex == index
+                let automatic = pendingAdvanceIsAutomatic
+                let unpause = pendingAutoplayIndex == index && (!automatic || autoplayEnabled())
                 pendingAutoplayIndex = nil
                 // The original entry has no appended per-file options; revisits must not
                 // inherit the last file's title or the initial command-line start offset.
@@ -210,17 +318,31 @@ final class PlayerProgressSession {
                         guard activeIndex == index, activeGeneration == generation else { return }
                         try await command(["set_property", "force-media-title", options(for: index)["force-media-title"] ?? ""])
                         guard activeIndex == index, activeGeneration == generation else { return }
-                        if unpause { try await command(["set_property", "pause", false]) }
+                        if unpause, !automatic || autoplayEnabled() { try await command(["set_property", "pause", false]) }
                     } catch {
                         if !finished { await failQueue(error) }
                     }
                 }
             }
+        case let .confirmedLoaded(index, generation):
+            guard activeIndex == index, activeGeneration == generation, !recorderEnded else { return }
+            publish(.loaded)
+            seekAfterInitialLoad()
+        case let .paused(index, generation, paused):
+            guard activeIndex == index, activeGeneration == generation, !recorderEnded else { return }
+            publish(.paused(paused))
+            if paused, !initialSeekPending { recorder.flush() }
+        case let .stopped(index, generation):
+            guard activeIndex == index, activeGeneration == generation, !recorderEnded else { return }
+            publish(.stopped)
         case let .progress(index, generation, position, duration):
             guard activeIndex == index, activeGeneration == generation, !recorderEnded else { return }
+            guard !initialSeekPending,
+                  publish(.progress(PlaybackProgressSample(position: position, duration: duration))) else { return }
             recorder.update(position: position, duration: duration)
         case let .eof(index, generation):
             guard activeIndex == index, activeGeneration == generation, !recorderEnded else { return }
+            guard !initialSeekPending, publish(.naturalEOF) else { return }
             endRecorder(completed: true)
             guard let onQueueEOF else { return }
             let completedRecorder = recorder
@@ -229,17 +351,18 @@ final class PlayerProgressSession {
                 do {
                     let next = try await onQueueEOF(completedRecorder)
                     if let queueConfiguration { await queueConfiguration.value }
-                    guard !finished, !Task.isCancelled, queueConfigured,
+                    guard !finished, !Task.isCancelled, queueConfigured, autoplayEnabled(),
                           activeIndex == index, activeGeneration == generation, let next,
                           let nextIndex = localQueue.firstIndex(where: { $0.item == next.item }),
                           next.episode == nil, next.torrent == nil else { return }
                     try await command(["set_property", "start", "0"])
                     guard !finished, !Task.isCancelled, activeIndex == index, activeGeneration == generation else { return }
                     try await command(["set_property", "force-media-title", options(for: nextIndex)["force-media-title"] ?? ""])
-                    guard !finished, !Task.isCancelled, activeIndex == index, activeGeneration == generation else { return }
+                    guard !finished, !Task.isCancelled, autoplayEnabled(), activeIndex == index, activeGeneration == generation else { return }
                     // keep-open may re-pause the EOF frame. Unpause only after the
                     // next file is ready, not before its start-file cancels this task.
                     pendingAutoplayIndex = nextIndex
+                    pendingAdvanceIsAutomatic = true
                     try await command(["set_property", "playlist-pos", nextIndex])
                 } catch {
                     if !finished, !Task.isCancelled, activeIndex == index, activeGeneration == generation {
@@ -248,10 +371,12 @@ final class PlayerProgressSession {
                 }
             }
         case let .unloaded(generation):
+            publish(.cancelled)
             activeIndex = nil; activeGeneration = generation
             eofTask?.cancel(); eofTask = nil
             endRecorder(completed: false)
         case let .ended(failed, message):
+            publish(failed ? .failed(.mediaPlayback) : .stopped)
             // Invalidate synchronously, before another queued property/EOF can be consumed.
             activeIndex = nil; activeGeneration += 1
             eofTask?.cancel()
@@ -343,6 +468,7 @@ final class PlayerProgressSession {
 
     private func failQueue(_ error: Error) async {
         guard !finished else { return }
+        publish(.failed(.mediaPlayback))
         NSLog("Player queue could not be maintained: %@", error.localizedDescription)
         await finish(completed: false, stopPlayer: true)
     }
@@ -383,27 +509,39 @@ final class PlayerProgressSession {
 /// Confined to the NIO event loop, with bounded framing and no payload logging.
 final class PlaybackIPCHandler: ChannelInboundHandler, @unchecked Sendable {
     typealias InboundIn = ByteBuffer
-    static let observations = ["path", "idle-active", "time-pos", "paused-for-cache", "duration"].enumerated().map {
+    static let observations = ["path", "idle-active", "time-pos", "pause", "paused-for-cache", "duration", "eof-reached"].enumerated().map {
         "{\"command\":[\"observe_property\",\($0.offset + 1),\"\($0.element)\"]}\n"
     }.joined()
     private var pending = ByteBuffer()
     private let paths: Set<String>
     private let started: @Sendable () -> Void
+    private let retainsEOF: Bool
+    private var notifiedEOF = false
     private let buffering: @Sendable (Bool) -> Void
     private let progress: @Sendable (Double, Double?) -> Void
     private let ended: @Sendable (Bool, Bool) -> Void
+    private let playbackEvent: @Sendable (PlaybackEvent.Kind) -> Void
+    private let requestReply: @Sendable (Int, String) -> Void
     private var seenMedia = false
     private var notified = false
     private var notifiedStarted = false
     private var position: Double?
     private var duration: Double?
+    private var fileLoaded = false
+    private var confirmedLoaded = false
+    private var paused: Bool?
+    private var entryID: Int?
 
-    init(paths: Set<String>, started: @escaping @Sendable () -> Void = {},
+    init(paths: Set<String>, retainsEOF: Bool = false, started: @escaping @Sendable () -> Void = {},
          buffering: @escaping @Sendable (Bool) -> Void = { _ in },
          progress: @escaping @Sendable (Double, Double?) -> Void,
-         ended: @escaping @Sendable (Bool, Bool) -> Void) {
+         ended: @escaping @Sendable (Bool, Bool) -> Void,
+         playbackEvent: @escaping @Sendable (PlaybackEvent.Kind) -> Void = { _ in },
+         requestReply: @escaping @Sendable (Int, String) -> Void = { _, _ in }) {
         self.paths = paths; self.started = started; self.buffering = buffering
-        self.progress = progress; self.ended = ended
+        self.retainsEOF = retainsEOF
+        self.progress = progress; self.ended = ended; self.playbackEvent = playbackEvent
+        self.requestReply = requestReply
     }
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         var bytes = unwrapInboundIn(data)
@@ -421,45 +559,99 @@ final class PlaybackIPCHandler: ChannelInboundHandler, @unchecked Sendable {
 
     /// Event-loop confined state transition, shared by the framed transport and regressions.
     func receive(_ message: [String: Any]) {
+        if let id = message["request_id"] as? Int, let error = message["error"] as? String {
+            requestReply(id, error)
+        }
         guard !notified else { return }
         let event = message["event"] as? String
+        if notifiedEOF, event == "seek" {
+            // An explicit replay owns a fresh recorder and cancels the old EOF lookup.
+            notifiedEOF = false
+            confirmedLoaded = false
+            position = nil
+            playbackEvent(.resolved)
+        }
+        if notifiedEOF, event == "start-file" { finish(); return }
+        if event == "start-file" { entryID = message["playlist_entry_id"] as? Int }
+        if event == "file-loaded" {
+            fileLoaded = true
+            if seenMedia { confirmLoaded() }
+        }
         if event == "property-change", let name = message["name"] as? String {
             if name == "path", let path = message["data"] as? String {
                 let filePath = URL(string: path).flatMap { $0.isFileURL ? $0.path : nil }
-                if paths.contains(path) || filePath.map(paths.contains) == true { seenMedia = true }
+                if paths.contains(path) || filePath.map(paths.contains) == true {
+                    seenMedia = true
+                    if fileLoaded { confirmLoaded() }
+                }
                 else if seenMedia { finish(); return }
             }
             guard seenMedia else { return }
             if name == "paused-for-cache", let value = message["data"] as? Bool { buffering(value) }
+            if name == "pause", let value = message["data"] as? Bool {
+                paused = value
+                if confirmedLoaded { playbackEvent(.paused(value)) }
+            }
             if name == "duration", let value = message["data"] as? Double, value.isFinite, value > 0 {
                 duration = value
-                if let position { progress(position, duration) }
+                if let position {
+                    playbackEvent(.progress(PlaybackProgressSample(position: position, duration: duration)))
+                    progress(position, duration)
+                }
             }
             if name == "time-pos", let value = message["data"] as? Double, value.isFinite, value >= 0 {
                 position = value
+                // IPC may attach after file-loaded was sent. A matched active
+                // path plus numeric backend time-pos confirms a real loaded file;
+                // this is never inferred from URL resolution or a UI seek target.
+                confirmLoaded()
                 if !notifiedStarted { notifiedStarted = true; started() }
+                playbackEvent(.progress(PlaybackProgressSample(position: value, duration: duration)))
                 progress(value, duration)
+            }
+            if name == "eof-reached", message["data"] as? Bool == true, confirmedLoaded {
+                finish(completed: true)
             }
             if name == "idle-active", message["data"] as? Bool == true { finish() }
         }
         if event == "end-file", seenMedia, message["reason"] as? String != "redirect" {
-            finish(failed: message["reason"] as? String == "error", completed: message["reason"] as? String == "eof")
+            if let endedID = message["playlist_entry_id"] as? Int, let entryID, endedID != entryID { return }
+            finish(failed: message["reason"] as? String == "error",
+                   completed: message["reason"] as? String == "eof" && confirmedLoaded)
         }
         if event == "shutdown" { finish() }
+    }
+    private func confirmLoaded() {
+        guard !confirmedLoaded else { return }
+        confirmedLoaded = true
+        playbackEvent(.loaded)
+        if let paused { playbackEvent(.paused(paused)) }
     }
     func channelInactive(context: ChannelHandlerContext) { finish(); context.fireChannelInactive() }
     func errorCaught(context: ChannelHandlerContext, error: Error) { finish(failed: true); context.close(promise: nil) }
     private func finish(failed: Bool = false, completed: Bool = false) {
         guard !notified else { return }
-        notified = true; ended(failed, completed)
+        if completed, retainsEOF {
+            guard !notifiedEOF else { return }
+            notifiedEOF = true
+            playbackEvent(.naturalEOF)
+            ended(false, true)
+            return
+        }
+        notified = true
+        playbackEvent(failed ? .failed(.mediaPlayback) : completed ? .naturalEOF : .stopped)
+        ended(failed, completed)
     }
 }
 
 enum LocalQueueIPCEvent: Sendable {
     case loaded(index: Int, generation: Int)
     case ready(index: Int, generation: Int)
+    case confirmedLoaded(index: Int, generation: Int)
+    case paused(index: Int, generation: Int, paused: Bool)
     case progress(index: Int, generation: Int, position: Double, duration: Double?)
     case eof(index: Int, generation: Int)
+    case stopped(index: Int, generation: Int)
     case unloaded(generation: Int)
     case reply(id: Int, error: String)
     case ended(failed: Bool, message: String?)
@@ -469,7 +661,7 @@ enum LocalQueueIPCEvent: Sendable {
 /// can own progress or EOF, and a start/stop invalidates any older asynchronous choice.
 final class LocalQueueIPCHandler: ChannelInboundHandler, @unchecked Sendable {
     typealias InboundIn = ByteBuffer
-    static let observations = ["path", "idle-active", "time-pos", "duration", "eof-reached"].enumerated().map {
+    static let observations = ["path", "idle-active", "time-pos", "pause", "duration", "eof-reached"].enumerated().map {
         "{\"command\":[\"observe_property\",\($0.offset + 1),\"\($0.element)\"]}\n"
     }.joined()
     private var pending = ByteBuffer()
@@ -486,6 +678,9 @@ final class LocalQueueIPCHandler: ChannelInboundHandler, @unchecked Sendable {
     private var ready = false
     private var fileLoaded = false
     private var notifiedEOF = false
+    private var notifiedLoaded = false
+    private var paused: Bool?
+    private var entryID: Int?
 
     init(paths: Set<String>, queuePaths: [String], initialIndex: Int,
          event: @escaping @Sendable (LocalQueueIPCEvent) -> Void) {
@@ -519,12 +714,24 @@ final class LocalQueueIPCHandler: ChannelInboundHandler, @unchecked Sendable {
         switch message["event"] as? String {
         case "start-file":
             invalidate()
+            entryID = message["playlist_entry_id"] as? Int
         case "file-loaded":
             fileLoaded = true
             signalReady()
+        case "seek":
+            if notifiedEOF, let index {
+                generation += 1
+                position = nil
+                fileLoaded = false
+                ready = false
+                notifiedLoaded = false
+                notifiedEOF = false
+                event(.loaded(index: index, generation: generation))
+            }
         case "property-change":
             receiveProperty(message)
         case "end-file":
+            if let endedID = message["playlist_entry_id"] as? Int, let entryID, endedID != entryID { return }
             switch message["reason"] as? String {
             case "redirect":
                 break
@@ -536,9 +743,12 @@ final class LocalQueueIPCHandler: ChannelInboundHandler, @unchecked Sendable {
                 signalEOF()
             case "quit":
                 finish()
+            case "stop":
+                if let index { event(.stopped(index: index, generation: generation)) }
+                invalidate()
             default:
-                // Manual next/previous also produces reason=stop. Retire its recorder,
-                // but retain the socket until the following path or actual idle/close.
+                // Unknown unloads retire the recorder, but retain the socket
+                // until the following path or actual idle/close.
                 invalidate()
             }
         case "shutdown":
@@ -581,6 +791,9 @@ final class LocalQueueIPCHandler: ChannelInboundHandler, @unchecked Sendable {
         } else if name == "duration", let value = message["data"] as? Double, value.isFinite, value > 0 {
             duration = value
             if let position { event(.progress(index: index, generation: generation, position: position, duration: value)) }
+        } else if name == "pause", let value = message["data"] as? Bool {
+            paused = value
+            if notifiedLoaded { event(.paused(index: index, generation: generation, paused: value)) }
         } else if name == "eof-reached", message["data"] as? Bool == true {
             signalReady()
             signalEOF()
@@ -588,13 +801,21 @@ final class LocalQueueIPCHandler: ChannelInboundHandler, @unchecked Sendable {
     }
 
     private func signalReady() {
-        guard let index, !ready else { return }
+        guard let index else { return }
+        // Preserve the queue's existing ready/autoplay ordering, while loaded
+        // success additionally requires file-loaded or actual backend time-pos.
+        if !notifiedLoaded, fileLoaded || position != nil {
+            notifiedLoaded = true
+            event(.confirmedLoaded(index: index, generation: generation))
+            if let paused { event(.paused(index: index, generation: generation, paused: paused)) }
+        }
+        guard !ready else { return }
         ready = true
         event(.ready(index: index, generation: generation))
     }
 
     private func signalEOF() {
-        guard let index, !notifiedEOF else { return }
+        guard let index, notifiedLoaded, !notifiedEOF else { return }
         notifiedEOF = true
         event(.eof(index: index, generation: generation))
     }
@@ -604,6 +825,7 @@ final class LocalQueueIPCHandler: ChannelInboundHandler, @unchecked Sendable {
         if seenInitial { event(.unloaded(generation: generation)) }
         index = nil; position = nil; duration = nil
         ready = false; fileLoaded = false; notifiedEOF = false
+        notifiedLoaded = false; paused = nil
     }
 
     func channelInactive(context: ChannelHandlerContext) {

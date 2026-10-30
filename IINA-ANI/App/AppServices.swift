@@ -72,28 +72,62 @@ final class AppServices {
 
     func playbackHistory() throws -> PlaybackHistoryStore {
         if let historyStore { return historyStore }
-        let owner = try PlaybackHistoryStore(url: storage().applicationSupport.appendingPathComponent("Playback/history-v1.json"))
+        let owner = try PlaybackHistoryStore(url: storage().applicationSupport.appendingPathComponent("Playback/history-v1.json"), registry: registry)
         historyStore = owner
         return owner
     }
 
     func resumePlayback(_ entry: PlaybackHistoryEntry) async throws {
         guard !stopped else { throw Processes.ProcessesError.notSupported }
+        let history = try playbackHistory()
+        let savedSelection = try history.selectionForResume(entry)
         let startPosition = entry.awaitingUpdates == true ? 0 : entry.position
         if let torrent = entry.selection.torrent {
             let endpoint = try await localEndpoint()
             let policy = try TorrentUploadPolicy(bytesPerSecond: preferences.torrentUploadLimitBytesPerSecond,
                                                 acknowledged: preferences.torrentUploadConsentAcknowledged)
             let grant = try await downloads().torrentPlayback(selection: torrent, uploadPolicy: policy, port: endpoint.port)
+            _ = try history.selectionForResume(entry)
             _ = try await player.openTorrentPlayback(grant, startPosition: startPosition, title: entry.title, coverURL: entry.coverURL)
         } else {
-            var media = try await decoder.resolve(entry.selection)
-            guard let key = entry.selection.qualityID ?? media.videos.first?.key else { throw VideoGetError.notFountData }
+            var selection = savedSelection
+            var localURL: URL?
+            if selection.item.kind == .local {
+                do { localURL = try history.localFileForResume(entry) }
+                catch PlaybackLocalFileAccessError.requiresAuthorization {
+                    let panel = NSOpenPanel()
+                    panel.canChooseDirectories = false
+                    panel.allowsMultipleSelection = false
+                    guard panel.runModal() == .OK, let authorized = panel.url else { throw CancellationError() }
+                    localURL = try history.localFileForResume(entry, authorizedURL: authorized)
+                }
+                selection.item = SourceItemRef(sourceID: "local", pageURL: localURL!.absoluteString, kind: .local)
+            }
+            let scoped = localURL?.startAccessingSecurityScopedResource() ?? false
+            defer { if scoped { localURL?.stopAccessingSecurityScopedResource() } }
+            if selection.item.kind != .local,
+               registry.descriptor(for: selection.item.sourceID)?.capabilities.contains(.episodes) == true {
+                guard let catalog = try await decoder.catalog(for: selection) else { throw PlaybackFailure.missingEpisode }
+                _ = try history.selectionForResume(entry)
+                try history.validateResumeCatalog(catalog, selection: selection)
+            }
+            var media = try await decoder.resolve(selection)
+            _ = try history.selectionForResume(entry)
+            try history.validateResolvedSelection(media.selection, requested: selection)
+            guard let key = selection.qualityID ?? media.videos.first?.key else { throw VideoGetError.notFountData }
             media = try await decoder.prepareVideoUrl(media, key)
-            if preferences.enableFlvjs && registry.descriptor(for: entry.selection.item.sourceID)?.capabilities.contains(.jsPlayer) == true {
-                try openJSPlayer(selection: entry.selection, title: entry.title, coverURL: entry.coverURL, startPosition: startPosition, episodeTitle: entry.episodeTitle)
+            _ = try history.selectionForResume(entry)
+            try history.validateResolvedSelection(media.selection, requested: selection)
+            try Task.checkCancellation()
+            guard !stopped else { throw CancellationError() }
+            // Keep the actual bookmark URL for queue setup. History recognizes its
+            // saved resource identity and retains the original persisted history ID.
+            media.selection = selection
+            if preferences.enableFlvjs && registry.descriptor(for: selection.item.sourceID)?.capabilities.contains(.jsPlayer) == true {
+                try openJSPlayer(selection: savedSelection, title: entry.title, coverURL: entry.coverURL, startPosition: startPosition, episodeTitle: entry.episodeTitle)
             } else {
                 try await player.prepareDanmakuFile(yougetJSON: media, id: media.uuid)
+                _ = try history.selectionForResume(entry)
                 try await player.openWithPlayer(media, key, title: entry.title, coverURL: entry.coverURL, startPosition: startPosition, episodeTitle: entry.episodeTitle)
             }
         }

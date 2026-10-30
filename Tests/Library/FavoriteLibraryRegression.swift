@@ -109,11 +109,11 @@ struct FavoriteLibraryRegression {
         try require(try reloaded.links().allSatisfy { $0.id != first.id } && reloaded.links().contains { $0.id == second.id }, "link deletion is independent")
         try close(reopened)
         try await torrentIdentityPersistence(model, root.appendingPathComponent("torrent.sqlite"))
-        try await collectionDefaults(model, root.appendingPathComponent("collection-defaults.sqlite"))
+        try await independentCollectionStatus(model, root.appendingPathComponent("collection-status.sqlite"))
         print("PASS: work-ID dedup, two confirmed sources, real Bili/configured identities, broken-link repair, collision atomicity, independent query/sort, deletion isolation, corrupt-ID rejection and reopen; exact torrent favorites/episode mappings")
     }
 
-    private static func collectionDefaults(_ model: NSManagedObjectModel, _ store: URL) async throws {
+    private static func independentCollectionStatus(_ model: NSManagedObjectModel, _ store: URL) async throws {
         let container = try await open(model, store)
         let works = WorkLibrary(container: container)
         let favorites = FavoriteLibrary(container: container)
@@ -132,41 +132,46 @@ struct FavoriteLibraryRegression {
         record.setValue(3.0, forKey: "order")
         record.setValue(Date(), forKey: "createdAt")
         try container.viewContext.save()
-        var expectedFresh = fresh
-        expectedFresh.collectionStatus = .wish
-        try require(try works.fetchWork(id: fresh.id) == expectedFresh,
-                    "adding a favorite defaults only its category, without a pending command or revision")
+        try require(try works.fetchWork(id: fresh.id) == fresh,
+                    "adding a favorite preserves unclassified nil without a pending command or revision")
         try close(container)
 
         let reopened = try await open(model, store)
         let reloaded = FavoriteLibrary(container: reopened)
         let retained = WorkLibrary(container: reopened)
         let firstRead = try reloaded.works()
-        var expectedLegacy = legacy
-        expectedLegacy.collectionStatus = .wish
-        try require(firstRead.first(where: { $0.id == legacy.id }) == expectedLegacy &&
-                    retained.fetchWork(id: legacy.id) == expectedLegacy,
-                    "persisted nil favorite becomes durable wish without fabricating a local edit")
+        try require(try firstRead.first(where: { $0.id == legacy.id }) == legacy &&
+                    retained.fetchWork(id: legacy.id) == legacy,
+                    "reading a legacy nil favorite must not infer a category or write a classification")
         try require(try retained.fetchWork(id: unrelated.id) == unrelated &&
                     retained.fetchWork(id: remote.id) == remote && retained.fetchWork(id: pending.id) == pending,
-                    "default migration preserves nonfavorites, remote categories and pending edits")
+                    "favorite reads preserve nonfavorites, explicit remote categories and pending edits")
         try reloaded.addWork(workID: fresh.id)
         try require(try reloaded.works() == firstRead && reloaded.favoriteWorkIDs().count == 4,
-                    "repeated default reads and adds preserve favorite identities and ordering")
+                    "repeated reads and adds preserve favorite identities and ordering")
         let imported = try retained.applyCollectionStatus(.doing, workID: legacy.id, subjectID: 43,
             associationRevision: legacy.bangumiAssociationRevision, collectionRevision: legacy.collectionStatusRevision,
             acknowledgingLocalEdit: false)
         try require(imported.collectionStatus == .doing && !imported.collectionStatusPending &&
                     (try reloaded.works()).first(where: { $0.id == legacy.id }) == imported,
-                    "incoming remote category replaces local default and survives subsequent reads")
+                    "incoming remote category can classify a legacy nil work and survives subsequent reads")
         try close(reopened)
         let final = try await open(model, store)
         let finalWorks = WorkLibrary(container: final)
-        try require(try finalWorks.fetchWork(id: fresh.id) == expectedFresh &&
+        try require(try finalWorks.fetchWork(id: fresh.id) == fresh &&
                     finalWorks.fetchWork(id: legacy.id) == imported,
-                    "local default and imported category survive another reopen")
+                    "unclassified nil and explicit imported category survive another reopen")
+        let finalFavorites = FavoriteLibrary(container: final)
+        try finalFavorites.removeWork(workID: pending.id)
+        try require(try finalWorks.fetchWork(id: pending.id) == pending &&
+                    !finalFavorites.favoriteWorkIDs().contains(pending.id),
+                    "removing membership preserves the explicit category, pending flag and revision")
+        let classifiedNonfavorite = try finalWorks.setCollectionStatus(workID: unrelated.id, status: .onHold)
+        try require(classifiedNonfavorite.collectionStatus == .onHold &&
+                    !(try finalFavorites.favoriteWorkIDs()).contains(unrelated.id),
+                    "classifying a nonfavorite must not add favorite membership")
         try close(final)
-        print("PASS: favorite wish defaults, persisted nil migration, pending/nonfavorite preservation and remote replacement")
+        print("PASS: unclassified legacy/new favorites, independent membership/status, pending preservation and remote replacement")
     }
 
     private static func torrentIdentityPersistence(_ model: NSManagedObjectModel, _ store: URL) async throws {

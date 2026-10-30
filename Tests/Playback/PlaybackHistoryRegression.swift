@@ -91,7 +91,202 @@ import Foundation
         try awaitingUpdateProgress(root: root)
         try manualDeletion(root: root)
         try await completedSeason(root: root)
-        print("Playback history regressions passed: exact seconds, restart, media isolation, ordinary completion, retained EOF, replay, stale completion isolation, credential exclusion, local metadata compatibility")
+        try staleRecorders(root: root)
+        try configuredHistory(root: root)
+        try localFileReferences(root: root)
+        print("Playback history regressions passed: exact seconds, restart, native/source resume identity, configured file/revision safety, recorder/delete races, retained EOF, local bookmarks and reauthorization")
+    }
+
+    @MainActor static func staleRecorders(root: URL) throws {
+        let url = root.appendingPathComponent("recorder-ownership/history.json")
+        let store = try PlaybackHistoryStore(url: url)
+        let selection = PlayableSelection(item: SourceItemRef(sourceID: "senfun",
+            pageURL: "https://www.senfun.in/vodplay/42-1-1.html", kind: .episode))
+        let older = PlaybackProgressRecorder(store: store, selection: selection, title: "Older", coverURL: nil)
+        older.update(position: 10, duration: 120)
+        let newer = PlaybackProgressRecorder(store: store, selection: selection, title: "Newer", coverURL: nil)
+        newer.update(position: 40, duration: 120)
+        older.update(position: 11, duration: 120, flush: true)
+        older.finish(completed: true)
+        try older.retainForUpdates(through: Date())
+        try require(store.unfinished.first?.position == 40 && store.unfinished.first?.title == "Newer",
+                    "Old actual progress, flush, EOF and delayed retention must not replace a newer same-episode player")
+        let deleted = try store.unfinished.first.unwrap()
+        try store.remove(id: deleted.id)
+        newer.update(position: 45, duration: 120, flush: true)
+        newer.finish()
+        try newer.retainForUpdates(through: Date())
+        try require(try PlaybackHistoryStore(url: url).unfinished.isEmpty,
+                    "Deleting history must invalidate the old player's periodic update, close flush and EOF retention")
+        do {
+            _ = try store.selectionForResume(deleted)
+            throw Failure(message: "A pending resume survived manual history deletion")
+        } catch PlaybackFailure.cancelled {}
+        let restarted = PlaybackProgressRecorder(store: store, selection: selection, title: "Explicit replay", coverURL: nil)
+        restarted.update(position: 3, duration: 120)
+        let recreated = try store.unfinished.first.unwrap()
+        try require(recreated.id == deleted.id && recreated.position == 3,
+                    "A fresh explicit player may recreate progress without changing persisted episode IDs")
+        do {
+            _ = try store.selectionForResume(deleted)
+            throw Failure(message: "An old resume overwrote a newer replay of the same episode")
+        } catch PlaybackFailure.cancelled {}
+        let failed = PlaybackProgressRecorder(store: store, selection: selection, title: "Failed launch", coverURL: nil)
+        failed.finish(completed: true)
+        restarted.update(position: 4, duration: 120)
+        try require(store.unfinished.first?.position == 4,
+                    "A failed launch without actual samples must not take progress ownership from a real player")
+        let directory = url.deletingLastPathComponent()
+        let backup = root.appendingPathComponent("recorder-ownership-backup")
+        try FileManager.default.moveItem(at: directory, to: backup)
+        try Data().write(to: directory)
+        do {
+            try store.remove(id: recreated.id)
+            throw Failure(message: "History deletion unexpectedly succeeded with inaccessible storage")
+        } catch is CocoaError {}
+        try require(store.unfinished.first?.position == 4,
+                    "Failed deletion must retain the visible history transaction")
+        try FileManager.default.removeItem(at: directory)
+        try FileManager.default.moveItem(at: backup, to: directory)
+        restarted.update(position: 5, duration: 120)
+        try require(store.unfinished.first?.position == 5,
+                    "Failed deletion must not revoke recorder ownership after storage recovers")
+    }
+
+    @MainActor static func configuredHistory(root: URL) throws {
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: repository.appendingPathComponent("Examples/MobileSources/internet-archive.json"))
+        let directory = root.appendingPathComponent("configured-history/sources")
+        let users = root.appendingPathComponent("configured-history/users")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("archive.json")
+        try data.write(to: file)
+        let registry = SourceRegistry(builtinDirectory: directory, userDirectory: users)
+        let config = try SourceConfiguration.load(data: data)
+        let work = try config.item("https://archive.org/details/season-one")
+        let episode = try config.item(work.pageURL + "?file=episode%201.mp4")
+        let classification = BangumiSubject(id: 400602, name: "Frieren", type: 2).classification
+        let selection = PlayableSelection(item: work, episode: episode, lineID: "0", qualityID: "MP4",
+            classification: classification)
+        let url = root.appendingPathComponent("configured-history/history.json")
+        let store = try PlaybackHistoryStore(url: url, registry: registry)
+        let recorder = PlaybackProgressRecorder(store: store, selection: selection, title: "Archive", coverURL: nil)
+        recorder.update(position: 25.5, duration: 120)
+        let entry = try store.unfinished.first.unwrap()
+        try require(entry.selection.episode == episode && entry.context?.configurationRevision == config.configurationRevision &&
+                    entry.selection.classification == classification && store.continuing(downloads: []).first?.id == entry.id,
+                    "Confirmed anime classification and exact configured identity must persist and appear in Continue Watching")
+        try require(try store.selectionForResume(entry) == entry.selection,
+                    "Unchanged configured history must retain its exact saved source and episode for resume")
+        func leaf(_ ref: SourceItemRef, index: Int) -> VideoTreeNode {
+            VideoTreeNode(site: .configured(config.id), index: index, title: "Same title", id: ref.pageURL, url: ref.pageURL)
+        }
+        let other = try config.item(work.pageURL + "?file=episode%202.mp4")
+        let catalog = VideoSelectionCatalog(nodes: [VideoTreeNode(title: "Line", children: [leaf(other, index: 0), leaf(episode, index: 1)])],
+                                            current: 0, selection: selection)
+        try store.validateResumeCatalog(catalog, selection: entry.selection)
+        try store.validateResolvedSelection(entry.selection, requested: entry.selection)
+        do {
+            try store.validateResumeCatalog(VideoSelectionCatalog(nodes: [leaf(other, index: 0)], current: 0, selection: selection),
+                                            selection: entry.selection)
+            throw Failure(message: "Missing saved file silently resumed another catalog entry")
+        } catch PlaybackFailure.missingEpisode {}
+        var wrong = selection
+        wrong.episode = other
+        do {
+            try store.validateResolvedSelection(wrong, requested: entry.selection)
+            throw Failure(message: "Resolved wrong file was accepted for resume")
+        } catch PlaybackFailure.missingEpisode {}
+        var changed = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        changed["mediaHosts"] = ["archive.org", "cdn.archive.org"]
+        try JSONSerialization.data(withJSONObject: changed).write(to: file)
+        try registry.reload(builtinDirectory: directory, userDirectory: users)
+        recorder.update(position: 26.5, duration: 120)
+        let reopened = try PlaybackHistoryStore(url: url, registry: registry)
+        let preserved = try reopened.unfinished.first.unwrap()
+        try require(preserved.id == entry.id && preserved.context == entry.context && preserved.position == 26.5,
+                    "An active recorder and archive reload must preserve original IDs and original configuration context")
+        do {
+            _ = try reopened.selectionForResume(preserved)
+            throw Failure(message: "Changed source configuration silently adopted old history")
+        } catch PlaybackFailure.configurationChanged {}
+        do {
+            try recorder.validateForLaunch()
+            throw Failure(message: "Changed configuration was accepted at the final player handoff")
+        } catch PlaybackFailure.configurationChanged {}
+        var unsafe = changed
+        var route = unsafe["route"] as! [String: Any]
+        route["queryIdentityParameter"] = "access_token"
+        unsafe["route"] = route
+        try JSONSerialization.data(withJSONObject: unsafe).write(to: file)
+        try registry.reload(builtinDirectory: directory, userDirectory: users)
+        let unsafeConfig = try registry.source(for: config.id).unwrap()
+        let sensitive = PlayableSelection(item: try unsafeConfig.item(work.pageURL),
+            episode: try unsafeConfig.item(work.pageURL + "?access_token=private-value"))
+        do {
+            try reopened.record(selection: sensitive, title: "Unsafe", coverURL: nil, position: 10, duration: 120, completed: false)
+            throw Failure(message: "Configuration expanded history into credential query persistence")
+        } catch PlaybackFailure.unsupportedResponse {}
+        try require(!String(decoding: Data(contentsOf: url), as: UTF8.self).contains("private-value"),
+                    "Configured query identity must never expand the credential boundary")
+        // Optional context fields do not change old native identities; old configured
+        // records remain visible but cannot pretend their format version is a revision.
+        var legacy = preserved
+        legacy.context = nil
+        do {
+            _ = try reopened.selectionForResume(legacy)
+            throw Failure(message: "Legacy configured progress without a revision silently resumed")
+        } catch PlaybackFailure.configurationChanged {}
+    }
+
+    @MainActor static func localFileReferences(root: URL) throws {
+        let folder = root.appendingPathComponent("local-references")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let original = folder.appendingPathComponent("episode.mp4")
+        try Data("original media".utf8).write(to: original)
+        let storeURL = folder.appendingPathComponent("state/history.json")
+        let store = try PlaybackHistoryStore(url: storeURL)
+        let selection = PlayableSelection(item: SourceItemRef(sourceID: "local", pageURL: original.absoluteString, kind: .local))
+        try store.record(selection: selection, title: "Local", coverURL: nil, position: 12, duration: 120, completed: false)
+        let entry = try store.unfinished.first.unwrap()
+        try require(entry.localFile != nil, "Real desktop local progress must retain a durable file access reference")
+        let impostor = folder.appendingPathComponent("other/episode.mp4")
+        try FileManager.default.createDirectory(at: impostor.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("another media".utf8).write(to: impostor)
+        do {
+            _ = try store.localFileForResume(entry, authorizedURL: impostor)
+            throw Failure(message: "Same filename was accepted as local file identity")
+        } catch is CocoaError {}
+        let moved = folder.appendingPathComponent("renamed.mp4")
+        try FileManager.default.moveItem(at: original, to: moved)
+        let resumed = try store.localFileForResume(entry, authorizedURL: moved)
+        let reopened = try PlaybackHistoryStore(url: storeURL)
+        let preserved = try reopened.unfinished.first.unwrap()
+        try require(resumed == moved && preserved.id == entry.id && preserved.selection == entry.selection &&
+                    preserved.position == 12 && (try preserved.localFile?.matches(moved)) == true,
+                    "Reauthorizing the actual moved file must renew access without migrating its history ID or progress")
+        try Data("replacement at the old path".utf8).write(to: original)
+        var actual = selection
+        actual.item = SourceItemRef(sourceID: "local", pageURL: moved.absoluteString, kind: .local)
+        let recorder = PlaybackProgressRecorder(store: store, selection: actual, title: "Moved local", coverURL: nil)
+        recorder.update(position: 13, duration: 120)
+        recorder.finish()
+        let latest = try store.unfinished.first.unwrap()
+        try require(store.unfinished.count == 1 && latest.id == entry.id && latest.position == 13 &&
+                    (try latest.localFile?.matches(moved)) == true &&
+                    (try latest.localFile?.matches(original)) == false,
+                    "Actual moved-file queue loads must retain their original history ID and never recapture a replacement at the old path")
+        let directory = storeURL.deletingLastPathComponent()
+        let backup = folder.appendingPathComponent("state-backup")
+        try FileManager.default.moveItem(at: directory, to: backup)
+        try Data().write(to: directory)
+        do {
+            _ = try store.localFileForResume(latest)
+            throw Failure(message: "History bookmark renewal unexpectedly saved into unavailable storage")
+        } catch is CocoaError {}
+        try FileManager.default.removeItem(at: directory)
+        try FileManager.default.moveItem(at: backup, to: directory)
     }
 
     @MainActor static func manualDeletion(root: URL) throws {

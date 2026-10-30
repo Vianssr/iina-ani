@@ -99,24 +99,8 @@ actor ConfiguredSource: SupportSiteProtocol {
         var stream = Stream(url: media)
         stream.qualityIndex = line.number
         result.streams["\(line.title) (\(line.number))"] = stream
-        let alternatives = catalog.lines.compactMap { other -> (CatalogLine, CatalogEpisode)? in
-            guard other.number != line.number,
-                  let match = other.episodes.first(where: { $0.title == episode.title }) ??
-                    other.episodes.first(where: { $0.identity == episode.identity }) else { return nil }
-            return (other, match)
-        }
-        await withTaskGroup(of: (Int, String?).self) { group in
-            for (other, match) in alternatives {
-                group.addTask { (other.number, try? await self.resolveMedia(match.url, id: p.id,
-                    line: other.number, episode: match.number, identity: match.identity)) }
-            }
-            for await (number, media) in group {
-                guard let media, let other = alternatives.first(where: { $0.0.number == number })?.0 else { continue }
-                var stream = Stream(url: media)
-                stream.qualityIndex = number
-                result.streams["\(other.title) (\(number))"] = stream
-            }
-        }
+        // A catalog line is a page identity, not a fallback quality. Switching lines
+        // requires selecting that exact catalog leaf, never a title-matched alternative.
         try Task.checkCancellation()
         result.site = site
         return result

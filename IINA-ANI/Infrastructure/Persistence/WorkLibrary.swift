@@ -16,16 +16,18 @@ struct Work: Codable, Hashable, Sendable {
     var classification: MediaClassification
     var classificationIsManual: Bool
     var collectionStatus: BangumiCollectionStatus?
-    /// A durable local command must not be replaced by a remote read, including after restart.
+    /// A durable local edit must not be replaced by a remote read, including local nil (no remote delete).
     var collectionStatusPending: Bool
     var collectionStatusRevision: UUID?
+    /// The profile that owns this durable command; never retarget a failed retry after sign-out.
+    var collectionStatusAccountID: UUID?
 
     init(id: UUID = UUID(), bangumiID: Int? = nil, title: String, aliases: [String] = [],
          coverURL: String? = nil, year: Int? = nil, summary: String? = nil, updatedAt: Date = .now,
          bangumiMetadata: BangumiMetadata? = nil, bangumiAssociationRevision: UUID? = nil,
          classification: MediaClassification = .unknown, classificationIsManual: Bool = false,
          collectionStatus: BangumiCollectionStatus? = nil, collectionStatusPending: Bool = false,
-         collectionStatusRevision: UUID? = nil) {
+         collectionStatusRevision: UUID? = nil, collectionStatusAccountID: UUID? = nil) {
         self.id = id
         self.bangumiID = bangumiID
         self.title = title
@@ -41,12 +43,14 @@ struct Work: Codable, Hashable, Sendable {
         self.collectionStatus = collectionStatus
         self.collectionStatusPending = collectionStatusPending
         self.collectionStatusRevision = collectionStatusRevision
+        self.collectionStatusAccountID = collectionStatusAccountID
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, bangumiID, title, aliases, coverURL, year, summary, updatedAt
         case bangumiMetadata, bangumiAssociationRevision, classification, classificationIsManual
         case collectionStatus, collectionStatusPending, collectionStatusRevision
+        case collectionStatusAccountID
     }
 
     init(from decoder: Decoder) throws {
@@ -66,6 +70,7 @@ struct Work: Codable, Hashable, Sendable {
         collectionStatus = try c.decodeIfPresent(BangumiCollectionStatus.self, forKey: .collectionStatus)
         collectionStatusPending = try c.decodeIfPresent(Bool.self, forKey: .collectionStatusPending) ?? false
         collectionStatusRevision = try c.decodeIfPresent(UUID.self, forKey: .collectionStatusRevision)
+        collectionStatusAccountID = try c.decodeIfPresent(UUID.self, forKey: .collectionStatusAccountID)
     }
 }
 
@@ -105,10 +110,16 @@ struct Episode: Codable, Hashable, Sendable {
 struct EpisodeSourceMapping: Codable, Hashable, Sendable {
     var episodeID: UUID
     var selection: PlayableSelection
+    /// Missing on legacy records; configured sources require explicit reconfirmation.
+    var confirmation: ConfirmedSourceMapping?
+    var catalogGroup: [String]?
 
-    init(episodeID: UUID, selection: PlayableSelection) {
+    init(episodeID: UUID, selection: PlayableSelection, confirmation: ConfirmedSourceMapping? = nil,
+         catalogGroup: [String]? = nil) {
         self.episodeID = episodeID
         self.selection = selection
+        self.confirmation = confirmation
+        self.catalogGroup = catalogGroup
     }
 }
 
@@ -234,13 +245,26 @@ final class WorkLibrary {
     }
 
     @discardableResult
-    func setCollectionStatus(workID: UUID, status: BangumiCollectionStatus) throws -> Work {
+    func setCollectionStatus(workID: UUID, status: BangumiCollectionStatus?, accountID: UUID? = nil) throws -> Work {
         guard var work = try fetchWork(id: workID) else { throw LibraryError.workNotFound(workID) }
         work.collectionStatus = status
         work.collectionStatusPending = true
         work.collectionStatusRevision = UUID()
+        work.collectionStatusAccountID = accountID
         work.updatedAt = .now
-        try upsert(work)
+        do { try upsert(work) } catch { context.rollback(); throw error }
+        return work
+    }
+
+    @discardableResult
+    func bindCollectionStatusAccount(workID: UUID, revision: UUID?, accountID: UUID) throws -> Work {
+        guard var work = try fetchWork(id: workID) else { throw LibraryError.workNotFound(workID) }
+        guard work.collectionStatusPending, work.collectionStatusRevision == revision,
+              work.collectionStatusAccountID == nil || work.collectionStatusAccountID == accountID else {
+            throw LibraryError.collectionStatusChanged(workID)
+        }
+        work.collectionStatusAccountID = accountID
+        do { try upsert(work) } catch { context.rollback(); throw error }
         return work
     }
 
@@ -260,6 +284,7 @@ final class WorkLibrary {
         guard acknowledgingLocalEdit || !work.collectionStatusPending else { return work }
         work.collectionStatus = status
         work.collectionStatusPending = false
+        work.collectionStatusAccountID = nil
         work.collectionStatusRevision = UUID()
         work.updatedAt = .now
         try upsert(work)
@@ -302,7 +327,36 @@ final class WorkLibrary {
             .sorted { $0.sort == $1.sort ? $0.id.uuidString < $1.id.uuidString : $0.sort < $1.sort }
     }
 
+    /// Commit one preferred source for this exact domain episode after successful resolution.
+    /// Keep source links and every other episode mapping, including unconfirmed legacy records.
+    func setPreferredMapping(_ mapping: EpisodeSourceMapping, forWorkID workID: UUID,
+                             sourceWork: SourceItemRef) throws {
+        let links = try sourceLinks(forWorkID: workID)
+        let targetID = links.first(where: { $0.sourceWork == sourceWork })?.id ?? UUID()
+        var updates: [WorkSourceLink] = []
+        for var link in links where link.id == targetID || link.episodeMappings.contains(where: { $0.episodeID == mapping.episodeID }) {
+            link.episodeMappings.removeAll { $0.episodeID == mapping.episodeID }
+            if link.id == targetID { link.episodeMappings.append(mapping) }
+            updates.append(link)
+        }
+        if !links.contains(where: { $0.id == targetID }) {
+            updates.append(WorkSourceLink(id: targetID, workID: workID, sourceWork: sourceWork, episodeMappings: [mapping]))
+        }
+        do {
+            for link in updates { try stage(link) }
+            try context.saveIfChanged()
+        } catch {
+            context.rollback()
+            throw error
+        }
+    }
+
     func upsert(_ link: WorkSourceLink) throws {
+        try stage(link)
+        try context.saveIfChanged()
+    }
+
+    private func stage(_ link: WorkSourceLink) throws {
         guard let work = try fetchWork(id: link.workID) else { throw LibraryError.workNotFound(link.workID) }
         if !link.episodeMappings.isEmpty, work.classification.kind != .anime { throw LibraryError.animeRequired }
         var mappedEpisodes = Set<UUID>()
@@ -327,7 +381,6 @@ final class WorkLibrary {
         record.setValue(link.id, forKey: "id")
         record.setValue(link.workID, forKey: "workID")
         record.setValue(try encoder.encode(link), forKey: "payload")
-        try context.saveIfChanged()
     }
 
     func sourceLinks(forWorkID workID: UUID) throws -> [WorkSourceLink] {

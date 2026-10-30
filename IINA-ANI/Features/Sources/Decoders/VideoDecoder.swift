@@ -184,6 +184,54 @@ actor VideoDecoder {
     nonisolated func isSourceEnabled(_ sourceID: String) -> Bool { sourceEnabledPolicy(sourceID) }
     nonisolated func episodeIdentity(_ leaf: VideoTreeNode) throws -> String { try registry.episodeIdentity(for: leaf) }
 
+    nonisolated func mappingRevision(_ id: String) throws -> String {
+        guard sourceEnabledPolicy(id) else { throw PlaybackFailure.sourceDisabled }
+        let snapshot = registry.snapshot
+        guard snapshot.descriptors.contains(where: { $0.id == id }) else { throw PlaybackFailure.configurationChanged }
+        if snapshot.configurations[id] != nil, snapshot.loadError != nil {
+            throw PlaybackFailure.configurationChanged
+        }
+        return snapshot.configurations[id]?.configurationRevision ?? "native-adapter:\(id):mapping-v1"
+    }
+
+    /// Synchronous registry authority, also used immediately before persisting or handing off playback.
+    nonisolated func mappingSelection(_ selection: PlayableSelection) throws
+        -> (selection: PlayableSelection, revision: String, configured: Bool) {
+        let id = selection.item.sourceID
+        guard sourceEnabledPolicy(id) else { throw PlaybackFailure.sourceDisabled }
+        let snapshot = registry.snapshot
+        guard snapshot.descriptors.contains(where: { $0.id == id }) else { throw PlaybackFailure.configurationChanged }
+        if let configuration = snapshot.configurations[id] {
+            guard snapshot.loadError == nil else { throw PlaybackFailure.configurationChanged }
+            return (try configuration.mappingSelection(selection), configuration.configurationRevision, true)
+        }
+        guard selection.torrent == nil, selection.classification.kind == .anime,
+              (selection.episode ?? selection.item).kind == .episode else { throw PlaybackFailure.missingEpisode }
+        func canonical(_ ref: SourceItemRef) throws -> SourceItemRef {
+            guard var page = URLComponents(string: ref.pageURL), page.user == nil, page.password == nil,
+                  ["https", "http"].contains(page.scheme?.lowercased() ?? ""),
+                  !["mp4", "m3u8", "mpd", "mkv", "torrent"].contains(URL(string: ref.pageURL)?.pathExtension.lowercased() ?? "") else {
+                throw PlaybackFailure.missingEpisode
+            }
+            // Bilibili's canonicalizer owns its p identity. Other supported anime adapters use path IDs.
+            if id != "bilibili" { page.query = nil }
+            page.fragment = nil
+            guard let raw = page.string else { throw PlaybackFailure.missingEpisode }
+            return try registry.item(for: raw)
+        }
+        var safe = selection
+        safe.accountID = nil
+        let work = try canonical(selection.item)
+        guard work.sourceID == id, work.kind == selection.item.kind else { throw PlaybackFailure.missingEpisode }
+        safe.item = work
+        if let episode = selection.episode {
+            let exact = try canonical(episode)
+            guard exact.sourceID == id, exact.kind == .episode else { throw PlaybackFailure.missingEpisode }
+            safe.episode = exact
+        }
+        return (safe, "native-adapter:\(id):mapping-v1", false)
+    }
+
     func sourceDescriptors() -> [SourceDescriptor] { registry.snapshot.descriptors }
     var sourceRegistryLoadError: String? { registry.loadError }
 

@@ -94,7 +94,8 @@ struct BookmarkFavoritesMigrationRegression {
         let videoMetadata = BangumiMetadata(subject: BangumiSubject(id: 43, name: "Metadata", type: 6), episodes: [], fetchedAt: .now)
         let oldWorks = [Work(bangumiID: 42, title: "Same title", bangumiMetadata: metadata),
                         Work(bangumiID: 43, title: "Same title", bangumiMetadata: videoMetadata),
-                        Work(bangumiID: 44, title: "Same title")]
+                        Work(bangumiID: 44, title: "Same title", collectionStatus: .onHold,
+                             collectionStatusPending: true, collectionStatusRevision: UUID())]
         let manual = Work(title: "Manual", classification: MediaClassification(kind: .live, provenance: "manual"), classificationIsManual: true)
         let library = WorkLibrary(container: container)
         try library.upsert(manual)
@@ -126,6 +127,10 @@ struct BookmarkFavoritesMigrationRegression {
             let actual = try migrated.fetchWork(id: work.id)!
             try require(actual.id == work.id && actual.classification.kind == kind && actual.title == work.title && actual.bangumiID == work.bangumiID,
                         "R3 migration guessed from ID/title or changed Work identity")
+            try require(actual.collectionStatus == work.collectionStatus &&
+                        actual.collectionStatusPending == work.collectionStatusPending &&
+                        actual.collectionStatusRevision == work.collectionStatusRevision,
+                        "Media-kind migration must preserve nil and explicit pending collection categories")
         }
         try require(try migrated.fetchWork(id: manual.id) == manual, "R3 migration overwrote existing manual classification")
         try require(try migrated.episodes(forWorkID: oldWorks[0].id) == [episode] &&

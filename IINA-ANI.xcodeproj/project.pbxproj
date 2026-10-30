@@ -132,6 +132,7 @@
 		0A03000100000007 /* SourceRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A03000100000006 /* SourceRegistry.swift */; };
 		0A03000100000009 /* Sources in Resources */ = {isa = PBXBuildFile; fileRef = 0A03000100000008 /* Sources */; };
 		0A0400010000000000000001 /* BangumiModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0400010000000000000000 /* BangumiModels.swift */; };
+		0A2910260000000000000001 /* CollectionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2910260000000000000000 /* CollectionStatus.swift */; };
 		0A0400010000000000000003 /* BangumiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0400010000000000000002 /* BangumiService.swift */; };
 		0A0400010000000000000005 /* BangumiWorkSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0400010000000000000004 /* BangumiWorkSync.swift */; };
 		0A0400010000000000000007 /* BangumiAccountSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A0400010000000000000006 /* BangumiAccountSheetView.swift */; };
@@ -186,9 +187,11 @@
 		0A1200010000000000000003 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1200010000000000000002 /* AppServices.swift */; };
 		0A1200010000000000000005 /* AppStoragePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1200010000000000000004 /* AppStoragePaths.swift */; };
 		0A1200260000000000000001 /* SourceSubscription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1200260000000000000000 /* SourceSubscription.swift */; };
+		0A6000010000000000000001 /* SourceSubscriptionRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A6000010000000000000000 /* SourceSubscriptionRules.swift */; };
 		0A1200260000000000000003 /* SourceSubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1200260000000000000002 /* SourceSubscriptionService.swift */; };
 		0A1310010000000000000001 /* PlaybackHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1310010000000000000000 /* PlaybackHistory.swift */; };
 		0A1310010000000000000003 /* PlayerProgressSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1310010000000000000002 /* PlayerProgressSession.swift */; };
+		0A2810260000000000000001 /* PlaybackContract.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2810260000000000000000 /* PlaybackContract.swift */; };
 		0A1310260000000000000001 /* TorrentSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1310260000000000000000 /* TorrentSearchService.swift */; };
 		0A2310260000000000000001 /* YouTubeBrowseService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2310260000000000000000 /* YouTubeBrowseService.swift */; };
 		0A2310260000000000000003 /* YouTubeCookieImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A2310260000000000000002 /* YouTubeCookieImport.swift */; };
@@ -369,6 +372,7 @@
 		0A03000100000006 /* SourceRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceRegistry.swift; sourceTree = "<group>"; };
 		0A03000100000008 /* Sources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sources; sourceTree = "<group>"; };
 		0A0400010000000000000000 /* BangumiModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BangumiModels.swift; sourceTree = "<group>"; };
+		0A2910260000000000000000 /* CollectionStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CollectionStatus.swift; sourceTree = "<group>"; };
 		0A0400010000000000000002 /* BangumiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BangumiService.swift; sourceTree = "<group>"; };
 		0A0400010000000000000004 /* BangumiWorkSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BangumiWorkSync.swift; sourceTree = "<group>"; };
 		0A0400010000000000000006 /* BangumiAccountSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BangumiAccountSheetView.swift; sourceTree = "<group>"; };
@@ -424,9 +428,11 @@
 		0A1200010000000000000002 /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		0A1200010000000000000004 /* AppStoragePaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoragePaths.swift; sourceTree = "<group>"; };
 		0A1200260000000000000000 /* SourceSubscription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSubscription.swift; sourceTree = "<group>"; };
+		0A6000010000000000000000 /* SourceSubscriptionRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSubscriptionRules.swift; sourceTree = "<group>"; };
 		0A1200260000000000000002 /* SourceSubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSubscriptionService.swift; sourceTree = "<group>"; };
 		0A1310010000000000000000 /* PlaybackHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackHistory.swift; sourceTree = "<group>"; };
 		0A1310010000000000000002 /* PlayerProgressSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerProgressSession.swift; sourceTree = "<group>"; };
+		0A2810260000000000000000 /* PlaybackContract.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackContract.swift; sourceTree = "<group>"; };
 		0A1310260000000000000000 /* TorrentSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TorrentSearchService.swift; sourceTree = "<group>"; };
 		0A2110010000000000000001 /* App.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = App.xcconfig; sourceTree = "<group>"; };
 		0A2310260000000000000000 /* YouTubeBrowseService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = YouTubeBrowseService.swift; sourceTree = "<group>"; };
@@ -483,6 +489,7 @@
 				0A0700010000000000000004 /* SourceSearch.swift */,
 				01FA1F012D83000100000100 /* SourceSelection.swift */,
 				0A1200260000000000000000 /* SourceSubscription.swift */,
+				0A6000010000000000000000 /* SourceSubscriptionRules.swift */,
 				0A1200260000000000000002 /* SourceSubscriptionService.swift */,
 				0199489D2742852E00C71708 /* SupportSites.swift */,
 				015C19DB218B0D4F003B2F3A /* VideoGetStructs.swift */,
@@ -746,6 +753,7 @@
 				0A1200010000000000000000 /* PlaybackEncoder.swift */,
 				0A1310010000000000000000 /* PlaybackHistory.swift */,
 				0A1310010000000000000002 /* PlayerProgressSession.swift */,
+				0A2810260000000000000000 /* PlaybackContract.swift */,
 				01AEC8BD20EE108B001406E8 /* Processes.swift */,
 			);
 			path = Playback;
@@ -754,6 +762,7 @@
 		5DA1E848A70C304A304C09DE /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				0A2910260000000000000000 /* CollectionStatus.swift */,
 				B3FDE5DC9857300ADFD8A82A /* Extensions */,
 				01AEC8C820F1081C001406E8 /* Identifiers.swift */,
 				011E4D3221E99CA300997633 /* Log.swift */,
@@ -1215,6 +1224,7 @@
 				0A1200010000000000000001 /* PlaybackEncoder.swift in Sources */,
 				0A1310010000000000000001 /* PlaybackHistory.swift in Sources */,
 				0A1310010000000000000003 /* PlayerProgressSession.swift in Sources */,
+				0A2810260000000000000001 /* PlaybackContract.swift in Sources */,
 				0A1200010000000000000003 /* AppServices.swift in Sources */,
 				0A0810010000000000000001 /* WorkspaceCapability.swift in Sources */,
 				0A0810020000000000000001 /* WorkspaceApplicationController.swift in Sources */,
@@ -1285,6 +1295,7 @@
 				01E40FEB22C304E800864118 /* ImageCacheService.swift in Sources */,
 				01FA1F012D83000100000108 /* SiteAccounts.swift in Sources */,
 				0A0400010000000000000001 /* BangumiModels.swift in Sources */,
+				0A2910260000000000000001 /* CollectionStatus.swift in Sources */,
 				0A0400010000000000000003 /* BangumiService.swift in Sources */,
 				0A0400010000000000000005 /* BangumiWorkSync.swift in Sources */,
 				0A0400010000000000000007 /* BangumiAccountSheetView.swift in Sources */,
@@ -1298,6 +1309,7 @@
 				0A0700010000000000000005 /* SourceSearch.swift in Sources */,
 				0A1310260000000000000001 /* TorrentSearchService.swift in Sources */,
 				0A1200260000000000000001 /* SourceSubscription.swift in Sources */,
+				0A6000010000000000000001 /* SourceSubscriptionRules.swift in Sources */,
 				0A1200260000000000000003 /* SourceSubscriptionService.swift in Sources */,
 				0A0600010000000000000001 /* DownloadModels.swift in Sources */,
 				0A0600010000000000000003 /* DownloadSourceResolver.swift in Sources */,

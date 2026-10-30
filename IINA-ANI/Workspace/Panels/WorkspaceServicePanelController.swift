@@ -1885,7 +1885,18 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         if case .resume(let entry) = destinations[indexPath.item] {
             let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("playback.resume"), for: indexPath)
             (item as? WorkspaceResumeCard)?.configure(entry: entry, appearance: dependencies.skinAppearance,
-                componentID: componentID, previewOnly: previewOnly)
+                componentID: componentID, previewOnly: previewOnly,
+                enabled: { [weak self] in self?.attached == true && self?.operation == nil },
+                activate: { [weak self] in
+                    guard let self, let index = self.destinations.firstIndex(where: {
+                        if case .resume(let current) = $0 { return current.id == entry.id }
+                        return false
+                    }) else { return }
+                    self.cards.selectionIndexPaths = [IndexPath(item: index, section: 0)]
+                    self.selectedRowID = self.identity(forRow: index)
+                    self.storeState()
+                    self.activateSelection()
+                })
             return item
         }
         let item = collectionView.makeItem(withIdentifier: NSUserInterfaceItemIdentifier("discovery.card"), for: indexPath)
@@ -2743,9 +2754,10 @@ private final class WorkspaceResumeCard: NSCollectionViewItem {
     override var isSelected: Bool {
         didSet { view.workspaceSkinBinding?.state = isSelected ? .selected : .normal }
     }
-    func configure(entry: PlaybackHistoryEntry, appearance: SkinAppearance, componentID: String, previewOnly: Bool) {
+    func configure(entry: PlaybackHistoryEntry, appearance: SkinAppearance, componentID: String, previewOnly: Bool,
+                   enabled: @escaping () -> Bool, activate: @escaping () -> Void) {
         (view as? WorkspaceResumeCardView)?.configure(entry: entry, appearance: appearance,
-            componentID: componentID, previewOnly: previewOnly)
+            componentID: componentID, previewOnly: previewOnly, enabled: enabled, activate: activate)
         view.bindSkin(appearance, slot: "row", componentID: componentID)
         view.workspaceSkinBinding?.state = isSelected ? .selected : .normal
     }
@@ -2764,9 +2776,32 @@ private final class WorkspaceResumeCardView: NSView {
     private let position = NSTextField(labelWithString: "")
     private let progress = WorkspaceSkinProgressIndicator()
     private let playIndicator = NSImageView()
+    private var activation: (() -> Void)?
+    private var activationEnabled: () -> Bool = { false }
+
+    override var acceptsFirstResponder: Bool { isAccessibilityEnabled() }
+    override var focusRingMaskBounds: NSRect { bounds }
+
+    override func isAccessibilityEnabled() -> Bool { activation != nil && activationEnabled() }
+
+    override func accessibilityPerformPress() -> Bool {
+        guard isAccessibilityEnabled(), let activation else { return false }
+        activation()
+        return true
+    }
+
+    override func keyDown(with event: NSEvent) {
+        switch event.keyCode {
+        case 36, 49, 76:
+            if accessibilityPerformPress() { return }
+        default: break
+        }
+        super.keyDown(with: event)
+    }
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
+        focusRingType = .exterior
         wantsLayer = true
         layer?.masksToBounds = true
         cover.wantsLayer = true
@@ -2830,7 +2865,11 @@ private final class WorkspaceResumeCardView: NSView {
             : String(format: "%d:%02d", value / 60, value % 60)
     }
 
-    func configure(entry: PlaybackHistoryEntry, appearance: SkinAppearance, componentID: String, previewOnly: Bool) {
+    func configure(entry: PlaybackHistoryEntry, appearance: SkinAppearance, componentID: String, previewOnly: Bool,
+                   enabled: @escaping () -> Bool, activate: @escaping () -> Void) {
+        activation = previewOnly ? nil : activate
+        activationEnabled = enabled
+        setAccessibilityRole(previewOnly ? .group : .button)
         if thumbnail == nil || thumbnailURL != entry.coverURL || thumbnailPreviewOnly != previewOnly
             || thumbnailAppearance !== appearance || thumbnailComponentID != componentID {
             thumbnail?.removeFromSuperview()

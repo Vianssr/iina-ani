@@ -45,6 +45,7 @@ final class WorkspaceApplicationController: NSObject {
             (String(localized: "開啟網址…"), #selector(openAddress), "o", [.command, .shift]),
             (String(localized: "開啟 Torrent 檔案…"), #selector(chooseTorrent), "t", [.command, .shift]),
             (String(localized: "活動任務"), #selector(showTasks), "d", [.command, .shift]),
+            (String(localized: "Next episode…"), #selector(nextEpisode), "", [.command]),
             (String(localized: "設定…"), #selector(showSettings), ",", [.command]),
             (String(localized: "恢復內建佈局"), #selector(restoreWorkspace), "", [.command]),
         ]
@@ -61,6 +62,32 @@ final class WorkspaceApplicationController: NSObject {
         }
         do { try skinController().installMenu(in: menu) } catch { NSAlert(error: error).runModal() }
         mainMenu.addItem(root)
+    }
+
+    @objc private func nextEpisode() {
+        let player = AppServices.current.player
+        let choices = player.nextEpisodePlayers
+        let alert = NSAlert()
+        alert.messageText = String(localized: "Next episode")
+        guard !choices.isEmpty else {
+            alert.informativeText = String(localized: "No active IINA/mpv session supports next episode. Local playlists can also be controlled in the player; JSPlayer uses its source selection controls.")
+            alert.addButton(withTitle: String(localized: "OK"))
+            alert.runModal()
+            return
+        }
+        alert.informativeText = String(localized: "Choose the playback session. Next stays in the same source and catalog group, keeping its line and quality. Failed resolution leaves the current player paused.")
+        let picker = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 380, height: 28))
+        picker.addItems(withTitles: choices.map(\.title))
+        picker.setAccessibilityLabel(String(localized: "Playback session"))
+        alert.accessoryView = picker
+        alert.addButton(withTitle: String(localized: "Next episode"))
+        alert.addButton(withTitle: String(localized: "Cancel"))
+        alert.addButton(withTitle: String(localized: "Cancel pending next episode"))
+        let response = alert.runModal()
+        guard choices.indices.contains(picker.indexOfSelectedItem) else { return }
+        let id = choices[picker.indexOfSelectedItem].id
+        if response == .alertFirstButtonReturn { player.requestNextEpisode(id) }
+        else if response == .alertThirdButtonReturn { player.cancelNextEpisode(id) }
     }
 
     private func skinController() throws -> WorkspaceSkinController {

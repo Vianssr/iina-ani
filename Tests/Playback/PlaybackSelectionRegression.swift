@@ -53,6 +53,7 @@ struct PlaybackSelectionRegression {
         try autoplayCatalogs()
         try autoplayLocalFiles()
         try autoplayEOF()
+        try retainedEOF()
         print("PASS: exact playback identities and autoplay sibling groups, source boundaries, local natural order and EOF-only completion")
     }
 
@@ -172,6 +173,16 @@ struct PlaybackSelectionRegression {
         var snapshot: [(failed: Bool, completed: Bool)] { lock.lock(); defer { lock.unlock() }; return values }
     }
 
+    final class Samples: @unchecked Sendable {
+        private let lock = NSLock()
+        private var positions: [Double] = []
+        private var replies: [Int] = []
+        func append(_ position: Double) { lock.lock(); defer { lock.unlock() }; positions.append(position) }
+        func reply(_ id: Int) { lock.lock(); defer { lock.unlock() }; replies.append(id) }
+        var count: Int { lock.lock(); defer { lock.unlock() }; return positions.count }
+        var acknowledged: [Int] { lock.lock(); defer { lock.unlock() }; return replies }
+    }
+
     static func autoplayEOF() throws {
         let path = "file:///isolated/Episode%201.mp4"
         func observer(_ events: Ends) -> PlaybackIPCHandler {
@@ -214,5 +225,58 @@ struct PlaybackSelectionRegression {
         try require(redirected.snapshot.isEmpty, "A load-hook redirect is not EOF")
         redirectHandler.receive(["event": "end-file", "reason": "eof"])
         try require(redirected.snapshot.first?.completed == true && unseen.snapshot.isEmpty, "Independent observers must remain isolated")
+        let failed = Ends(), samples = Samples()
+        let failedHandler = PlaybackIPCHandler(paths: [path], progress: { position, _ in samples.append(position) },
+            ended: { failed.append($0, $1) }, requestReply: { id, _ in samples.reply(id) })
+        failedHandler.receive(["event": "property-change", "name": "time-pos", "data": 30.0])
+        failedHandler.receive(["event": "property-change", "name": "path", "data": path])
+        failedHandler.receive(["event": "property-change", "name": "duration", "data": 100.0])
+        failedHandler.receive(["event": "end-file", "reason": "error"])
+        failedHandler.receive(["event": "end-file", "reason": "eof"])
+        failedHandler.receive(["request_id": 7, "error": "success"])
+        try require(samples.count == 0 && failed.snapshot.count == 1 &&
+                    failed.snapshot.first?.failed == true && failed.snapshot.first?.completed == false,
+                    "Unmatched/preload time and a failed load must not produce successful progress or natural completion")
+        try require(samples.acknowledged == [7],
+                    "Nonqueue resume seek acknowledgements must reach the request owner, even during teardown")
+        let unloaded = Ends(), unloadedHandler = observer(unloaded)
+        unloadedHandler.receive(["event": "property-change", "name": "path", "data": path])
+        unloadedHandler.receive(["event": "end-file", "reason": "eof"])
+        try require(unloaded.snapshot.first?.completed == false,
+                    "EOF before file-loaded or actual backend time cannot complete an unconfirmed load")
+    }
+}
+
+extension PlaybackSelectionRegression {
+    static func retainedEOF() throws {
+        let path = "file:///isolated/retained.mp4"
+        let events = Ends()
+        let handler = PlaybackIPCHandler(paths: [path], retainsEOF: true,
+            progress: { _, _ in }, ended: { events.append($0, $1) })
+        handler.receive(["event": "property-change", "name": "path", "data": path])
+        handler.receive(["event": "property-change", "name": "time-pos", "data": 90.0])
+        handler.receive(["event": "property-change", "name": "eof-reached", "data": true])
+        handler.receive(["event": "end-file", "reason": "eof"])
+        try require(events.snapshot.map(\.completed) == [true], "Retained EOF must advance once despite duplicate reports")
+        handler.receive(["event": "seek"])
+        handler.receive(["event": "property-change", "name": "eof-reached", "data": false])
+        handler.receive(["event": "property-change", "name": "time-pos", "data": 12.0])
+        handler.receive(["event": "property-change", "name": "eof-reached", "data": true])
+        try require(events.snapshot.map(\.completed) == [true, true], "A real replay gets its own single EOF")
+        handler.receive(["event": "shutdown"])
+        handler.receive(["event": "end-file", "reason": "eof"])
+        try require(events.snapshot.map(\.completed) == [true, true, false],
+                    "Close remains observable after retained EOF and permanently suppresses late EOF")
+
+        let stopped = Ends()
+        let replacement = PlaybackIPCHandler(paths: [path], retainsEOF: true,
+            progress: { _, _ in }, ended: { stopped.append($0, $1) })
+        replacement.receive(["event": "property-change", "name": "path", "data": path])
+        replacement.receive(["event": "property-change", "name": "time-pos", "data": 90.0])
+        replacement.receive(["event": "end-file", "reason": "eof"])
+        replacement.receive(["event": "start-file", "playlist_entry_id": 2])
+        replacement.receive(["event": "end-file", "reason": "eof", "playlist_entry_id": 1])
+        try require(stopped.snapshot.map(\.completed) == [true, false],
+                    "Manual file replacement cancels the old retained owner instead of continuing it")
     }
 }

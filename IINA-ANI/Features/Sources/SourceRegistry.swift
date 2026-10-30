@@ -14,14 +14,23 @@ final class SourceRegistry: @unchecked Sendable {
         var subscriptionSearch: [String: NativeSearchSource] = [:]
     }
 
+    struct ConfigurationImport {
+        let configuration: SourceConfiguration
+        let previousRevision: String?
+        fileprivate let data: Data
+        fileprivate let registryRevision: UInt64
+    }
+
     enum RegistryError: Error, LocalizedError {
         case duplicateID(String)
         case hostConflict(String)
+        case stalePreview
 
         var errorDescription: String? {
             switch self {
             case .duplicateID(let id): return String(localized: "Duplicate source ID: \(id)")
             case .hostConflict(let host): return String(localized: "Source host conflicts with an existing source: \(host)")
+            case .stalePreview: return String(localized: "來源配置已變更；請重新匯入並檢查預覽。")
             }
         }
     }
@@ -30,6 +39,7 @@ final class SourceRegistry: @unchecked Sendable {
     private let mutationLock = NSLock()
     private var generation: UInt64 = 0
     private var subscriptionURL: URL?
+    private var directories: (builtin: URL?, user: URL)?
     private var stored = Snapshot(configurations: [:], nativeSearch: [:], matchers: [], descriptors: [], loadError: nil)
 
     init(builtinDirectory: URL? = nil, userDirectory: URL? = nil) {
@@ -59,11 +69,13 @@ final class SourceRegistry: @unchecked Sendable {
         mutationLock.lock()
         defer { mutationLock.unlock() }
         do {
-            let loaded = try load(builtinDirectory: builtinDirectory, userDirectory: userDirectory)
-            let directory = try userDirectory ?? AppStoragePaths.production().applicationSupport.appendingPathComponent("sources", isDirectory: true)
+            let builtins = builtinDirectory ?? Bundle.main.resourceURL?.appendingPathComponent("Sources", isDirectory: true)
+            let directory = try userDirectory ?? Self.defaultUserDirectory()
+            let loaded = try load(builtinDirectory: builtins, userDirectory: directory)
             lock.lock()
             stored = loaded
             subscriptionURL = directory.appendingPathComponent("subscriptions/css1.json")
+            directories = (builtins, directory)
             generation &+= 1
             lock.unlock()
         } catch {
@@ -76,7 +88,93 @@ final class SourceRegistry: @unchecked Sendable {
         }
     }
 
-    private func load(builtinDirectory: URL?, userDirectory: URL?, includeUsers: Bool = true) throws -> Snapshot {
+    private static func defaultUserDirectory() throws -> URL {
+        let support = try FileManager.default.url(for: .applicationSupportDirectory,
+            in: .userDomainMask, appropriateFor: nil, create: true)
+        return support.appendingPathComponent(Bundle.main.bundleIdentifier ?? "IINA-ANI", isDirectory: true)
+            .appendingPathComponent("sources", isDirectory: true)
+    }
+
+    private func locations() throws -> (builtin: URL?, user: URL) {
+        lock.lock()
+        let current = directories
+        lock.unlock()
+        return try current ?? (Bundle.main.resourceURL?.appendingPathComponent("Sources", isDirectory: true),
+                               Self.defaultUserDirectory())
+    }
+
+    var configurationDirectory: URL? { try? locations().user }
+
+    func reloadCurrent() throws {
+        let current = try locations()
+        try reload(builtinDirectory: current.builtin, userDirectory: current.user)
+    }
+
+    /// Preview validates the complete resulting registry without changing files or enablement.
+    func prepareConfigurationImport(fileURL: URL) throws -> ConfigurationImport {
+        let scoped = fileURL.startAccessingSecurityScopedResource()
+        defer { if scoped { fileURL.stopAccessingSecurityScopedResource() } }
+        let values = try fileURL.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+        guard values.isRegularFile == true, let size = values.fileSize, size <= 1_048_576 else {
+            throw SourceConfiguration.ConfigurationError.invalidConfiguration
+        }
+        let data = try Data(contentsOf: fileURL)
+        guard data.count <= 1_048_576 else { throw SourceConfiguration.ConfigurationError.invalidConfiguration }
+        let configuration = try SourceConfiguration.load(data: data)
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
+        let current = try locations()
+        let base = try load(builtinDirectory: current.builtin, userDirectory: current.user)
+        let destination = try configurationFile(for: configuration.id, directory: current.user)
+        _ = try load(builtinDirectory: current.builtin, userDirectory: current.user,
+                     replacement: (destination, configuration))
+        return ConfigurationImport(configuration: configuration,
+            previousRevision: base.configurations[configuration.id]?.configurationRevision,
+            data: data, registryRevision: revision)
+    }
+
+    /// The bytes are validated before atomic replacement; failed writes never publish a new snapshot.
+    func applyConfigurationImport(_ draft: ConfigurationImport) throws {
+        mutationLock.lock()
+        defer { mutationLock.unlock() }
+        let current = try locations()
+        let base = try load(builtinDirectory: current.builtin, userDirectory: current.user)
+        guard revision == draft.registryRevision,
+              base.configurations[draft.configuration.id]?.configurationRevision == draft.previousRevision else {
+            throw RegistryError.stalePreview
+        }
+        let configuration = try SourceConfiguration.load(data: draft.data)
+        let destination = try configurationFile(for: configuration.id, directory: current.user)
+        let next = try load(builtinDirectory: current.builtin, userDirectory: current.user,
+                            replacement: (destination, configuration))
+        try FileManager.default.createDirectory(at: current.user, withIntermediateDirectories: true)
+        try draft.data.write(to: destination, options: .atomic)
+        lock.lock()
+        stored = next
+        directories = current
+        subscriptionURL = current.user.appendingPathComponent("subscriptions/css1.json")
+        generation &+= 1
+        lock.unlock()
+    }
+
+    private func configurationFile(for id: String, directory: URL) throws -> URL {
+        // This filename belongs to the native search resource and is excluded by load().
+        guard id.lowercased() != "native-search" else {
+            throw SourceConfiguration.ConfigurationError.invalidConfiguration
+        }
+        if FileManager.default.fileExists(atPath: directory.path) {
+            let files = try FileManager.default.contentsOfDirectory(at: directory,
+                includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+                .filter { $0.pathExtension.lowercased() == "json" && $0.lastPathComponent != "native-search.json" }
+            for file in files where try SourceConfiguration.load(fileURL: file).id == id { return file }
+        }
+        let destination = directory.appendingPathComponent(id + ".json")
+        guard !FileManager.default.fileExists(atPath: destination.path) else { throw RegistryError.duplicateID(id) }
+        return destination
+    }
+
+    private func load(builtinDirectory: URL?, userDirectory: URL?, includeUsers: Bool = true,
+                      replacement: (file: URL, configuration: SourceConfiguration)? = nil) throws -> Snapshot {
         let builtins = builtinDirectory ?? Bundle.main.resourceURL?.appendingPathComponent("Sources", isDirectory: true)
         let users: URL?
         if !includeUsers {
@@ -84,10 +182,7 @@ final class SourceRegistry: @unchecked Sendable {
         } else if let userDirectory {
             users = userDirectory
         } else {
-            let support = try FileManager.default.url(for: .applicationSupportDirectory,
-                in: .userDomainMask, appropriateFor: nil, create: true)
-            users = support.appendingPathComponent(Bundle.main.bundleIdentifier ?? "IINA-ANI", isDirectory: true)
-                .appendingPathComponent("sources", isDirectory: true)
+            users = try Self.defaultUserDirectory()
         }
 
         let nativeSites = SupportSites.nativeSites
@@ -133,25 +228,35 @@ final class SourceRegistry: @unchecked Sendable {
         var configurations: [String: SourceConfiguration] = [:]
         let directories = [builtins, users]
         for directory in directories {
-            guard let directory, FileManager.default.fileExists(atPath: directory.path) else { continue }
-            let files = try FileManager.default.contentsOfDirectory(at: directory,
-                includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles])
-                .filter { $0.pathExtension.lowercased() == "json" && $0.lastPathComponent != "native-search.json" }
-                .sorted { $0.lastPathComponent < $1.lastPathComponent }
-            for file in files {
-                let configuration = try SourceConfiguration.load(fileURL: file)
-                guard !nativeIDs.contains(configuration.id), configurations[configuration.id] == nil else {
+            guard let directory else { continue }
+            var files = FileManager.default.fileExists(atPath: directory.path)
+                ? try FileManager.default.contentsOfDirectory(at: directory,
+                    includingPropertiesForKeys: [.isRegularFileKey], options: [.skipsHiddenFiles])
+                    .filter { $0.pathExtension.lowercased() == "json" && $0.lastPathComponent != "native-search.json" }
+                : []
+            if let replacement,
+               replacement.file.deletingLastPathComponent().standardizedFileURL.path == directory.standardizedFileURL.path,
+               !files.contains(replacement.file) { files.append(replacement.file) }
+            guard files.count <= 100 else { throw SourceConfiguration.ConfigurationError.invalidConfiguration }
+            var directoryIDs: Set<String> = []
+            for file in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
+                let configuration: SourceConfiguration
+                if let replacement, file == replacement.file { configuration = replacement.configuration }
+                else {
+                    let size = try file.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? Int.max
+                    guard size <= 1_048_576 else { throw SourceConfiguration.ConfigurationError.invalidConfiguration }
+                    configuration = try SourceConfiguration.load(fileURL: file)
+                }
+                guard !nativeIDs.contains(configuration.id), directoryIDs.insert(configuration.id).inserted else {
                     throw RegistryError.duplicateID(configuration.id)
                 }
-                for host in configuration.hosts.map({ $0.lowercased() }) {
-                    guard !nativeHosts.contains(host) else { throw RegistryError.hostConflict(host) }
-                }
-                for existing in configurations.values {
-                    let overlap = Set(existing.hosts.map { $0.lowercased() })
-                        .intersection(configuration.hosts.map { $0.lowercased() })
-                    if let host = overlap.first { throw RegistryError.hostConflict(host) }
-                }
                 configurations[configuration.id] = configuration
+            }
+        }
+        var occupiedHosts = nativeHosts
+        for configuration in configurations.values.sorted(by: { $0.id < $1.id }) {
+            for host in configuration.hosts.map({ $0.lowercased() }) {
+                guard occupiedHosts.insert(host).inserted else { throw RegistryError.hostConflict(host) }
             }
         }
 
@@ -182,7 +287,9 @@ final class SourceRegistry: @unchecked Sendable {
             capabilities: [.information, .episodes, .download])
         nativeDescriptors["youtube"] = SourceDescriptor(id: "youtube", name: "YouTube", version: 1,
             capabilities: [.browse])
-        let descriptors = (Array(nativeDescriptors.values) + configurations.values.map(\.descriptor)).sorted { $0.id < $1.id }
+        // Native descriptors remain adapter-owned; declarative sources cannot enable unimplemented operations.
+        let descriptors = (Array(nativeDescriptors.values) + configurations.values.map { $0.descriptor(on: .macOS) })
+            .sorted { $0.id < $1.id }
         let matchers = configurations.values.sorted { $0.id < $1.id }
         let base = Snapshot(configurations: configurations, nativeSearch: nativeSearch, matchers: matchers,
                             descriptors: subscriptionDescriptors(descriptors, active: []), loadError: nil)

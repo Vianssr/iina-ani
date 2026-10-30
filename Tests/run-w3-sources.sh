@@ -19,7 +19,7 @@ FLAGS=(-I "$PRODUCTS" -F "$PRODUCTS" -I "$ROOT/Native/include"
 for module in "$BUILD/Intermediates.noindex/GeneratedModuleMaps/"*.modulemap; do
     FLAGS+=(-Xcc "-fmodule-map-file=$module")
 done
-for source in SourceConfigurationRegression SourceRegistryRegression ConfiguredSourceRegression SourceSearchRegression XiFanRegression SourceSubscriptionRegression SourceSubscriptionStoreRegression; do
+for source in SourceConfigurationRegression AutomaticDanmakuConfigurationRegression SourceRegistryRegression ConfiguredSourceRegression SourceSearchRegression XiFanRegression SourceSubscriptionRegression SourceSubscriptionStoreRegression; do
     xcrun swiftc -swift-version 6 -parse-as-library "${FLAGS[@]}" \
         "$ROOT/Tests/Sources/$source.swift" \
         -Xlinker "$APP_BINARY/IINA-ANI.debug.dylib" \

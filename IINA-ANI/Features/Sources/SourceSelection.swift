@@ -168,3 +168,192 @@ struct PlayableSelection: Codable, Hashable, Sendable {
         classification = try c.decodeIfPresent(MediaClassification.self, forKey: .classification) ?? .unknown
     }
 }
+
+/// Stable domain identity; neither a display title nor a resolved media URL is an ID.
+struct PlaybackWorkIdentity: Codable, Hashable, Sendable {
+    let localID: String
+    let bangumiID: Int?
+
+    static func bangumi(_ id: Int) -> Self {
+        Self(localID: playbackIdentity("bangumi-work", [String(id)]), bangumiID: id)
+    }
+
+    /// `workID` is the source's work/season key, not the work's title.
+    static func source(sourceID: String, workID: String) -> Self {
+        Self(localID: playbackIdentity("source-work", [sourceID, workID]), bangumiID: nil)
+    }
+
+    /// For native adapters with an already-canonical, credential-free page reference.
+    static func source(_ item: SourceItemRef) -> Self {
+        source(sourceID: item.sourceID, workID: item.pageURL)
+    }
+}
+
+struct PlaybackEpisodeIdentity: Codable, Hashable, Sendable {
+    let localID: String
+    let bangumiID: Int?
+    let type: Int?
+    /// The raw Bangumi sort, including fractional values; never a displayed integer.
+    let sort: Double?
+
+    static func bangumi(_ id: Int, type: Int?, sort: Double?) -> Self {
+        Self(localID: playbackIdentity("bangumi-episode", [String(id)]),
+             bangumiID: id, type: type, sort: sort)
+    }
+
+    /// Work/season scope is required because episode keys are commonly reused.
+    static func source(sourceID: String, workID: String, episodeID: String) -> Self {
+        Self(localID: playbackIdentity("source-episode", [sourceID, workID, episodeID]),
+             bangumiID: nil, type: nil, sort: nil)
+    }
+
+    static func source(work: SourceItemRef, episode: SourceItemRef) -> Self {
+        Self(localID: playbackIdentity("source-episode-page",
+             [work.sourceID, work.pageURL, episode.sourceID, episode.pageURL]),
+             bangumiID: nil, type: nil, sort: nil)
+    }
+}
+
+/// Durable selection and requested domain identities, independent of expiring playback input.
+struct PlaybackContext: Codable, Hashable, Sendable {
+    let work: PlaybackWorkIdentity
+    let episode: PlaybackEpisodeIdentity
+    let selection: PlayableSelection
+    let configurationRevision: String?
+}
+
+/// A manually confirmed, successfully resolved choice, never the resolved stream itself.
+struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
+    let context: PlaybackContext
+    let sourceTitle: String
+    let confirmedAt: Date
+
+    init(context: PlaybackContext, sourceTitle: String, confirmedAt: Date = .now) {
+        self.context = context
+        self.sourceTitle = sourceTitle
+        self.confirmedAt = confirmedAt
+    }
+
+    func matches(work: PlaybackWorkIdentity, episode: PlaybackEpisodeIdentity) -> Bool {
+        context.work == work && context.episode == episode
+    }
+
+    /// The iOS configured-source library boundary also checks callers that bypass
+    /// canonicalization. Native desktop adapters retain their own identity validation.
+    /// Current configuration authority is deliberately not checked here: invalidated records
+    /// remain durable until the user explicitly reconfirms or removes them.
+    func validateForPersistence() throws {
+        let selection = context.selection
+        guard confirmedAt.timeIntervalSinceReferenceDate.isFinite,
+              !sourceTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              selection.item.kind == .work, let episode = selection.episode, episode.kind == .episode,
+              selection.item.sourceID == episode.sourceID,
+              !selection.item.sourceID.isEmpty,
+              selection.item.sourceID.utf8.count <= 64,
+              selection.item.sourceID.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }),
+              selection.accountID == nil, selection.torrent == nil,
+              Self.isCanonicalPublicPage(selection.item.pageURL),
+              Self.isCanonicalPublicPage(episode.pageURL),
+              selection.lineID.map(Self.safeLabel) ?? true,
+              selection.qualityID.map(Self.safeLabel) ?? true,
+              Self.safeProvenance(selection.classification.provenance),
+              let revision = context.configurationRevision, revision.hasPrefix("sha256:"), revision.utf8.count == 71,
+              revision.utf8.dropFirst(7).allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }),
+              Self.validWork(context.work), Self.validEpisode(context.episode) else {
+            throw PlaybackFailure.unsupportedResponse
+        }
+    }
+
+    static func safeIdentityParameter(_ name: String) -> Bool {
+        let lower = name.lowercased()
+        let compact = lower.filter { $0.isLetter || $0.isNumber }
+        return !name.isEmpty && name.utf8.count <= 64 &&
+            name.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "_" || $0 == "-") }) &&
+            !sensitiveIdentityFragments.contains(where: compact.contains) &&
+            !lower.hasPrefix("utm_") && !trackingIdentityNames.contains(lower)
+    }
+
+    static func isCanonicalPublicPage(_ raw: String) -> Bool {
+        guard var components = URLComponents(string: raw),
+              let scheme = components.scheme, scheme == "https" || scheme == "http",
+              let host = components.host, !host.isEmpty, host == host.lowercased(),
+              components.user == nil, components.password == nil, components.port == nil,
+              components.fragment == nil, components.url != nil,
+              !mediaPageExtensions.contains((components.path as NSString).pathExtension.lowercased()) else { return false }
+        let query = components.queryItems ?? []
+        guard query.count <= 1, query.allSatisfy({
+            safeIdentityParameter($0.name) && $0.value.map({ !$0.isEmpty && !$0.contains("://") &&
+                !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }) == true
+        }) else { return false }
+        components.queryItems = query.isEmpty ? nil : query
+        return components.string == raw
+    }
+
+    static func safeLabel(_ value: String) -> Bool {
+        !value.isEmpty && value.utf8.count <= 256 && !value.contains("://") &&
+            !value.contains(where: { "?&=#@".contains($0) }) &&
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+    }
+
+    // Classification evidence uses assignments (for example, bangumi.subject.type=2),
+    // unlike source-owned line/quality labels. It still cannot carry URLs or queries.
+    private static func safeProvenance(_ value: String) -> Bool {
+        !value.isEmpty && value.utf8.count <= 256 && !value.contains("://") &&
+            !value.contains(where: { "?&#@".contains($0) }) &&
+            !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+    }
+
+    private static let sensitiveIdentityFragments = [
+        "token", "cookie", "auth", "password", "passwd", "secret", "signature", "credential",
+        "session", "apikey", "accesskey", "privatekey", "bearer", "jwt", "csrf", "xsrf", "tracking", "expires"
+    ]
+    private static let trackingIdentityNames: Set<String> = ["ref", "referer", "referrer", "fbclid", "gclid", "sig", "key"]
+    private static let mediaPageExtensions: Set<String> = [
+        "m3u8", "mpd", "mp4", "m4v", "mov", "mkv", "webm", "ts", "flv", "mp3", "aac", "torrent"
+    ]
+
+    private static func validWork(_ work: PlaybackWorkIdentity) -> Bool {
+        if let id = work.bangumiID { return id > 0 && work == .bangumi(id) }
+        return validSourceIdentity(work.localID, namespaces: ["source-work"])
+    }
+
+    private static func validEpisode(_ episode: PlaybackEpisodeIdentity) -> Bool {
+        guard episode.sort.map({ $0.isFinite && $0 >= 0 }) ?? true,
+              episode.type.map({ $0 >= 0 }) ?? true else { return false }
+        if let id = episode.bangumiID {
+            return id > 0 && episode == .bangumi(id, type: episode.type, sort: episode.sort)
+        }
+        return episode.type == nil && episode.sort == nil &&
+            validSourceIdentity(episode.localID, namespaces: ["source-episode", "source-episode-page"])
+    }
+
+    private static func validSourceIdentity(_ raw: String, namespaces: [String]) -> Bool {
+        guard let namespace = namespaces.first(where: { raw.hasPrefix($0 + ":v1:") }) else { return false }
+        var bytes = raw.utf8.dropFirst(namespace.utf8.count + 4)
+        var count = 0
+        while !bytes.isEmpty {
+            guard let colon = bytes.firstIndex(of: 58), colon != bytes.startIndex,
+                  let length = Int(String(decoding: bytes[..<colon], as: UTF8.self)), length > 0,
+                  String(length).utf8.elementsEqual(bytes[..<colon]) else { return false }
+            let start = bytes.index(after: colon)
+            guard let end = bytes.index(start, offsetBy: length, limitedBy: bytes.endIndex),
+                  let value = String(bytes: bytes[start..<end], encoding: .utf8),
+                  !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains),
+                  (value.contains("://") ? isCanonicalPublicPage(value) : !value.contains("?")) else { return false }
+            bytes = bytes[end...]
+            count += 1
+        }
+        return count == (namespace == "source-work" ? 2 : namespace == "source-episode" ? 3 : 4)
+    }
+}
+
+/// Cross-platform failure categories intentionally contain no raw response, URL or credentials.
+enum PlaybackFailure: String, Error, Codable, CaseIterable, Sendable {
+    case noCandidates, missingEpisode, sourceDisabled, configurationChanged
+    case network, unsupportedResponse, authenticationRequired, mediaPlayback, cancelled
+}
+
+/// UTF-8 byte-length framing makes arbitrary delimiters and Unicode components unambiguous.
+private func playbackIdentity(_ namespace: String, _ components: [String]) -> String {
+    namespace + ":v1:" + components.map { "\($0.utf8.count):\($0)" }.joined()
+}

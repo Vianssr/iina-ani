@@ -83,6 +83,10 @@ actor Bilibili {
         }
         
         let key = isBangumi ? "result" : "data"
+        if isBangumi {
+            let preview: Bool = (try? json.value(for: "\(key).is_preview")) ?? false
+            guard !preview else { throw VideoGetError.needVip }
+        }
         
         
         do {

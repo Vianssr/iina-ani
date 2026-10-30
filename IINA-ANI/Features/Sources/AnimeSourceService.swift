@@ -32,25 +32,34 @@ final class AnimeSourceService {
         var catalog: @Sendable (PlayableSelection) async throws -> VideoSelectionCatalog?
         var decode: @Sendable (PlayableSelection) async throws -> YouGetJSON
         var prepare: @Sendable (YouGetJSON, String) async throws -> YouGetJSON
+        var mappingSelection: @Sendable (PlayableSelection) throws -> (selection: PlayableSelection, revision: String, configured: Bool)
+        var mappingRevision: @Sendable (String) throws -> String
     }
 
     enum SourceError: Error, LocalizedError {
-        case invalidContext, unavailable, unresolved
+        case invalidContext, unavailable, unresolved, storage
+        case failure(PlaybackFailure)
         var errorDescription: String? {
             switch self {
             case .invalidContext: return String(localized: "此候選不屬於當前作品／集數。")
             case .unavailable: return String(localized: "此來源沒有可用的公開播放網址。")
             case .unresolved: return String(localized: "來源尚未成功解析，不會保存關聯。")
+            case .failure(let failure): return AnimeSourceService.failureDescription(failure)
+            case .storage: return String(localized: "播放來源已解析，但映射保存失敗；請檢查本機儲存後重試。")
             }
         }
     }
 
     private struct Issued {
-        let workID: UUID
-        let episodeID: UUID
+        let work: Work
+        let episode: Episode
+        let revision: String
+        let title: String
         let sourceWork: SourceItemRef
         let selection: PlayableSelection
         var resolved: PlayableSelection?
+        var catalogGroup: [String]?
+        var resolutionID: UUID?
     }
     private struct CandidateIdentity: Hashable {
         let work: SourceItemRef
@@ -60,7 +69,7 @@ final class AnimeSourceService {
     private struct SearchOutcome: Sendable {
         let source: SourceDescriptor
         let results: [(SourceSearchResult, Evidence)]
-        let failures: Int
+        let failures: [String]
     }
     private let dependencies: Dependencies
     private var issued: [String: Issued] = [:]
@@ -73,7 +82,9 @@ final class AnimeSourceService {
             selection: { try await decoder.guestSelection(for: $0) },
             catalog: { try await decoder.catalog(for: $0) },
             decode: { try await decoder.resolve($0) },
-            prepare: { try await decoder.prepareVideoUrl($0, $1) })
+            prepare: { try await decoder.prepareVideoUrl($0, $1) },
+            mappingSelection: { try decoder.mappingSelection($0) },
+            mappingRevision: { try decoder.mappingRevision($0) })
     }
 
     /// Offline behavioral tests inject the existing decoder boundaries, not a second resolver.
@@ -93,24 +104,48 @@ final class AnimeSourceService {
         var seen: Set<CandidateIdentity> = []
         for link in links where link.workID == work.id {
             for mapping in link.episodeMappings where mapping.episodeID == episode.id {
-                var choice = mapping.selection
-                choice.accountID = nil
-                guard seen.insert(CandidateIdentity(choice)).inserted else { continue }
-                let exact = choice.episode ?? choice.item
-                let valid = choice.item.sourceID == link.sourceWork.sourceID &&
-                    exact.sourceID == choice.item.sourceID && exact.kind == .episode &&
-                    choice.torrent == nil && choice.classification.kind == .anime
-                let failure = !dependencies.enabled(choice.item.sourceID) ? String(localized: "來源已停用。") :
-                    (!valid ? String(localized: "保存的映射缺少明確的同來源集數身份。") : nil)
-                candidates.append(issue(work: work, episode: episode, sourceWork: link.sourceWork,
-                    name: names[choice.item.sourceID] ?? choice.item.sourceID, title: work.title,
-                    selection: failure == nil ? choice : nil, evidence: String(localized: "已保存的作品／集數映射"), failure: failure,
-                    trusted: failure == nil))
+                let name = names[mapping.selection.item.sourceID] ?? mapping.selection.item.sourceID
+                do {
+                    let authority = try current(mapping.selection)
+                    let choice = authority.selection
+                    guard choice.item.sourceID == link.sourceWork.sourceID else { throw SourceError.invalidContext }
+                    if let confirmation = mapping.confirmation {
+                        guard confirmation.matches(work: Self.workIdentity(work), episode: Self.episodeIdentity(episode, work: work)),
+                              confirmation.context.selection == choice,
+                              confirmation.context.configurationRevision == authority.revision else {
+                            throw SourceError.failure(.configurationChanged)
+                        }
+                    } else if authority.configured {
+                        throw SourceError.failure(.configurationChanged)
+                    }
+                    let group = try await validateCatalog(choice, work: work, episode: episode,
+                        title: mapping.confirmation?.sourceTitle ?? work.title, revision: authority.revision)
+                    guard mapping.catalogGroup == nil || mapping.catalogGroup == group else {
+                        throw SourceError.failure(.missingEpisode)
+                    }
+                    guard generation == requestGeneration else { throw CancellationError() }
+                    guard seen.insert(CandidateIdentity(choice)).inserted else { continue }
+                    candidates.append(issue(work: work, episode: episode, sourceWork: choice.item,
+                        name: name, title: mapping.confirmation?.sourceTitle ?? work.title,
+                        selection: choice, evidence: String(localized: "已保存的作品／集數映射"), failure: nil, trusted: true,
+                        catalogGroup: group))
+                } catch {
+                    if error is CancellationError || Task.isCancelled { throw CancellationError() }
+                    candidates.append(issue(work: work, episode: episode, sourceWork: link.sourceWork,
+                        name: name, title: work.title, selection: nil,
+                        evidence: String(localized: "已保存的作品／集數映射"),
+                        failure: Self.diagnostic(error), trusted: false))
+                }
             }
         }
-        if !forceSearch, candidates.contains(where: { $0.trusted }) {
+        if !forceSearch, !candidates.isEmpty {
             guard generation == requestGeneration else { throw CancellationError() }
-            return AnimeSourceReport(candidates: candidates)
+            let blocked = candidates.contains { $0.failure != nil }
+            return AnimeSourceReport(candidates: candidates.map {
+                AnimeSourceCandidate(id: $0.id, sourceName: $0.sourceName, title: $0.title,
+                    selection: $0.selection, evidence: $0.evidence, failure: $0.failure,
+                    trusted: $0.trusted && !blocked)
+            })
         }
 
         let aliases = Self.aliases(work)
@@ -118,16 +153,23 @@ final class AnimeSourceService {
             dependencies.enabled($0.id) && $0.capabilities.contains(.search) &&
             $0.capabilities.contains(.resolve) && ($0.capabilities.contains(.iina) || $0.capabilities.contains(.mpv))
         }.sorted { $0.id < $1.id }
+        let revisions = Dictionary(uniqueKeysWithValues: sources.compactMap { source in
+            (try? dependencies.mappingRevision(source.id)).map { (source.id, $0) }
+        })
         let dependencies = self.dependencies
         // Three in-flight sources, four aliases and at most eight plausible works/source.
         let outcomes = try await Self.bounded(sources, limit: 3) { source in
             var hits: [(SourceSearchResult, Evidence)] = [], rejected: [(SourceSearchResult, Evidence)] = []
-            var seen: Set<SourceItemRef> = [], failures = 0
+            var seen: Set<SourceItemRef> = [], failures: [String] = []
             for alias in aliases {
                 try Task.checkCancellation()
                 do {
                     let page = try await dependencies.search(source.id, alias)
                     try Task.checkCancellation()
+                    guard dependencies.enabled(source.id) else { throw PlaybackFailure.sourceDisabled }
+                    guard try dependencies.mappingRevision(source.id) == revisions[source.id] else {
+                        throw PlaybackFailure.configurationChanged
+                    }
                     for result in page.results where result.item.sourceID == source.id {
                         guard seen.insert(result.item).inserted else { continue }
                         let evidence = Self.workEvidence(work, result: result)
@@ -139,19 +181,20 @@ final class AnimeSourceService {
                     }
                 } catch {
                     if Task.isCancelled || error is CancellationError { throw CancellationError() }
-                    failures += 1
+                    failures.append(Self.diagnostic(error))
                 }
             }
             return SearchOutcome(source: source, results: hits + rejected, failures: failures)
         }
         guard generation == requestGeneration else { throw CancellationError() }
         for outcome in outcomes {
-            if outcome.failures > 0 || outcome.results.isEmpty {
+            if !outcome.failures.isEmpty || outcome.results.isEmpty {
                 candidates.append(issue(work: work, episode: episode,
                     sourceWork: SourceItemRef(sourceID: outcome.source.id, pageURL: "", kind: .work),
                     name: outcome.source.name, title: work.title, selection: nil,
                     evidence: String(localized: "關鍵詞搜尋（\(aliases.count) 個名稱）"),
-                    failure: outcome.failures > 0 ? String(localized: "部分或全部搜尋失敗／需原站授權。") : String(localized: "搜尋沒有命中。"), trusted: false))
+                    failure: outcome.failures.isEmpty ? String(localized: "搜尋沒有命中。") :
+                        Array(Set(outcome.failures)).sorted().joined(separator: "\n"), trusted: false))
             }
         }
         let numbering = Self.episodeNumbering(work: work, episode: episode)
@@ -171,6 +214,10 @@ final class AnimeSourceService {
                     return (source, result, nil, evidence.description, String(localized: "來源未提供明確集數清單。"), false)
                 }
                 try Task.checkCancellation()
+                guard dependencies.enabled(source.id) else { throw PlaybackFailure.sourceDisabled }
+                guard try dependencies.mappingRevision(source.id) == revisions[source.id] else {
+                    throw PlaybackFailure.configurationChanged
+                }
                 let matched = Self.catalogMatch(catalog, episode: episode, work: work, sourceTitle: result.title, numbering: numbering)
                 if let failure = matched.failure { return (source, result, nil, evidence.description, failure, false) }
                 guard let leaf = matched.nodes.first else {
@@ -184,13 +231,18 @@ final class AnimeSourceService {
                 choice.episode = exact.item
                 choice.qualityID = nil
                 choice.lineID = nil
+                choice = try Self.animeSelection(dependencies.mappingSelection(choice).selection,
+                    evidence: work.classification)
+                guard try dependencies.mappingRevision(source.id) == revisions[source.id] else {
+                    throw PlaybackFailure.configurationChanged
+                }
                 let savedWork = links.contains { $0.workID == work.id && $0.sourceWork == result.item }
                 return (source, result, choice, evidence.description + String(localized: "；精確 \(episode.kind.displayTitle)／\(episode.sort) 集號") +
                     (matched.evidence.isEmpty ? "" : "；" + matched.evidence.joined(separator: "；")) +
                     (savedWork ? String(localized: "；已確認作品來源") : ""), nil, !evidence.manualOnly && !matched.manualOnly && (savedWork || evidence.corroborated))
             } catch {
                 if Task.isCancelled || error is CancellationError { throw CancellationError() }
-                return (source, result, nil, evidence.description, String(localized: "集數載入失敗／需原站授權。"), false)
+                return (source, result, nil, evidence.description, Self.diagnostic(error), false)
             }
         }
         try Task.checkCancellation()
@@ -203,23 +255,41 @@ final class AnimeSourceService {
                 name: source.name, title: result.title, selection: choice, evidence: evidence +
                     (failure == nil && !corroborated ? String(localized: "；僅同名，不足自動綁定") : "") +
                     (plausible.count > 1 && choice != nil ? String(localized: "；多候選，請確認") : ""),
-                failure: failure, trusted: corroborated && plausible.count == 1 && failure == nil))
+                failure: failure, trusted: corroborated && plausible.count == 1 && failure == nil,
+                revision: revisions[source.id]))
         }
         return AnimeSourceReport(candidates: candidates)
     }
 
     func resolve(_ candidate: AnimeSourceCandidate) async throws -> YouGetJSON {
         try Task.checkCancellation()
-        guard candidate.failure == nil, let record = issued[candidate.id], var choice = candidate.selection,
-              Self.sameEpisode(choice, record.selection) else { throw SourceError.unavailable }
-        choice.accountID = nil
+        guard candidate.failure == nil, var record = issued[candidate.id], let requested = candidate.selection,
+              Self.sameEpisode(requested, record.selection) else { throw SourceError.unavailable }
+        let choice = try current(requested, revision: record.revision).selection
         issued[candidate.id]?.resolved = nil
+        record.resolutionID = UUID()
+        issued[candidate.id]?.resolutionID = record.resolutionID
+        let group = try await validateCatalog(choice, work: record.work, episode: record.episode,
+            title: record.title, revision: record.revision)
+        try checkIssued(candidate.id, record: record)
+        guard record.catalogGroup == nil || record.catalogGroup == group else { throw SourceError.failure(.missingEpisode) }
+        issued[candidate.id]?.catalogGroup = group
         var result = try await dependencies.decode(choice)
         try Task.checkCancellation()
+        try checkIssued(candidate.id, record: record)
+        guard let decoded = result.selection,
+              Self.sameEpisode(try current(decoded, revision: record.revision).selection, choice) else {
+            throw SourceError.failure(.missingEpisode)
+        }
         result.selection = choice // Prevent prepare from consulting a default account.
         guard let quality = choice.qualityID ?? result.videos.first?.key else { throw SourceError.unavailable }
         result = try await dependencies.prepare(result, quality)
         try Task.checkCancellation()
+        try checkIssued(candidate.id, record: record)
+        guard let prepared = result.selection,
+              Self.sameEpisode(try current(prepared, revision: record.revision).selection, choice) else {
+            throw SourceError.failure(.missingEpisode)
+        }
         guard let stream = result.streams[quality] else { throw SourceError.unavailable }
         let line: Int
         if let lineID = choice.lineID {
@@ -230,7 +300,7 @@ final class AnimeSourceService {
         let raw = line == 0 ? stream.url : stream.src[line - 1]
         guard let raw, let url = URL(string: raw), ["https", "http"].contains(url.scheme?.lowercased() ?? ""),
               url.host != nil, url.user == nil, url.password == nil else { throw SourceError.unavailable }
-        guard issued[candidate.id] != nil else { throw CancellationError() }
+        try checkIssued(candidate.id, record: record)
         var resolved = choice
         resolved.qualityID = quality
         result.selection = resolved
@@ -241,16 +311,27 @@ final class AnimeSourceService {
     /// Call only for the user's chosen candidate or a trusted automatic candidate, after resolve.
     func confirm(_ candidate: AnimeSourceCandidate, work: Work, episode: Episode, library: WorkLibrary) throws {
         try Task.checkCancellation()
-        guard let record = issued[candidate.id], record.workID == work.id, record.episodeID == episode.id,
+        guard let record = issued[candidate.id], record.work == work, record.episode == episode,
               episode.workID == work.id, work.classification.kind == .anime,
               candidate.failure == nil, let choice = candidate.selection,
               Self.sameEpisode(choice, record.selection) else { throw SourceError.invalidContext }
         guard let resolved = record.resolved else { throw SourceError.unresolved }
-        var link = try library.sourceLinks(forWorkID: work.id).first { $0.sourceWork == record.sourceWork }
-            ?? WorkSourceLink(workID: work.id, sourceWork: record.sourceWork)
-        link.episodeMappings.removeAll { $0.episodeID == episode.id }
-        link.episodeMappings.append(EpisodeSourceMapping(episodeID: episode.id, selection: resolved))
-        try library.upsert(link)
+        guard choice.qualityID == nil || choice.qualityID == resolved.qualityID,
+              choice.lineID == resolved.lineID else { throw SourceError.invalidContext }
+        guard let storedWork = try library.fetchWork(id: work.id),
+              Self.workIdentity(storedWork) == Self.workIdentity(work),
+              storedWork.classification == work.classification,
+              let storedEpisode = try library.episodes(forWorkID: work.id).first(where: { $0.id == episode.id }),
+              Self.episodeIdentity(storedEpisode, work: storedWork) == Self.episodeIdentity(episode, work: work) else {
+            throw SourceError.failure(.configurationChanged)
+        }
+        let safe = try current(resolved, revision: record.revision).selection
+        let context = PlaybackContext(work: Self.workIdentity(work), episode: Self.episodeIdentity(episode, work: work),
+            selection: safe, configurationRevision: record.revision)
+        let mapping = EpisodeSourceMapping(episodeID: episode.id, selection: safe,
+            confirmation: ConfirmedSourceMapping(context: context, sourceTitle: record.title), catalogGroup: record.catalogGroup)
+        do { try library.setPreferredMapping(mapping, forWorkID: work.id, sourceWork: record.sourceWork) }
+        catch { throw SourceError.storage }
     }
 
     private nonisolated static func sameEpisode(_ lhs: PlayableSelection, _ rhs: PlayableSelection) -> Bool {
@@ -259,13 +340,178 @@ final class AnimeSourceService {
     }
 
     private func issue(work: Work, episode: Episode, sourceWork: SourceItemRef, name: String, title: String,
-                       selection: PlayableSelection?, evidence: String, failure: String?, trusted: Bool) -> AnimeSourceCandidate {
+                       selection: PlayableSelection?, evidence: String, failure: String?, trusted: Bool,
+                       catalogGroup: [String]? = nil, revision: String? = nil) -> AnimeSourceCandidate {
         let id = UUID().uuidString
+        var safe = selection
+        var diagnostic = failure
         if let selection {
-            issued[id] = Issued(workID: work.id, episodeID: episode.id, sourceWork: sourceWork, selection: selection)
+            do {
+                guard selection.item.sourceID == sourceWork.sourceID else { throw SourceError.invalidContext }
+                let authority = try current(selection, revision: revision)
+                safe = authority.selection
+                issued[id] = Issued(work: work, episode: episode, revision: authority.revision,
+                    title: title, sourceWork: authority.selection.item, selection: authority.selection, catalogGroup: catalogGroup)
+            } catch {
+                safe = nil
+                diagnostic = Self.diagnostic(error)
+            }
         }
-        return AnimeSourceCandidate(id: id, sourceName: name, title: title, selection: selection,
-                                    evidence: evidence, failure: failure, trusted: trusted)
+        return AnimeSourceCandidate(id: id, sourceName: name, title: title, selection: safe,
+                                    evidence: evidence, failure: diagnostic, trusted: trusted && diagnostic == nil)
+    }
+
+    private func current(_ selection: PlayableSelection, revision: String? = nil) throws
+        -> (selection: PlayableSelection, revision: String, configured: Bool) {
+        guard dependencies.enabled(selection.item.sourceID) else { throw SourceError.failure(.sourceDisabled) }
+        do {
+            let authority = try dependencies.mappingSelection(selection)
+            guard revision == nil || revision == authority.revision else {
+                throw SourceError.failure(.configurationChanged)
+            }
+            return (try Self.animeSelection(authority.selection, evidence: selection.classification),
+                authority.revision, authority.configured)
+        } catch let failure as PlaybackFailure { throw SourceError.failure(failure) }
+    }
+
+    /// A mixed-content source's lack of classification cannot erase a confirmed anime work.
+    /// Explicit video/live source evidence is a conflict, never an invitation to relabel it.
+    private nonisolated static func animeSelection(_ selection: PlayableSelection,
+                                                   evidence: MediaClassification) throws -> PlayableSelection {
+        guard evidence.kind == .anime else { throw SourceError.invalidContext }
+        var safe = selection
+        if safe.classification.kind == .unknown { safe.classification = evidence }
+        guard safe.classification.kind == .anime else { throw SourceError.invalidContext }
+        return safe
+    }
+
+    private func checkIssued(_ id: String, record: Issued) throws {
+        guard let active = issued[id], active.work == record.work, active.episode == record.episode,
+              active.selection == record.selection, active.revision == record.revision,
+              active.resolutionID == record.resolutionID else { throw CancellationError() }
+        _ = try current(record.selection, revision: record.revision)
+    }
+
+    /// Re-read the catalog, then compare exact page identities among typed episode matches.
+    /// Never choose another line, the first leaf or a nearby episode when the saved leaf disappears.
+    private func validateCatalog(_ choice: PlayableSelection, work: Work, episode: Episode,
+                                 title: String, revision: String) async throws -> [String] {
+        _ = try current(choice, revision: revision)
+        guard let catalog = try await dependencies.catalog(choice) else { throw SourceError.failure(.missingEpisode) }
+        try Task.checkCancellation()
+        _ = try current(choice, revision: revision)
+        guard catalog.selection.item == choice.item else { throw SourceError.failure(.missingEpisode) }
+        let matches = Self.catalogMatch(catalog, episode: episode, work: work, sourceTitle: title,
+            numbering: Self.episodeNumbering(work: work, episode: episode))
+        guard matches.failure == nil else { throw SourceError.failure(.missingEpisode) }
+        var groups: [[String]] = []
+        for node in matches.nodes {
+            let exact = try await dependencies.selection(node.selectionURL)
+            try Task.checkCancellation()
+            _ = try current(choice, revision: revision)
+            var leaf = choice
+            leaf.episode = exact.item
+            let safe = try current(leaf, revision: revision).selection
+            if safe.episode == (choice.episode ?? choice.item) {
+                groups += Self.catalogGroups(for: node.selectionURL, in: catalog.nodes)
+            }
+        }
+        guard groups.count == 1, let group = groups.first else { throw SourceError.failure(.missingEpisode) }
+        return group
+    }
+
+    private nonisolated static func catalogGroups(for page: String, in nodes: [VideoTreeNode],
+                                                  prefix: [String] = []) -> [[String]] {
+        nodes.flatMap { node in
+            if node.isLeaf { return node.selectionURL == page ? [prefix] : [] }
+            return catalogGroups(for: page, in: node.children, prefix: prefix + [node.title])
+        }
+    }
+
+    /// Manual mapping uses exactly the same fresh-catalog / decode / confirmation boundary.
+    func candidate(for selection: PlayableSelection, work: Work, episode: Episode, title: String) throws -> AnimeSourceCandidate {
+        guard work.classification.kind == .anime, episode.workID == work.id else { throw SourceError.invalidContext }
+        let safe = try current(selection).selection
+        let previous = issued.values.first {
+            $0.work.id == work.id && $0.episode.id == episode.id &&
+                $0.resolved.map { Self.sameEpisode($0, safe) } == true
+        }
+        return issue(work: work, episode: episode, sourceWork: safe.item, name: safe.item.sourceID,
+            title: previous?.title ?? title, selection: safe, evidence: String(localized: "已保存的作品／集數映射"), failure: nil, trusted: false,
+            catalogGroup: previous?.catalogGroup)
+    }
+
+    /// Call immediately at the actual player handoff, including after danmaku preparation.
+    func validateHandoff(_ selection: PlayableSelection) throws {
+        // Detail presentation may replace classification provenance with the local work's
+        // evidence. That does not change the resolved media choice or its content kind.
+        guard let record = issued.values.first(where: {
+            guard let resolved = $0.resolved else { return false }
+            return resolved.item == selection.item && resolved.episode == selection.episode &&
+                resolved.qualityID == selection.qualityID && resolved.lineID == selection.lineID &&
+                resolved.accountID == selection.accountID && resolved.torrent == selection.torrent &&
+                resolved.classification.kind == selection.classification.kind
+        }) else { throw SourceError.unresolved }
+        _ = try current(selection, revision: record.revision)
+    }
+
+    private nonisolated static func workIdentity(_ work: Work) -> PlaybackWorkIdentity {
+        PlaybackWorkIdentity(localID: work.id.uuidString, bangumiID: work.bangumiID)
+    }
+
+    private nonisolated static func episodeIdentity(_ episode: Episode, work: Work) -> PlaybackEpisodeIdentity {
+        let id = episode.externalID.flatMap { $0.hasPrefix("bangumi:") ? Int($0.dropFirst(8)) : nil }
+        let type: Int
+        switch episode.kind {
+        case .main: type = 0
+        case .special: type = 1
+        case .opening: type = 2
+        case .ending: type = 3
+        case .other: type = 4
+        }
+        let rawType = work.bangumiMetadata?.episodes.first(where: { $0.id == id })?.type ?? type
+        return PlaybackEpisodeIdentity(localID: episode.id.uuidString, bangumiID: id, type: rawType, sort: episode.sort)
+    }
+
+    nonisolated static func diagnostic(_ error: Error) -> String {
+        if let failure = error as? PlaybackFailure { return failureDescription(failure) }
+        if let error = error as? SourceError { return error.localizedDescription }
+        if let error = error as? SiteAccountError {
+            switch error {
+            case .disabled: return failureDescription(.sourceDisabled)
+            case .needsLogin, .expired, .invalidAccount: return failureDescription(.authenticationRequired)
+            default: return error.localizedDescription
+            }
+        }
+        if let error = error as? VideoGetError {
+            switch error {
+            case .needLogin, .needPassWork: return failureDescription(.authenticationRequired)
+            case .needVip, .cantWatch: return String(localized: "此影片不可觀看或需要來源會員權限。")
+            case .notFountData, .notFindUrls, .notSupported: return failureDescription(.unsupportedResponse)
+            case .invalidLink: return failureDescription(.missingEpisode)
+            default: return error.localizedDescription
+            }
+        }
+        if error is SourceConfiguration.ConfigurationError { return failureDescription(.unsupportedResponse) }
+        let underlying = error as NSError
+        if error is URLError || underlying.domain == NSURLErrorDomain ||
+            (underlying.userInfo[NSUnderlyingErrorKey] as? NSError)?.domain == NSURLErrorDomain {
+            return failureDescription(.network)
+        }
+        // Keep adapter-owned diagnostics (VIP, region, response parsing) rather than inventing auth failures.
+        return error.localizedDescription
+    }
+
+    private nonisolated static func failureDescription(_ failure: PlaybackFailure) -> String {
+        switch failure {
+        case .sourceDisabled: return String(localized: "來源已停用；請在設定啟用後重試，不會自動換站。")
+        case .configurationChanged: return String(localized: "來源配置或保存的集數身份已變更；請按重新尋源並明確確認，原映射保留。")
+        case .missingEpisode: return String(localized: "原來源已缺少完全相同的集數／線路；請重新尋源確認，不會改播第一集。")
+        case .authenticationRequired: return String(localized: "來源要求登入或授權；請在原站確認可用性後重試，不會保存失敗映射。")
+        case .network: return String(localized: "來源網路請求失敗；請檢查連線後重試，原映射保留。")
+        case .unsupportedResponse: return String(localized: "來源回應無法安全解析；請檢查來源配置後重新尋源。")
+        default: return String(localized: "此來源沒有可用的公開播放網址。")
+        }
     }
 
     private nonisolated static func bounded<Input: Sendable, Output: Sendable>(_ inputs: [Input], limit: Int,

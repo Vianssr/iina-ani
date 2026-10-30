@@ -19,13 +19,37 @@ struct AnimeSourceRegression {
             (searches, catalogs, decodes, prepares, active, peak, guest)
         }
     }
+    final class Authority: @unchecked Sendable {
+        private let lock = NSLock()
+        private var enabled = true
+        private var revision = "native-fixture:mapping-v1"
+        let configured: Bool
+        init(configured: Bool = false) { self.configured = configured }
+        func setEnabled(_ value: Bool) { lock.lock(); defer { lock.unlock() }; enabled = value }
+        func setRevision(_ value: String) { lock.lock(); defer { lock.unlock() }; revision = value }
+        func isEnabled() -> Bool { lock.lock(); defer { lock.unlock() }; return enabled }
+        func currentRevision() throws -> String {
+            lock.lock(); defer { lock.unlock() }
+            guard enabled else { throw PlaybackFailure.sourceDisabled }
+            return revision
+        }
+        func mapping(_ selection: PlayableSelection) throws -> (selection: PlayableSelection, revision: String, configured: Bool) {
+            let revision = try currentRevision()
+            guard let episode = selection.episode ?? (selection.item.kind == .episode ? selection.item : nil),
+                  episode.kind == .episode, episode.sourceID == selection.item.sourceID,
+                  selection.torrent == nil else { throw PlaybackFailure.missingEpisode }
+            var safe = selection
+            safe.accountID = nil
+            return (safe, revision, configured)
+        }
+    }
 
     nonisolated static let anime = MediaClassification(kind: .anime, provenance: "fixture.source.anime")
     static func require(_ condition: Bool, _ message: String) throws { if !condition { throw Failure(message) } }
     static func source(_ id: String) -> SourceDescriptor {
         SourceDescriptor(id: id, name: id, version: 1, capabilities: [.search, .resolve, .episodes, .iina])
     }
-    static func ref(_ id: String = "a", _ page: String = "one", kind: SourceItemRef.Kind = .work) -> SourceItemRef {
+    nonisolated static func ref(_ id: String = "a", _ page: String = "one", kind: SourceItemRef.Kind = .work) -> SourceItemRef {
         SourceItemRef(sourceID: id, pageURL: "https://\(id).invalid/\(kind.rawValue)/\(page)", kind: kind)
     }
     static func hit(_ title: String, _ id: String = "a", _ page: String = "one", classification: MediaClassification = anime) -> SourceSearchResult {
@@ -57,10 +81,11 @@ struct AnimeSourceRegression {
 
     static func dependencies(hits: [SourceSearchResult], nodes: [VideoTreeNode], calls: Calls = Calls(),
                              delay: UInt64 = 0, failSource: String? = nil, requiredQuery: String? = nil,
-                             media: String? = "https://media.invalid/actual.mp4") -> AnimeSourceService.Dependencies {
+                             media: String? = "https://media.invalid/actual.mp4",
+                             authority: Authority = Authority()) -> AnimeSourceService.Dependencies {
         let ids = Set(hits.map { $0.item.sourceID }).union(failSource.map { [$0] } ?? [])
         let descriptors = ids.sorted().map(source)
-        return AnimeSourceService.Dependencies(descriptors: { descriptors }, enabled: { _ in true }, search: { id, query in
+        return AnimeSourceService.Dependencies(descriptors: { descriptors }, enabled: { _ in authority.isEnabled() }, search: { id, query in
             await calls.search()
             do {
                 if delay > 0 { try await Task.sleep(nanoseconds: delay) }
@@ -85,6 +110,7 @@ struct AnimeSourceRegression {
             await calls.decode(choice)
             var json = YouGetJSON(rawUrl: choice.item.pageURL)
             json.streams = ["HD": Stream(url: "")]
+            json.selection = choice
             return json
         }, prepare: { json, key in
             await calls.prepare(json)
@@ -92,7 +118,7 @@ struct AnimeSourceRegression {
             if let media { json.streams[key]?.url = media }
             json.selection?.qualityID = key
             return json
-        })
+        }, mappingSelection: { try authority.mapping($0) }, mappingRevision: { _ in try authority.currentRevision() })
     }
 
     static func main() async throws {
@@ -331,11 +357,11 @@ struct AnimeSourceRegression {
         var savedChoice = stored[0].episodeMappings[0].selection; savedChoice.accountID = UUID()
         let savedLink = WorkSourceLink(workID: target.id, sourceWork: stored[0].sourceWork,
                                       episodeMappings: [EpisodeSourceMapping(episodeID: selected.id, selection: savedChoice)])
-        let saved = AnimeSourceService(dependencies: dependencies(hits: [hit("Sample 第2季")], nodes: [], calls: savedCalls))
+        let saved = AnimeSourceService(dependencies: dependencies(hits: [hit("Sample 第2季")], nodes: exactNodes, calls: savedCalls))
         let savedReport = try await saved.discover(work: target, episode: selected, links: [savedLink])
         try require(savedReport.automaticCandidates.count == 1 && savedReport.automaticCandidates[0].selection?.accountID == nil, "explicit saved episode mapping is preferred and sanitized")
         let savedStats = await savedCalls.snapshot()
-        try require(savedStats.searches == 0 && savedStats.catalogs == 0, "saved exact mapping skips all-source searches/catalog requests")
+        try require(savedStats.searches == 0 && savedStats.catalogs == 1, "saved exact mapping skips alternate searches but revalidates the fresh exact catalog")
         _ = try await saved.resolve(savedReport.automaticCandidates[0])
         try require(await savedCalls.guest, "saved account cannot become an implicit decode/prepare credential")
 
@@ -406,6 +432,268 @@ struct AnimeSourceRegression {
             _ = try await qualityService.discover(work: ordinary, episode: selected, links: [])
             throw Failure("ordinary video entered anime sourcing")
         } catch AnimeSourceService.SourceError.invalidContext { }
+        try await mappingSafetyRegressions(library: library, target: target, episode: selected,
+            nodes: exactNodes, nativeMapping: stored[0])
         print("AnimeSourceRegression passed")
+    }
+
+    static func mappingSafetyRegressions(library: WorkLibrary, target: Work, episode: Episode,
+                                        nodes: [VideoTreeNode], nativeMapping: WorkSourceLink) async throws {
+        let configured = Authority(configured: true)
+        let calls = Calls()
+        let legacyData = try JSONSerialization.data(withJSONObject: [
+            "episodeID": episode.id.uuidString,
+            "selection": try JSONSerialization.jsonObject(with: JSONEncoder().encode(nativeMapping.episodeMappings[0].selection))
+        ])
+        let legacy = try JSONDecoder().decode(EpisodeSourceMapping.self, from: legacyData)
+        try require(legacy.confirmation == nil, "version-compatible legacy records are retained without invented confirmation metadata")
+        let oldLink = WorkSourceLink(workID: target.id, sourceWork: legacy.selection.item, episodeMappings: [legacy])
+        let oldService = AnimeSourceService(dependencies: dependencies(hits: [hit("Sample 第2季 [2026 TV]"), hit("Sample 第2季 [2026 TV]", "b")],
+            nodes: nodes, calls: calls, authority: configured))
+        let oldReport = try await oldService.discover(work: target, episode: episode, links: [oldLink])
+        try require(oldReport.matchedCandidates.isEmpty && oldReport.automaticCandidates.isEmpty,
+                    "configured legacy mapping cannot silently become trusted")
+        let legacyStats = await calls.snapshot()
+        try require(legacyStats.searches == 0 && legacyStats.decodes == 0, "invalid stored mapping cannot search or decode another source")
+        let explicit = try await oldService.discover(work: target, episode: episode, links: [oldLink], forceSearch: true)
+        guard let selected = explicit.matchedCandidates.first(where: { $0.selection?.item.sourceID == "a" }) else {
+            throw Failure("explicit reconfirmation must offer the original exact source")
+        }
+        _ = try await oldService.resolve(selected)
+        try oldService.confirm(selected, work: target, episode: episode, library: library)
+        let confirmed = try library.sourceLinks(forWorkID: target.id).first { $0.sourceWork == selected.selection?.item }!
+        try require(confirmed.episodeMappings[0].confirmation?.context.configurationRevision == configured.currentRevision(),
+                    "only successfully resolved mappings gain the current configuration revision")
+        configured.setRevision("configured-fixture:changed")
+        let changed = try await oldService.discover(work: target, episode: episode, links: [confirmed])
+        try require(changed.matchedCandidates.isEmpty && changed.automaticCandidates.isEmpty,
+                    "same-ID configuration replacement invalidates a saved confirmation")
+        let preserved = try library.sourceLinks(forWorkID: target.id).first { $0.id == confirmed.id }
+        try require(preserved == confirmed, "invalid configuration never deletes or rewrites the saved record")
+        configured.setRevision("native-fixture:mapping-v1")
+
+        let missingCalls = Calls()
+        let missing = AnimeSourceService(dependencies: dependencies(hits: [hit("Sample 第2季 [2026 TV]", "b")],
+            nodes: [leaf("02", "a", "actual")], calls: missingCalls, authority: configured))
+        let missingReport = try await missing.discover(work: target, episode: episode, links: [confirmed])
+        try require(missingReport.matchedCandidates.isEmpty && missingReport.automaticCandidates.isEmpty,
+                    "a saved page relabeled to a different episode cannot be reused")
+        try require(await missingCalls.searches == 0, "missing exact saved episode never triggers alternate-source search")
+        let moved = AnimeSourceService(dependencies: dependencies(hits: [hit("Sample 第2季 [2026 TV]")],
+            nodes: [leaf("01", "a", "replacement")], authority: configured))
+        let movedReport = try await moved.discover(work: target, episode: episode, links: [confirmed])
+        try require(movedReport.matchedCandidates.isEmpty, "matching number with another exact page is not a replacement mapping")
+        let regrouped = AnimeSourceService(dependencies: dependencies(hits: [hit("Sample 第2季 [2026 TV]")],
+            nodes: [VideoTreeNode(title: "different group", children: [leaf("01", "a", "actual")])], authority: configured))
+        let regroupedReport = try await regrouped.discover(work: target, episode: episode, links: [confirmed])
+        try require(regroupedReport.matchedCandidates.isEmpty, "the same exact page moved to another catalog group requires reconfirmation")
+        var wrongMetadata = episode
+        wrongMetadata.sort = 1.5
+        let changedEpisode = try await oldService.discover(work: target, episode: wrongMetadata, links: [confirmed])
+        try require(changedEpisode.matchedCandidates.isEmpty, "same UUID with changed raw sort cannot reuse confirmed identity")
+        for phase in ["search", "catalog"] {
+            let state = Authority(configured: true)
+            var deps = dependencies(hits: [hit("Sample 第2季 [2026 TV]")], nodes: nodes, authority: state)
+            if phase == "search" {
+                let search = deps.search
+                deps.search = { id, query in
+                    let result = try await search(id, query)
+                    state.setEnabled(false)
+                    return result
+                }
+            } else {
+                let catalog = deps.catalog
+                deps.catalog = { choice in
+                    let result = try await catalog(choice)
+                    state.setRevision("configured-fixture:changed-during-catalog")
+                    return result
+                }
+            }
+            let service = AnimeSourceService(dependencies: deps)
+            let report = try await service.discover(work: target, episode: episode, links: [])
+            try require(report.matchedCandidates.isEmpty && !report.candidates.isEmpty,
+                        "stale \(phase) result stays diagnostic-only")
+        }
+
+        for phase in ["decode", "prepare"] {
+            let state = Authority(configured: true)
+            var deps = dependencies(hits: [hit("Sample 第2季 [2026 TV]")], nodes: nodes, authority: state)
+            if phase == "decode" {
+                let decode = deps.decode
+                deps.decode = { choice in
+                    let result = try await decode(choice)
+                    state.setEnabled(false)
+                    return result
+                }
+            } else {
+                let prepare = deps.prepare
+                deps.prepare = { result, quality in
+                    let result = try await prepare(result, quality)
+                    state.setRevision("configured-fixture:changed-during-prepare")
+                    return result
+                }
+            }
+            let service = AnimeSourceService(dependencies: deps)
+            let report = try await service.discover(work: target, episode: episode, links: [])
+            let candidate = report.automaticCandidates[0]
+            do {
+                _ = try await service.resolve(candidate)
+                throw Failure("stale async \(phase) result escaped")
+            } catch AnimeSourceService.SourceError.failure(let failure) {
+                try require(failure == (phase == "decode" ? .sourceDisabled : .configurationChanged),
+                            "authority loss retains its specific recovery category")
+            }
+            do {
+                try service.confirm(candidate, work: target, episode: episode, library: library)
+                throw Failure("stale \(phase) result persisted")
+            } catch AnimeSourceService.SourceError.unresolved { }
+        }
+
+        let finalState = Authority(configured: true)
+        let finalService = AnimeSourceService(dependencies: dependencies(hits: [hit("Sample 第2季 [2026 TV]")], nodes: nodes, authority: finalState))
+        let finalReport = try await finalService.discover(work: target, episode: episode, links: [])
+        let finalCandidate = finalReport.automaticCandidates[0]
+        let finalResult = try await finalService.resolve(finalCandidate)
+        var presented = finalResult.selection!
+        presented.classification = MediaClassification(kind: .anime, provenance: "manual-work")
+        try finalService.validateHandoff(presented)
+        for changed in ["quality", "line", "episode", "account", "kind"] {
+            var invalid = presented
+            switch changed {
+            case "quality": invalid.qualityID = "another-quality"
+            case "line": invalid.lineID = "99"
+            case "episode": invalid.episode = ref("a", "different", kind: .episode)
+            case "account": invalid.accountID = UUID()
+            default: invalid.classification.kind = .video
+            }
+            do {
+                try finalService.validateHandoff(invalid)
+                throw Failure("changed \(changed) choice passed the actual handoff boundary")
+            } catch AnimeSourceService.SourceError.unresolved {}
+        }
+        finalState.setEnabled(false)
+        do {
+            try finalService.confirm(finalCandidate, work: target, episode: episode, library: library)
+            throw Failure("disable after preparation persisted")
+        } catch AnimeSourceService.SourceError.failure(.sourceDisabled) { }
+        do {
+            try finalService.validateHandoff(finalResult.selection!)
+            throw Failure("disable at actual handoff escaped")
+        } catch AnimeSourceService.SourceError.failure(.sourceDisabled) { }
+        finalState.setEnabled(true)
+        finalState.setRevision("changed-after-resolve")
+        do {
+            try finalService.confirm(finalCandidate, work: target, episode: episode, library: library)
+            throw Failure("configuration replacement after preparation persisted")
+        } catch AnimeSourceService.SourceError.failure(.configurationChanged) { }
+
+        var wrongDecodeDeps = dependencies(hits: [hit("Sample 第2季 [2026 TV]")], nodes: nodes)
+        let decode = wrongDecodeDeps.decode
+        wrongDecodeDeps.decode = { choice in
+            var result = try await decode(choice)
+            result.selection?.episode = ref("a", "two", kind: .episode)
+            return result
+        }
+        let wrongDecode = AnimeSourceService(dependencies: wrongDecodeDeps)
+        let wrongReport = try await wrongDecode.discover(work: target, episode: episode, links: [])
+        do {
+            _ = try await wrongDecode.resolve(wrongReport.automaticCandidates[0])
+            throw Failure("wrong decoded identity accepted")
+        } catch AnimeSourceService.SourceError.failure(.missingEpisode) { }
+        for kind in [MediaContentKind.video, .live] {
+            var incompatibleDependencies = dependencies(hits: [hit("Sample 第2季 [2026 TV]")], nodes: nodes)
+            let mappingSelection = incompatibleDependencies.mappingSelection
+            incompatibleDependencies.mappingSelection = { choice in
+                let authority = try mappingSelection(choice)
+                var incompatible = authority.selection
+                incompatible.classification = MediaClassification(kind: kind, provenance: "fixture.explicit-source-kind")
+                return (incompatible, authority.revision, true)
+            }
+            let incompatible = AnimeSourceService(dependencies: incompatibleDependencies)
+            do {
+                _ = try incompatible.candidate(for: nativeMapping.episodeMappings[0].selection,
+                    work: target, episode: episode, title: target.title)
+                throw Failure("explicit incompatible source classification was silently relabeled")
+            } catch AnimeSourceService.SourceError.invalidContext { }
+            let incompatibleReport = try await incompatible.discover(work: target, episode: episode, links: [])
+            try require(incompatibleReport.matchedCandidates.isEmpty && incompatibleReport.candidates.contains { $0.failure != nil },
+                        "explicit video/live source mismatch rejects before resolution or storage")
+        }
+
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+        let archive = try SourceConfiguration.load(fileURL: root.appendingPathComponent("Tests/Fixtures/Sources/internet-archive.json"))
+        let raw = "https://archive.org/details/BigBuckBunny_328?file=BigBuckBunny_512kb.mp4&utm_source=fixture&token=secret#ignored"
+        var archiveChoice = PlayableSelection(item: try archive.item("https://archive.org/details/BigBuckBunny_328"),
+            accountID: UUID(), classification: anime)
+        archiveChoice.episode = SourceItemRef(sourceID: archive.id, pageURL: raw, kind: .episode)
+        let safe = try archive.mappingSelection(archiveChoice)
+        try require(safe.classification.kind == .unknown, "mixed-content fixture intentionally supplies no source classification evidence")
+        try require(safe.episode?.pageURL == "https://archive.org/details/BigBuckBunny_328?file=BigBuckBunny_512kb.mp4" && safe.accountID == nil,
+                    "configured safe public file query identity survives while tracking, fragments and credentials are removed")
+        var archiveDependencies = dependencies(hits: [], nodes: [])
+        archiveDependencies.mappingSelection = {
+            (try archive.mappingSelection($0), archive.configurationRevision, true)
+        }
+        archiveDependencies.mappingRevision = { _ in archive.configurationRevision }
+        archiveDependencies.selection = {
+            PlayableSelection(item: try archive.item($0), classification: anime)
+        }
+        let archiveNode = VideoTreeNode(site: .configured(archive.id), title: "01", id: "BigBuckBunny_512kb.mp4",
+            url: safe.episode!.pageURL)
+        archiveDependencies.catalog = {
+            VideoSelectionCatalog(nodes: [archiveNode], current: 999, selection: $0)
+        }
+        let archiveService = AnimeSourceService(dependencies: archiveDependencies)
+        let archiveCandidate = try archiveService.candidate(for: archiveChoice, work: target, episode: episode, title: target.title)
+        do {
+            try archiveService.confirm(archiveCandidate, work: target, episode: episode, library: library)
+            throw Failure("manual mapping saved before real resolution")
+        } catch AnimeSourceService.SourceError.unresolved { }
+        _ = try await archiveService.resolve(archiveCandidate)
+        try archiveService.confirm(archiveCandidate, work: target, episode: episode, library: library)
+        let archiveLink = try library.sourceLinks(forWorkID: target.id).first { $0.sourceWork.sourceID == archive.id }!
+        let preferredMappings = try library.sourceLinks(forWorkID: target.id).flatMap(\.episodeMappings)
+            .filter { $0.episodeID == episode.id }
+        try require(preferredMappings.count == 1 && preferredMappings[0].selection.item.sourceID == archive.id,
+                    "successful explicit source replacement commits one preferred mapping without stale alternate mappings")
+        let archiveMapping = archiveLink.episodeMappings[0]
+        try require(archiveMapping.selection.episode == safe.episode && archiveMapping.selection.accountID == nil,
+                    "successful manual mapping persists exact file identity, not transient media or credentials")
+        try require(archiveMapping.selection.classification == anime &&
+                    archiveMapping.confirmation?.context.selection.classification == anime,
+                    "safe unknown-source normalization retains confirmed anime-work evidence through successful persistence")
+        let archiveReloaded = try await archiveService.discover(work: target, episode: episode, links: [archiveLink])
+        try require(archiveReloaded.automaticCandidates.first?.selection?.episode == safe.episode,
+                    "confirmed file query mapping reloads through exact fresh catalog validation")
+        let userSources = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: userSources, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: userSources) }
+        let registry = SourceRegistry(builtinDirectory: root.appendingPathComponent("IINA-ANI/Sources"), userDirectory: userSources)
+        let sourceState = Authority()
+        let decoder = VideoDecoder(registry: registry, sourceEnabled: { _ in sourceState.isEnabled() })
+        let fqdm = registry.source(for: "fqdm")!
+        let fqdmChoice = PlayableSelection(
+            item: try fqdm.item("https://www.fqdm.cc/index.php/vod/detail/id/12.html"),
+            episode: try fqdm.item("https://www.fqdm.cc/index.php/vod/play/id/12/sid/2/nid/1.html"),
+            lineID: "0", accountID: UUID(), classification: anime)
+        let fqdmSafe = try decoder.mappingSelection(fqdmChoice)
+        try require(fqdmSafe.selection.episode == fqdmChoice.episode && fqdmSafe.selection.lineID == "0" &&
+                    fqdmSafe.selection.accountID == nil && fqdmSafe.revision == fqdm.configurationRevision,
+                    "real decoder authority preserves configured page sid and independent desktop backup-stream index")
+        sourceState.setEnabled(false)
+        do {
+            _ = try decoder.mappingSelection(fqdmChoice)
+            throw Failure("real decoder authority ignored source disablement")
+        } catch PlaybackFailure.sourceDisabled { }
+        sourceState.setEnabled(true)
+        try Data("invalid configuration".utf8).write(to: userSources.appendingPathComponent("broken.json"))
+        do { try registry.reloadCurrent(); throw Failure("bad registry reload unexpectedly succeeded") }
+        catch { if error is Failure { throw error } }
+        do {
+            _ = try decoder.mappingRevision("fqdm")
+            throw Failure("retained configuration after bad reload was treated as authoritative")
+        } catch PlaybackFailure.configurationChanged { }
+        try require(try decoder.mappingRevision("bilibili").hasPrefix("native-adapter:"),
+                    "a malformed configured source must not disable native adapter identities")
     }
 }

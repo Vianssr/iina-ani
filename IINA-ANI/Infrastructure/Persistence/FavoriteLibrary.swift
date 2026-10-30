@@ -195,8 +195,7 @@ final class FavoriteLibrary {
     }
 
     func addWork(workID: UUID) throws {
-        guard let work = try works.fetchWork(id: workID) else { throw FavoriteError.favoriteWorkNotFound(workID) }
-        _ = try defaultCollectionStatus(for: work)
+        guard try works.fetchWork(id: workID) != nil else { throw FavoriteError.favoriteWorkNotFound(workID) }
         if try favoriteWorkIDs().contains(workID) { return }
         let order = try nextOrder(entity: "WorkFavoriteRecord")
         let record = try newRecord(entity: "WorkFavoriteRecord")
@@ -221,10 +220,7 @@ final class FavoriteLibrary {
             orderByID[id] = row.value(forKey: "order") as? Double ?? 0
             createdAtByID[id] = row.value(forKey: "createdAt") as? Date ?? .distantPast
         }
-        var favorites = try orderByID.keys.compactMap { id -> Work? in
-            guard let work = try works.fetchWork(id: id) else { return nil }
-            return try defaultCollectionStatus(for: work)
-        }
+        var favorites = try orderByID.keys.compactMap { try works.fetchWork(id: $0) }
         let needle = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if !needle.isEmpty {
             favorites = favorites.filter { $0.title.localizedCaseInsensitiveContains(needle) ||
@@ -242,28 +238,6 @@ final class FavoriteLibrary {
             favorites.sort { createdAtByID[$0.id] == createdAtByID[$1.id] ? $0.id.uuidString < $1.id.uuidString : (createdAtByID[$0.id] ?? .distantPast) > (createdAtByID[$1.id] ?? .distantPast) }
         }
         return favorites
-    }
-
-    // A local default is not a user command: preserve revision and pending state so
-    // a later online collection read can still supply the actual remote category.
-    private func defaultCollectionStatus(for work: Work) throws -> Work {
-        guard work.collectionStatus == nil, !work.collectionStatusPending else { return work }
-        var classified = work
-        classified.collectionStatus = .wish
-        // Patch only the migrated field: re-encoding a legacy Work would materialize
-        // missing classification fields and discard fields from a newer payload.
-        let request = NSFetchRequest<NSManagedObject>(entityName: "WorkRecord")
-        request.predicate = NSPredicate(format: "id == %@", work.id as CVarArg)
-        request.fetchLimit = 1
-        guard let record = try context.fetch(request).first,
-              let data = record.value(forKey: "payload") as? Data,
-              var payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw CocoaError(.coderReadCorrupt)
-        }
-        payload["collectionStatus"] = BangumiCollectionStatus.wish.rawValue
-        record.setValue(try JSONSerialization.data(withJSONObject: payload), forKey: "payload")
-        do { try context.save() } catch { context.rollback(); throw error }
-        return classified
     }
 
     func moveWork(workID: UUID, toIndex: Int) throws {

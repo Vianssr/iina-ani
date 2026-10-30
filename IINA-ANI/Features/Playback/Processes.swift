@@ -29,6 +29,28 @@ final class Processes: NSObject, Sendable {
     private let completedSeason: @MainActor (PlayableSelection, [SourceItemRef], [DownloadRecord], Date) throws -> [SourceItemRef]?
     private var progressPlayers: [UUID: PlayerProgressSession] = [:]
     private var autoplayTasks: [UUID: Task<Void, Never>] = [:]
+    private var continuationRevisions: [UUID: UUID] = [:]
+
+    var nextEpisodePlayers: [(id: UUID, title: String)] {
+        progressPlayers.values.filter {
+            $0.canAdvance && $0.selection.torrent == nil && $0.selection.item.kind != .live &&
+                $0.selection.classification.kind != .live
+        }.map { ($0.id, $0.displayTitle) }.sorted {
+            $0.1 == $1.1 ? $0.0.uuidString < $1.0.uuidString : $0.1 < $1.1
+        }
+    }
+
+    func cancelNextEpisode(_ id: UUID, includingQueue: Bool = true) {
+        continuationRevisions.removeValue(forKey: id)
+        autoplayTasks.removeValue(forKey: id)?.cancel()
+        if includingQueue { progressPlayers[id]?.cancelPendingNextEpisode() }
+    }
+
+    func requestNextEpisode(_ id: UUID) {
+        guard let session = progressPlayers[id], session.canAdvance else { return }
+        beginContinuation(session, title: session.displayTitle, coverURL: nil,
+                          recorder: session.continuationRecorder, automatic: false)
+    }
     private var stopped = false
 
     func openDownloadedFile(_ id: UUID) async throws {
@@ -189,6 +211,7 @@ final class Processes: NSObject, Sendable {
     func completeEpisode(after selection: PlayableSelection, completedAt: Date = Date(),
                          recorder: PlaybackProgressRecorder? = nil) async throws -> PlayableSelection? {
         try Task.checkCancellation()
+        try recorder?.validateForContinuation()
         guard !stopped, selection.torrent == nil,
               selection.item.sourceID != "torrent", selection.item.kind != .live,
               selection.episode?.kind != .live, selection.classification.kind != .live,
@@ -216,6 +239,8 @@ final class Processes: NSObject, Sendable {
             }
             try Task.checkCancellation()
             guard !stopped else { throw CancellationError() }
+            try recorder?.validateForContinuation()
+            try history().validateResumeCatalog(catalog, selection: selection)
             let next = AutoplaySelection.next(after: selection, in: catalog.nodes, registry: decoder.registry)
             if next == nil {
                 try await finishSeason(selection,
@@ -238,6 +263,7 @@ final class Processes: NSObject, Sendable {
         else { records = [] }
         if let items, let confirmed = try completedSeason(selection, items, records, completedAt) {
             try Task.checkCancellation()
+            try recorder?.validateForContinuation()
             guard !stopped else { throw CancellationError() }
             try history().removeCompletedSeason(confirmed, through: completedAt, registry: decoder.registry)
         } else {
@@ -245,49 +271,77 @@ final class Processes: NSObject, Sendable {
         }
     }
 
-    private func continueAfterEOF(_ selection: PlayableSelection, title: String?, coverURL: String?, recorder: PlaybackProgressRecorder) {
+    private func beginContinuation(_ session: PlayerProgressSession, title: String?, coverURL: String?,
+                                   recorder: PlaybackProgressRecorder, automatic: Bool) {
         guard !stopped else { return }
+        let id = session.id
+        cancelNextEpisode(id)
+        let revision = UUID()
+        continuationRevisions[id] = revision
         let completedAt = Date()
-        let id = UUID()
-        autoplayTasks[id] = Task { [weak self] in
-            guard let self else { return }
-            defer { autoplayTasks.removeValue(forKey: id) }
+        let selection = recorder.selection
+        autoplayTasks[id] = Task { [weak self, weak session] in
+            guard let self, let session else { return }
+            defer {
+                if continuationRevisions[id] == revision {
+                    continuationRevisions.removeValue(forKey: id)
+                    autoplayTasks.removeValue(forKey: id)
+                }
+            }
             do {
-                guard let next = try await completeEpisode(after: selection, completedAt: completedAt, recorder: recorder) else { return }
+                if !automatic {
+                    if selection.item.sourceID == "local" {
+                        try await session.nextLocalEpisode()
+                        return
+                    }
+                    try await session.pauseForTransition()
+                }
+                try recorder.validateForContinuation()
+                let next: PlayableSelection?
+                if automatic {
+                    next = try await completeEpisode(after: selection, completedAt: completedAt, recorder: recorder)
+                } else {
+                    var catalogChoice = selection
+                    catalogChoice.item = selection.episode ?? selection.item
+                    catalogChoice.episode = nil
+                    guard let catalog = try await decoder.catalog(for: catalogChoice) else {
+                        throw PlaybackFailure.missingEpisode
+                    }
+                    try recorder.validateForContinuation()
+                    try history().validateResumeCatalog(catalog, selection: selection)
+                    next = AutoplaySelection.next(after: selection, in: catalog.nodes, registry: decoder.registry)
+                    guard next != nil else {
+                        throw NSError(domain: "IINA-ANI.NextEpisode", code: 1, userInfo: [
+                            NSLocalizedDescriptionKey: String(localized: "No next episode is available in this source group.")])
+                    }
+                }
+                guard let next else { return }
+                try Task.checkCancellation()
+                try recorder.validateForContinuation()
                 var media = try await decoder.resolve(next)
+                try history().validateResolvedSelection(media.selection, requested: next)
                 guard let key = next.qualityID ?? media.videos.first?.key,
                       media.streams[key] != nil else { throw VideoGetError.notFountData }
                 media = try await decoder.prepareVideoUrl(media, key)
+                try history().validateResolvedSelection(media.selection, requested: next)
                 try await prepareDanmakuFile(yougetJSON: media, id: media.uuid)
-                var nextTitle = title
-                var nextCover = coverURL
-                var nextEpisode: String? = media.title
-                if next.item.sourceID == "local" {
-                    let records = (try? await downloads().completedDownloads()) ?? []
-                    if let record = records.first(where: { $0.completedFile?.standardizedFileURL.absoluteString == next.item.pageURL }) {
-                        nextTitle = record.title
-                        nextCover = record.coverURL
-                        nextEpisode = record.episodeTitle
-                    } else {
-                        nextTitle = media.title
-                        nextCover = nil
-                        nextEpisode = nil
-                    }
-                }
                 try Task.checkCancellation()
-                guard !stopped, preferences.autoPlayNext else { return }
-                try await openWithPlayer(media, key, title: nextTitle, coverURL: nextCover,
-                                         episodeTitle: nextEpisode, autoplay: true)
+                try recorder.validateForContinuation()
+                guard !stopped, continuationRevisions[id] == revision, session.canAdvance,
+                      !automatic || preferences.autoPlayNext else { return }
+                try await openWithPlayer(media, key, title: title, coverURL: coverURL,
+                                         episodeTitle: media.title, autoplay: automatic)
+                await session.stopPlayback()
             } catch is CancellationError {
-                do { try recorder.retainForUpdates(through: completedAt) }
-                catch { NSLog("Completed playback history could not be retained.") }
                 return
             } catch {
-                do { try recorder.retainForUpdates(through: completedAt) }
-                catch { NSLog("Completed playback history could not be retained.") }
-                guard !stopped, !Task.isCancelled else { return }
+                if automatic {
+                    do { try recorder.retainForUpdates(through: completedAt) }
+                    catch { NSLog("Completed playback history could not be retained.") }
+                }
+                guard !stopped, !Task.isCancelled, continuationRevisions[id] == revision else { return }
                 let visible = NSError(domain: "IINA-ANI.Autoplay", code: 1, userInfo: [
-                    NSLocalizedDescriptionKey: String(localized: "播放完成後的處理失敗"),
+                    NSLocalizedDescriptionKey: String(localized: "Unable to play next episode"),
                     NSLocalizedRecoverySuggestionErrorKey: String(localized: "來源目錄確認、觀看記錄保存或下一集啟播失敗；已停止後續操作，未切換來源、線路或品質。"),
                     NSUnderlyingErrorKey: error
                 ])
@@ -312,6 +366,14 @@ final class Processes: NSObject, Sendable {
             selection.qualityID = key
             selectedJSON.selection = selection
         }
+        // Capture configuration authority before asynchronous player preparation.
+        let initialRecorder: PlaybackProgressRecorder?
+        if let choice = selectedJSON.selection, choice.classification.kind != .live, choice.item.kind != .live {
+            initialRecorder = PlaybackProgressRecorder(store: try history(), selection: choice,
+                title: title ?? selectedJSON.title, coverURL: coverURL, episodeTitle: episodeTitle)
+        } else {
+            initialRecorder = nil
+        }
 		await iina.updateIINAState()
 		let type = await iina.archiveType
 		let buildVersion = await iina.buildVersion
@@ -325,14 +387,13 @@ final class Processes: NSObject, Sendable {
         var context = try PlaybackPreparation.context(for: selectedJSON, key: key, endpoint: endpoint, enableDanmaku: preferences.enableDanmaku && decoder.registry.descriptor(for: selectedJSON.site.sourceID)?.capabilities.contains(.danmaku) == true)
         context.playerOptions = ["start=\(startPosition)", "resume-playback=no"]
         let localQueue = try selectedJSON.selection.map { try AutoplaySelection.localQueue(for: $0) } ?? []
-        if !localQueue.isEmpty {
-            // The queue stays in this player. EOF advances only after the App's policy check.
+        if initialRecorder != nil {
+            // Keep the IPC owner alive at EOF: close, replay or manual replacement cancels pending next lookups.
             context.playerOptions += ["keep-open=always", "loop-file=no", "loop-playlist=no"]
         }
         var encoder = PlaybackEncoder(media: selectedJSON, context: context)
         var progress: PlayerProgressSession?
-        if let choice = selectedJSON.selection, choice.classification.kind != .live, choice.item.kind != .live {
-            let recorder = PlaybackProgressRecorder(store: try history(), selection: choice, title: title ?? selectedJSON.title, coverURL: coverURL, episodeTitle: episodeTitle)
+        if let choice = selectedJSON.selection, let recorder = initialRecorder {
             let store = try history()
             let records = localQueue.isEmpty ? [] : try await downloads().completedDownloads()
             let enableDanmaku = preferences.enableDanmaku
@@ -340,9 +401,12 @@ final class Processes: NSObject, Sendable {
             for path in Array(paths) { if let url = URL(string: path), url.isFileURL { paths.insert(url.path) } }
             if let endpoint { paths.insert("http://127.0.0.1:\(endpoint.port)/video.mp4?session=\(selectedJSON.uuid)") }
             let historyTitle = title ?? selectedJSON.title
+            weak var owner: PlayerProgressSession?
             let session = try PlayerProgressSession(recorder: recorder, paths: paths, localQueue: localQueue,
                 nativePlaylist: preferences.livePlayer == .iina,
                 initialStartPosition: startPosition,
+                retainsEOF: localQueue.isEmpty,
+                autoplayEnabled: { [preferences] in preferences.autoPlayNext },
                 makeRecorder: { selection in
                     if selection.item == choice.item {
                         return PlaybackProgressRecorder(store: store, selection: selection,
@@ -380,8 +444,22 @@ final class Processes: NSObject, Sendable {
                     }
                     return options
                 }, onEOF: { [weak self] recorder in
-                    self?.continueAfterEOF(choice, title: historyTitle, coverURL: coverURL, recorder: recorder)
-                }, onFinish: { [weak self] in self?.progressPlayers.removeValue(forKey: $0) })
+                    guard let self, let owner else { return }
+                    self.beginContinuation(owner, title: historyTitle, coverURL: coverURL, recorder: recorder, automatic: true)
+                }, onFinish: { [weak self] id in
+                    self?.cancelNextEpisode(id)
+                    self?.progressPlayers.removeValue(forKey: id)
+                })
+            owner = session
+            session.onPlaybackEvent = { [weak self] event in
+                switch event.kind {
+                case .resolved, .cancelled:
+                    self?.cancelNextEpisode(event.identity.sessionID, includingQueue: false)
+                case .stopped, .failed:
+                    self?.cancelNextEpisode(event.identity.sessionID)
+                default: break
+                }
+            }
             progress = session
             context.playerOptions.append("input-ipc-server=\(session.socketURL.path)")
             encoder = PlaybackEncoder(media: selectedJSON, context: context)
@@ -391,6 +469,7 @@ final class Processes: NSObject, Sendable {
         do {
         try Task.checkCancellation()
         guard !stopped, !autoplay || preferences.autoPlayNext else { throw CancellationError() }
+        try initialRecorder?.validateForLaunch()
         switch preferences.livePlayer {
         case .iina where !localQueue.isEmpty:
             // A real playlist disables IINA's asynchronous folder auto-add, which

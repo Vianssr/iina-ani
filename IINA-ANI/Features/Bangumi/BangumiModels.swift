@@ -1,25 +1,5 @@
 import Foundation
 
-enum BangumiCollectionStatus: Int, Codable, CaseIterable, Sendable, Hashable {
-    case wish = 1
-    case doing = 3
-    case collected = 2
-    case onHold = 4
-    case dropped = 5
-
-    static let displayOrder: [Self] = [.wish, .doing, .collected, .onHold, .dropped]
-
-    var title: String {
-        switch self {
-        case .wish: return String(localized: "想看")
-        case .doing: return String(localized: "在看")
-        case .collected: return String(localized: "已看")
-        case .onHold: return String(localized: "擱置")
-        case .dropped: return String(localized: "丟棄")
-        }
-    }
-}
-
 /// The collection endpoint embeds SlimSubject; it is not complete episode metadata.
 struct BangumiOnlineCollection: Decodable, Sendable {
     let subjectID: Int

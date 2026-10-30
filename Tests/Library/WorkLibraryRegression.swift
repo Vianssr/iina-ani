@@ -1,6 +1,14 @@
 import CoreData
 import Foundation
 
+private final class FailingSaveContext: NSManagedObjectContext, @unchecked Sendable {
+    var rejectSave = false
+    override func save() throws {
+        if rejectSave { throw CocoaError(.fileWriteNoPermission) }
+        try super.save()
+    }
+}
+
 @main
 @MainActor
 struct WorkLibraryRegression {
@@ -60,6 +68,29 @@ struct WorkLibraryRegression {
         print("PASS: Work/Episode/WorkSourceLink identity, confirmed mapping, reparent rejection, and reopen")
         try await testClassification(model: currentModel, root: root)
         try await testCollectionStatus(model: currentModel, root: root)
+        try await testCollectionWriteFailure(model: currentModel, root: root)
+    }
+
+    private static func testCollectionWriteFailure(model: NSManagedObjectModel, root: URL) async throws {
+        let container = try await openContainer(at: root.appendingPathComponent("failed-status.sqlite"), model: model)
+        let context = FailingSaveContext(concurrencyType: .mainQueueConcurrencyType)
+        context.persistentStoreCoordinator = container.persistentStoreCoordinator
+        let library = WorkLibrary(context: context)
+        let work = Work(title: "Committed classification", collectionStatus: .doing)
+        try library.upsert(work)
+        context.rejectSave = true
+        for status: BangumiCollectionStatus? in [.collected, nil] {
+            do {
+                _ = try library.setCollectionStatus(workID: work.id, status: status)
+                throw RegressionError("failed classification write succeeded")
+            } catch let error as CocoaError {
+                try require(error.code == .fileWriteNoPermission, "unexpected write error")
+            }
+            try require(try library.fetchWork(id: work.id) == work && !context.hasChanges,
+                        "failed write exposed unsaved classification or revision to UI")
+        }
+        try container.persistentStoreCoordinator.remove(container.persistentStoreCoordinator.persistentStores[0])
+        print("PASS: failed classification writes roll back status, revision and pending state")
     }
 
     private static func testCollectionStatus(model: NSManagedObjectModel, root: URL) async throws {
@@ -106,7 +137,29 @@ struct WorkLibraryRegression {
                 acknowledgingLocalEdit: false)
             throw RegressionError("association changed away and back accepted stale collection read")
         } catch WorkLibrary.LibraryError.bangumiAssociationChanged { }
+        let cleared = try reopenedLibrary.setCollectionStatus(workID: work.id, status: nil)
+        try require(cleared.collectionStatus == nil && cleared.collectionStatusPending &&
+                    cleared.collectionStatusRevision != relinked.collectionStatusRevision,
+                    "clearing a category is a durable local edit with a fresh revision, not remote removal")
+        let staleRead = try reopenedLibrary.applyCollectionStatus(.wish, workID: work.id, subjectID: 42,
+            associationRevision: relinked.bangumiAssociationRevision, collectionRevision: relinked.collectionStatusRevision,
+            acknowledgingLocalEdit: false)
+        try require(staleRead == cleared, "an in-flight remote read must not restore an explicitly cleared category")
+        let subsequentRead = try reopenedLibrary.applyCollectionStatus(.doing, workID: work.id, subjectID: 42,
+            associationRevision: cleared.bangumiAssociationRevision, collectionRevision: cleared.collectionStatusRevision,
+            acknowledgingLocalEdit: false)
+        try require(subsequentRead == cleared, "future remote reads must preserve a local unclassified edit")
+        do {
+            _ = try reopenedLibrary.applyCollectionStatus(.dropped, workID: work.id, subjectID: 42,
+                associationRevision: relinked.bangumiAssociationRevision, collectionRevision: relinked.collectionStatusRevision,
+                acknowledgingLocalEdit: true)
+            throw RegressionError("an in-flight acknowledgement restored a cleared category")
+        } catch WorkLibrary.LibraryError.collectionStatusChanged { }
         try reopened.persistentStoreCoordinator.remove(reopened.persistentStoreCoordinator.persistentStores[0])
+        let clearedReopened = try await openContainer(at: url, model: model)
+        try require(try WorkLibrary(container: clearedReopened).fetchWork(id: work.id) == cleared,
+                    "explicit local nil, revision and read-protection must survive SQLite reopen")
+        try clearedReopened.persistentStoreCoordinator.remove(clearedReopened.persistentStoreCoordinator.persistentStores[0])
         print("PASS: collection legacy decoding, durable pending status, stale acknowledgement and association protection")
     }
 

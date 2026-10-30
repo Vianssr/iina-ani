@@ -20,6 +20,10 @@ import Darwin
             try await eofSmoke(media: media, root: root)
             return
         }
+        if ProcessInfo.processInfo.environment["RETAINED_EOF_SMOKE"] == "1" {
+            try await retainedEOFSmoke(media: media, root: root)
+            return
+        }
         try require(FileManager.default.fileExists(atPath: media.path), "Generate the 120-second local fixture first")
         let storage = root.appendingPathComponent(UUID().uuidString)
         let historyURL = storage.appendingPathComponent("Playback/history-v1.json")
@@ -171,14 +175,22 @@ import Darwin
             try require(playlist.compactMap { $0["filename"] as? String } == queue.map { URL(string: $0.item.pageURL)!.path },
                         "Actual mpv playlist must contain every sibling in natural order")
             try require(try property("playlist-pos") as? Int == 1, "Initial selected middle episode changed")
+            try await waitUntil { (try? property("time-pos") as? Double) != nil }
             let initialPosition = try property("time-pos") as? Double ?? -1
             try require(abs(initialPosition - 7.25) < 0.5, "Initial resume offset was lost")
             try send(["set_property", "pause", false])
             try await waitUntil { store.unfinished.contains { $0.selection == selected && $0.position >= 7 } }
+            try require(observer.playbackState.hasLoadedMedia &&
+                        (observer.playbackState.actualPosition ?? -1) >= 7,
+                        "Matched real IPC must confirm shared loaded state and actual progress")
+            var previousLoad = observer.playbackState.identity
             for index in (enabled ? [0, 2] : [0, 1, 2]) {
                 try send(["set_property", "playlist-pos", index])
                 try send(["set_property", "pause", true])
-                try await waitUntil { (try? property("path") as? String) == URL(string: queue[index].item.pageURL)!.path }
+                try await waitUntil {
+                    (try? property("path") as? String) == URL(string: queue[index].item.pageURL)!.path &&
+                        observer.playbackState.identity != previousLoad && observer.playbackState.phase == .loaded
+                }
                 try require((try property("time-pos") as? Double ?? 99) < 2,
                             "Manual queue selection inherited the initial resume offset")
                 try require(try property("media-title") as? String != "INITIAL SELECTED TITLE",
@@ -189,13 +201,22 @@ import Darwin
                 }
                 try send(["seek", 4, "absolute+exact"])
                 try send(["set_property", "pause", false])
-                try await waitUntil { store.unfinished.contains { $0.selection == queue[index] && $0.position >= 4 } }
+                try await waitUntil {
+                    observer.playbackState.identity != previousLoad &&
+                        observer.playbackState.phase == .loaded &&
+                        (observer.playbackState.actualPosition ?? -1) >= 4 &&
+                        store.unfinished.contains { $0.selection == queue[index] && $0.position >= 4 }
+                }
+                previousLoad = observer.playbackState.identity
             }
             try require(store.unfinished.contains { $0.selection == selected } &&
                         store.unfinished.contains { $0.selection == queue[0] },
                         "Skipping must preserve independent previous-file history")
             try send(["set_property", "playlist-pos", 0])
-            try await waitUntil { (try? property("path") as? String) == URL(string: queue[0].item.pageURL)!.path }
+            try await waitUntil {
+                (try? property("path") as? String) == URL(string: queue[0].item.pageURL)!.path &&
+                    observer.playbackState.identity != previousLoad && observer.playbackState.phase == .loaded
+            }
             try send(["seek", 29, "absolute+exact"])
             try send(["set_property", "pause", false])
             try await waitUntil { eofSelections.count == 1 }
@@ -211,11 +232,23 @@ import Darwin
                 try await Task.sleep(for: .seconds(1))
                 try require(try property("playlist-pos") as? Int == 0, "Disabled autoplay advanced natively")
                 try require(try property("eof-reached") as? Bool == true, "Disabled autoplay did not retain EOF")
+                try require(observer.playbackState.phase == .ended,
+                            "Actual keep-open EOF must terminate the shared load without advancing")
             }
             try require(eofSelections == [queue[0]], "Natural EOF must be reported exactly once for the active identity")
             try require(process.isRunning && process.processIdentifier == pid && observer.socketURL == socket,
                         "Queue transition replaced the original player process/socket")
             try require(!store.unfinished.contains { $0.selection == queue[0] }, "Completed file history was not removed")
+            if !enabled {
+                let completedLoad = observer.playbackState.identity
+                try send(["seek", 4, "absolute+exact"])
+                try send(["set_property", "pause", false])
+                try await waitUntil {
+                    observer.playbackState.identity != completedLoad && observer.playbackState.phase == .loaded &&
+                        store.unfinished.contains { $0.selection == queue[0] && $0.position >= 4 && $0.position < 8 }
+                }
+                try require(eofSelections == [queue[0]], "Replay was incorrectly completed by the previous EOF")
+            }
             _ = try command(socket, ["quit"])
             try await waitUntil { !process.isRunning }
             await observer.stop()
@@ -225,11 +258,86 @@ import Darwin
             evidence.append(["autoplay": enabled, "pid": pid, "socket": socket.path,
                 "initialPosition": initialPosition, "playlist": playlist, "historyPath": historyURL.path])
         }
+        for cancel in [true, false] {
+            let store = try PlaybackHistoryStore(url: storage.appendingPathComponent("delayed-\(cancel)/history.json"))
+            preferences.autoPlayNext = true
+            var completion: CheckedContinuation<PlayableSelection?, Never>?
+            var callbacks = 0
+            func recorder(_ choice: PlayableSelection) -> PlaybackProgressRecorder {
+                PlaybackProgressRecorder(store: store, selection: choice, title: "Delayed queue", coverURL: nil)
+            }
+            let observer = try PlayerProgressSession(recorder: recorder(queue[0]),
+                paths: [queue[0].item.pageURL, URL(string: queue[0].item.pageURL)!.path],
+                localQueue: queue, autoplayEnabled: { preferences.autoPlayNext }, makeRecorder: { recorder($0) },
+                onQueueEOF: { _ in
+                    callbacks += 1
+                    return await withCheckedContinuation { completion = $0 }
+                }, onFinish: { _ in })
+            let process = Process()
+            process.executableURL = mpv
+            process.arguments = ["--no-config", "--vo=null", "--ao=null", "--idle=yes",
+                "--keep-open=always", "--start=28", "--input-ipc-server=\(observer.socketURL.path)",
+                URL(string: queue[0].item.pageURL)!.path]
+            process.standardOutput = FileHandle.nullDevice; process.standardError = FileHandle.nullDevice
+            try process.run(); observer.observe()
+            defer { if process.isRunning { process.terminate() } }
+            try await waitUntil { completion != nil }
+            if cancel { observer.cancelPendingNextEpisode() } else { preferences.autoPlayNext = false }
+            completion?.resume(returning: queue[1]); completion = nil
+            try await Task.sleep(for: .milliseconds(400))
+            let position = try command(observer.socketURL, ["get_property", "playlist-pos"])["data"] as? Int
+            try require(position == 0 && callbacks == 1, "Cancelled/disabled delayed EOF advanced the queue")
+            try require(!store.unfinished.contains { $0.selection.item == queue[1].item }, "Unplayed next file acquired history")
+            try await observer.nextLocalEpisode()
+            try await waitUntil {
+                observer.selection.item == queue[1].item && observer.playbackState.phase == .loaded &&
+                    (observer.playbackState.actualPosition ?? 0) > 0
+            }
+            _ = try command(observer.socketURL, ["quit"])
+            try await waitUntil { !process.isRunning }
+            await observer.stop()
+        }
+        print("PASS real delayed local EOF cancellation/disable, followed by explicit manual next")
         let report: [String: Any] = ["result": "PASS real local queue IPC/history/EOF enabled+disabled",
             "ffmpeg": ffmpeg.path, "mpv": mpv.path, "fixtures": fixtures.path, "runs": evidence]
         try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
             .write(to: storage.appendingPathComponent("queue-evidence.json"), options: .atomic)
         print(String(data: try JSONSerialization.data(withJSONObject: report, options: [.sortedKeys]), encoding: .utf8)!)
+    }
+    @MainActor static func retainedEOFSmoke(media: URL, root: URL) async throws {
+        let file = root.appendingPathComponent("retained-" + UUID().uuidString + "/history.json")
+        let store = try PlaybackHistoryStore(url: file)
+        let choice = PlayableSelection(item: SourceItemRef(sourceID: "local", pageURL: media.absoluteString, kind: .local))
+        func recorder() -> PlaybackProgressRecorder {
+            PlaybackProgressRecorder(store: store, selection: choice, title: "Retained EOF", coverURL: nil)
+        }
+        var completions = 0
+        var closed = false
+        let observer = try PlayerProgressSession(recorder: recorder(), paths: [media.absoluteString, media.path],
+            retainsEOF: true, makeRecorder: { _ in recorder() },
+            onEOF: { _ in completions += 1 }, onFinish: { _ in closed = true })
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/opt/homebrew/bin/mpv")
+        process.arguments = ["--no-config", "--vo=null", "--ao=null", "--keep-open=always",
+            "--start=117", "--input-ipc-server=\(observer.socketURL.path)", media.path]
+        process.standardOutput = FileHandle.nullDevice; process.standardError = FileHandle.nullDevice
+        try process.run(); observer.observe()
+        defer { if process.isRunning { process.terminate() } }
+        try await waitUntil { completions == 1 }
+        let endedIdentity = observer.playbackState.identity
+        try require(process.isRunning && observer.canAdvance && !closed, "EOF lost the cancellable player owner")
+        _ = try command(observer.socketURL, ["seek", 12.0, "absolute+exact"])
+        _ = try command(observer.socketURL, ["set_property", "pause", false])
+        try await waitUntil {
+            observer.playbackState.identity != endedIdentity &&
+                observer.playbackState.phase == .loaded && (store.unfinished.first?.position ?? 0) >= 12
+        }
+        let actual = try command(observer.socketURL, ["get_property", "time-pos"])["data"] as? Double ?? -1
+        try require(abs(actual - (store.unfinished.first?.position ?? -100)) < 2, "Replay did not own actual history")
+        _ = try command(observer.socketURL, ["quit"])
+        try await waitUntil { closed && !process.isRunning }
+        try require(completions == 1, "Closing replay triggered a second natural EOF")
+        print("PASS real retained EOF → new replay load/history → close, one EOF; actual replay position \(actual)")
     }
     @MainActor static func waitUntil(line: Int = #line, _ predicate: () -> Bool) async throws {
         let deadline = ContinuousClock.now + .seconds(15)

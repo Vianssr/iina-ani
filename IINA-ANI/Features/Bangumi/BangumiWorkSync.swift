@@ -38,16 +38,28 @@ final class BangumiWorkSync {
     /// Save the user's command before any suspension; failed sync never rolls it back.
     @discardableResult
     func setCollectionStatus(workID: UUID, status: BangumiCollectionStatus) async throws -> BangumiWorkRead {
-        let initial = try library.setCollectionStatus(workID: workID, status: status)
+        let previousWork = try read(workID: workID).work
+        let retrying = previousWork.collectionStatusPending && previousWork.collectionStatus == status
+        var initial = try library.setCollectionStatus(workID: workID, status: status,
+            accountID: retrying ? previousWork.collectionStatusAccountID : nil)
         guard let subjectID = initial.bangumiID else {
             throw BangumiError.account(String(localized: "尚未關聯 Bangumi 作品；分類已儲存於本機，關聯後可重新同步。"))
+        }
+        let account: Result<UUID, Error>
+        do { account = .success(try await service.collectionAccountID()) }
+        catch { account = .failure(error) }
+        try Task.checkCancellation()
+        if let accountID = try? account.get() {
+            if let owner = initial.collectionStatusAccountID, owner != accountID {
+                throw BangumiError.account(String(localized: "This pending collection change belongs to another Bangumi account. Sign in to that account to retry."))
+            }
+            initial = try library.bindCollectionStatusAccount(workID: workID,
+                revision: initial.collectionStatusRevision, accountID: accountID)
         }
         let previous = Self.collectionWrites[workID]?.task
         let token = UUID()
         let task = Task { @MainActor in
-            let account: Result<UUID, Error>
-            do { account = .success(try await self.service.collectionAccountID()) }
-            catch { account = .failure(error) }
+            // `account` was captured for this durable revision; never resolve a new default on retry.
             // Keep remote writes in command order, bound to the account selected for this command.
             if let previous { _ = try? await previous.value }
             try Task.checkCancellation()

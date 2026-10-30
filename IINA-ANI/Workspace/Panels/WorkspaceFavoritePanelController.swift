@@ -297,7 +297,7 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         searchRow.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -32).isActive = true
         searchField.heightAnchor.constraint(greaterThanOrEqualToConstant: 30).isActive = true
         if kind == .works {
-            collectionFilter.addItems(withTitles: [String(localized: "全部分類")]
+            collectionFilter.addItems(withTitles: [String(localized: "全部分類"), String(localized: "未分類")]
                 + BangumiCollectionStatus.displayOrder.map(\.title) + [String(localized: "待同步")])
             collectionFilter.selectItem(at: collectionFilterIndex)
             collectionFilter.target = self
@@ -535,15 +535,16 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         if kind == .works, filters.count == 2 {
             let key = filters[1]
             if key == "pending" {
-                collectionFilterIndex = BangumiCollectionStatus.displayOrder.count + 1
+                collectionFilterIndex = BangumiCollectionStatus.displayOrder.count + 2
             } else if key.hasPrefix("status:"), let raw = Int(key.dropFirst(7)),
                       let status = BangumiCollectionStatus(rawValue: raw),
                       let index = BangumiCollectionStatus.displayOrder.firstIndex(of: status) {
-                collectionFilterIndex = index + 1
+                collectionFilterIndex = index + 2
+            } else if key == "unclassified" {
+                collectionFilterIndex = 1
             } else if let legacy = Int(key), legacy > 0 {
                 // Old indices: all, unclassified, five categories, pending.
-                collectionFilterIndex = legacy == 1 ? 1
-                    : min(legacy - 1, BangumiCollectionStatus.displayOrder.count + 1)
+                collectionFilterIndex = min(legacy, BangumiCollectionStatus.displayOrder.count + 2)
             }
         }
         searchField.stringValue = saved.query
@@ -838,8 +839,8 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
         switch rows[row] {
         case .work(let work):
             text = work.title
-            subtitle = [work.collectionStatus?.title,
-                work.collectionStatusPending ? String(localized: "待同步") : nil,
+            subtitle = [work.collectionStatus?.title ?? String(localized: "未分類"),
+                work.collectionStatusPending && work.collectionStatus != nil ? String(localized: "待同步") : nil,
                 work.classification.kind.title, work.year.map(String.init), sourceDescriptions[work.id]]
                 .compactMap { $0 }.joined(separator: " · ")
         case .link(let link):
@@ -947,10 +948,12 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
             case .works:
                 let works = try favorites.works(query: query, sort: sort).filter { work in
                     switch collectionFilterIndex {
-                    case 0: return true
-                    case 1...BangumiCollectionStatus.displayOrder.count:
-                        return work.collectionStatus == BangumiCollectionStatus.displayOrder[collectionFilterIndex - 1]
-                    default: return work.collectionStatusPending
+                    case 0: return CollectionStatusFilter.all.matches(work.collectionStatus)
+                    case 1: return CollectionStatusFilter.unclassified.matches(work.collectionStatus)
+                    case 2...(BangumiCollectionStatus.displayOrder.count + 1):
+                        return CollectionStatusFilter.status(BangumiCollectionStatus.displayOrder[collectionFilterIndex - 2])
+                            .matches(work.collectionStatus)
+                    default: return work.collectionStatusPending && work.collectionStatus != nil
                     }
                 }
                 sourceDescriptions = try Dictionary(uniqueKeysWithValues: works.map { work in
@@ -1067,7 +1070,8 @@ final class WorkspaceFavoritePanelController: NSViewController, NSTableViewDataS
 
     private var collectionFilterKey: String {
         if collectionFilterIndex == 0 { return "all" }
-        let index = collectionFilterIndex - 1
+        if collectionFilterIndex == 1 { return "unclassified" }
+        let index = collectionFilterIndex - 2
         guard BangumiCollectionStatus.displayOrder.indices.contains(index) else { return "pending" }
         return "status:\(BangumiCollectionStatus.displayOrder[index].rawValue)"
     }

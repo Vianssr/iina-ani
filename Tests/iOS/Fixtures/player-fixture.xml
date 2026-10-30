@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<i>
+    <chatserver>fixture.invalid</chatserver>
+    <chatid>1</chatid>
+    <d p="0,1,25,16777215,0,0,fixture,1">Visible scrolling comment</d>
+    <d p="0,5,25,16777215,0,0,fixture,2">Visible top comment</d>
+    <d p="0,4,25,16777215,0,0,fixture,3">Visible bottom comment</d>
+    <d p="0,1,25,16711680,0,0,fixture,4">spoiler filtered comment</d>
+    <d p="20,1,25,16777215,0,0,fixture,5">Visible later comment</d>
+    <d p="40,1,25,16777215,0,0,fixture,6">Visible seek comment</d>
+</i>

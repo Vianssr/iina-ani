@@ -137,6 +137,16 @@ enum SiteAccountsRegression {
         let reauthorized = try await validatingPool.completeBangumiLogin(credentials: credentials("fixture-valid-second"))
         try require(reauthorized.id == reauthAccount.id && reauthorized.status == .valid && reauthorized.displayName == "Fixture Bangumi User", "reauthorization must update the same single profile")
         try require(try storedCredentials(reauthAccount.id, service: service) == credentials("fixture-valid-second"), "reauthorization must replace both secure OAuth tokens")
+        var verified = reauthorized
+        verified.bangumiUserID = 101
+        try SiteAccounts.checkBangumiIdentity(existing: verified, userID: 101)
+        try SiteAccounts.checkBangumiIdentity(existing: nil, userID: 202)
+        for old in [verified, reauthorized] {
+            do {
+                try SiteAccounts.checkBangumiIdentity(existing: old, userID: 202)
+                throw Failure.assertion("different or unverified remote identities must not reuse a Bangumi profile's pending commands/cache")
+            } catch SiteAccountError.bangumiIdentityChanged {}
+        }
         try require(await manager(service, preferences).bangumiAccount()?.id == reauthAccount.id, "the single profile must survive service restart")
         try require(try await validatingPool.defaultAccount(sourceID: "bangumi")?.id == reauthAccount.id, "metadata requests must automatically use the signed-in account")
         let bangumiMetadata = String(decoding: defaults.data(forKey: "site-account-metadata-v1")!, as: UTF8.self)

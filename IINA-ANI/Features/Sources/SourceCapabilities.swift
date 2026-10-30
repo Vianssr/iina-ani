@@ -23,6 +23,23 @@ enum SourceCapability: String, Codable, CaseIterable, Sendable {
     }
 }
 
+enum SourcePlatform: String, CaseIterable, Sendable {
+    case macOS, iOS
+
+    /// Backends supported by the platform, not permissions granted by a configuration.
+    var capabilities: Set<SourceCapability> {
+        switch self {
+        case .macOS: return Self.desktopCapabilities
+        case .iOS: return Self.mobileCapabilities
+        }
+    }
+
+    private static let desktopCapabilities = Set(SourceCapability.allCases)
+    private static let mobileCapabilities: Set<SourceCapability> = [
+        .information, .resolve, .episodes, .lines, .search, .mpv
+    ]
+}
+
 struct SourceDescriptor: Sendable {
     let id: String
     let name: String

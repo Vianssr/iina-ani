@@ -10,11 +10,13 @@ struct SiteAccount: Codable, Sendable, Identifiable, Equatable {
     var displayName: String
     var enabled: Bool
     var status: Status
+    var bangumiUserID: Int? = nil
 }
 
 enum SiteAccountError: Error, LocalizedError {
     case unsupportedLogin(String), invalidAccount, disabled, needsLogin, expired
     case accountInUse, invalidCookies, validationFailed, secureStorage(OSStatus)
+    case bangumiIdentityChanged
 
     var errorDescription: String? {
         switch self {
@@ -27,6 +29,7 @@ enum SiteAccountError: Error, LocalizedError {
         case .invalidCookies: return NSLocalizedString("No supported site credentials were provided.", comment: "")
         case .validationFailed: return NSLocalizedString("The site could not validate this login. Retry or sign in again.", comment: "")
         case .secureStorage: return NSLocalizedString("Secure credential storage is unavailable.", comment: "")
+        case .bangumiIdentityChanged: return String(localized: "Sign out before switching Bangumi accounts. Existing pending changes belong to the previous account.")
         }
     }
 }
@@ -274,13 +277,31 @@ actor SiteAccounts {
         let context = try Self.makeContext(accountID: accountID, source: "bangumi", cookies: [], bearerToken: credentials.accessToken)
         let lease = beginUse(accountID)
         defer { releaseUse(lease) }
-        let name = try await validatedName("bangumi", context: context)
+        let name: String
+        let remoteUserID: Int?
+        if let bangumiIdentityValidator {
+            name = try await bangumiIdentityValidator(context)
+            remoteUserID = nil
+        } else {
+            let response = await context.session.request(
+                "https://api.bgm.tv/v0/me",
+                headers: ["User-Agent": "IINA-ANI/1.0 (Bangumi account client)"],
+                requestModifier: AccountHTTP.authorizationModifier(token: context.bearerToken)
+            ).serializingData().response
+            name = try Self.bangumiDisplayName(data: response.data, statusCode: response.response?.statusCode)
+            guard let data = response.data,
+                  let value = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let id = value["id"] as? Int, id > 0 else { throw SiteAccountError.validationFailed }
+            remoteUserID = id
+            try Self.checkBangumiIdentity(existing: records[accountID], userID: id)
+        }
         try Task.checkCancellation()
         try ensureUnused(accountID, excluding: lease)
         try Self.storeSecret(JSONEncoder().encode(credentials), accountID: accountID, service: keychainService)
         account.status = .valid
         account.enabled = true
         account.displayName = name
+        account.bangumiUserID = remoteUserID
         records[accountID] = account
         setDefaultID(accountID, "bangumi")
         persist()
@@ -486,6 +507,14 @@ actor SiteAccounts {
             }
             #endif
             throw SiteAccountError.validationFailed
+        }
+    }
+
+    static func checkBangumiIdentity(existing: SiteAccount?, userID: Int) throws {
+        guard userID > 0 else { throw SiteAccountError.validationFailed }
+        // Legacy profiles without a verified identity must sign out once before reauthorization.
+        if let existing, existing.bangumiUserID != userID {
+            throw SiteAccountError.bangumiIdentityChanged
         }
     }
 

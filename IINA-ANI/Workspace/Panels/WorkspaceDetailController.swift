@@ -182,6 +182,23 @@ final class WorkspaceCompletedDownloads {
 }
 
 enum WorkspaceDetailEpisodeAvailability {
+    private static let airdateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 9 * 3600)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        return formatter
+    }()
+
+    static func isAvailable(_ episode: BangumiEpisode, now: Date = Date()) -> Bool {
+        // Missing names are metadata gaps, not evidence that an identified episode is unaired.
+        guard let airdate = episode.airdate, airdate.count == 10,
+              let date = airdateFormatter.date(from: airdate),
+              airdateFormatter.string(from: date) == airdate else { return true }
+        return date <= now
+    }
+
     static func isUpdatedTitle(_ title: String) -> Bool {
         let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         switch title {
@@ -193,7 +210,7 @@ enum WorkspaceDetailEpisodeAvailability {
     // Rows refer to the full metadata/local arrays, never the filtered button positions.
     static func index(for key: String, bangumi: [BangumiEpisode], local: [Episode]) -> Int? {
         if let index = bangumi.firstIndex(where: { "bangumi:\($0.id)" == key }) {
-            return isUpdatedTitle(bangumi[index].title) ? index : nil
+            return isAvailable(bangumi[index]) ? index : nil
         }
         guard let index = local.firstIndex(where: { $0.id.uuidString == key }),
               isUpdatedTitle(local[index].label) else { return nil }
@@ -734,9 +751,12 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         cancelButton = button(String(localized: "取消来源操作"), #selector(cancelLoading), icon: .close)
         favoriteWorkButton = button(String(localized: "收藏作品…"), #selector(showCollectionPopover), icon: .favorites)
         favoriteWorkButton.toolTip = String(localized: "點選收藏方式即可確認。")
-        collectionButtons = BangumiCollectionStatus.displayOrder.map { status in
-            let control = button(status.title, #selector(favoriteWork(_:)))
-            control.tag = status.rawValue
+        let membership = button(String(localized: "加入收藏"), #selector(toggleWorkFavorite))
+        membership.tag = -1
+        let classifications: [BangumiCollectionStatus?] = [nil] + BangumiCollectionStatus.displayOrder.map { Optional($0) }
+        collectionButtons = [membership] + classifications.map { status in
+            let control = button(status?.title ?? String(localized: "未分類"), #selector(setWorkCollectionStatus(_:)))
+            control.tag = status?.rawValue ?? 0
             return control
         }
         favoriteLinkButton = button(String(localized: "Favorite Link"), #selector(favoriteLink), icon: .bookmark)
@@ -2083,9 +2103,10 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         removeSourceButton.isEnabled = sources.indexOfSelectedItem > 0 && !commanding
         mapButton.isEnabled = classification.kind == .anime && selection?.classification.kind == .anime && work != nil && currentLink != nil && (selectedEpisodeIndex ?? -1) >= 0 && media != nil && !loading && !commanding
         favoriteWorkButton.isEnabled = attached && (work != nil || media != nil) && !commanding
+        collectionButtons.first?.title = workIsFavorite ? String(localized: "移除收藏") : String(localized: "加入收藏")
         for control in collectionButtons {
             control.isEnabled = favoriteWorkButton.isEnabled && !collectionSaving
-                && (!workIsFavorite || control.tag != work?.collectionStatus?.rawValue)
+                && (control.tag == -1 || control.tag != (work?.collectionStatus?.rawValue ?? 0))
         }
         favoriteLinkButton.isEnabled = selection != nil && !commanding
         favoriteLinkButton.isHidden = classification.kind == .anime && selection == nil
@@ -2237,17 +2258,18 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         localEpisodes.append(episode)
         return episode
     }
-    private func discoverAnimeSources(force: Bool, playWhenMatched: Bool) {
+    private func discoverAnimeSources(force: Bool, playWhenMatched: Bool, sourceLinks: [WorkSourceLink]? = nil) {
         do {
             let episode = try selectedAnimeEpisode()
             guard let work else { return }
+            let requestedLinks = sourceLinks ?? links
             operation?.cancel(); generation = UUID(); playbackSubmitted = false
             let token = generation
             loading = true
             status.stringValue = String(localized: "尋找已選作品與集數的公開來源…")
             runCommand(playback: true) { [self] in
                 defer { if accepts(token) { loading = false } }
-                let report = try await animeSources.discover(work: work, episode: episode, links: links, forceSearch: force)
+                let report = try await animeSources.discover(work: work, episode: episode, links: requestedLinks, forceSearch: force)
                 guard accepts(token) else { return }
                 presentAnimeCandidates(report)
                 let automatic = report.automaticCandidates
@@ -2262,9 +2284,6 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     }
     private func resolveAnimeCandidate(_ candidate: AnimeSourceCandidate, work: Work, episode: Episode, token: UUID) async throws {
         guard var choice = candidate.selection else { throw VideoGetError.notFountData }
-        if let current = selection, current.item == choice.item, current.episode == choice.episode {
-            choice.qualityID = current.qualityID; choice.lineID = current.lineID
-        }
         choice.accountID = nil
         selection = choice; accounts = []; media = nil
         let pinned = AnimeSourceCandidate(id: candidate.id, sourceName: candidate.sourceName, title: candidate.title, selection: choice, evidence: candidate.evidence, failure: candidate.failure, trusted: candidate.trusted)
@@ -2285,12 +2304,14 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         if usesJSPlayer(choice) {
             try Task.checkCancellation()
             guard accepts(token), !playbackSubmitted else { throw CancellationError() }
+            if hasPinnedAnimeEpisode { try animeSources.validateHandoff(choice) }
             playbackSubmitted = true
             try services.openJSPlayer(selection: choice, title: work?.title, coverURL: work?.coverURL ?? sourceCoverURL, episodeTitle: prepared.title)
         } else {
             try await services.player.prepareDanmakuFile(yougetJSON: prepared, id: prepared.uuid)
             try Task.checkCancellation()
             guard accepts(token), !playbackSubmitted else { throw CancellationError() }
+            if hasPinnedAnimeEpisode { try animeSources.validateHandoff(choice) }
             playbackSubmitted = true
             try await services.player.openWithPlayer(prepared, key, title: work?.title, coverURL: work?.coverURL ?? sourceCoverURL, episodeTitle: prepared.title)
         }
@@ -2302,8 +2323,16 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         }
         let token = generation
         runCommand(playback: true) { [self] in
-            let resolved = try await services.decoder.resolve(choice)
-            try await adoptResolved(resolved, choice: choice, token: token)
+            if hasPinnedAnimeEpisode {
+                try animeSources.validateHandoff(choice)
+                let episode = try selectedAnimeEpisode()
+                guard let work else { throw AnimeSourceService.SourceError.invalidContext }
+                let candidate = try animeSources.candidate(for: choice, work: work, episode: episode, title: work.title)
+                try await resolveAnimeCandidate(candidate, work: work, episode: episode, token: token)
+            } else {
+                let resolved = try await services.decoder.resolve(choice)
+                try await adoptResolved(resolved, choice: choice, token: token)
+            }
             try await submitAnimePlayback(token: token)
         }
     }
@@ -2369,7 +2398,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                     $0.id == candidate.id ? AnimeSourceCandidate(id: $0.id, sourceName: $0.sourceName, title: $0.title, selection: $0.selection, evidence: $0.evidence, failure: error.localizedDescription, trusted: $0.trusted) : $0
                 })
             }
-            status.stringValue = String(localized: "來源解析失敗，詳情已移至來源診斷；可另選匹配來源，未改播其他站。")
+            status.stringValue = AnimeSourceService.diagnostic(error)
             renderCandidates()
             return
         }
@@ -2489,6 +2518,8 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         candidatePopup.target = self; candidatePopup.action = #selector(confirmCandidate)
         candidatePopup.setAccessibilityLabel(String(localized: "選擇匹配來源即播放已選集數"))
         findSourceButton = button(String(localized: "重新尋源"), #selector(findPanelSources), icon: .search)
+        findSourceButton.identifier = NSUserInterfaceItemIdentifier("desktop.source.reconfirm")
+        candidatePopup.identifier = NSUserInterfaceItemIdentifier("desktop.source.candidates")
         candidateControls = NSStackView()
         candidateControls.orientation = .vertical; candidateControls.alignment = .leading; candidateControls.spacing = 10
         for item in [row([findSourceButton, candidatePopup]), candidateEvidence] as [NSView] { appendInfo(item, to: candidateControls) }
@@ -2794,19 +2825,40 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
             self.updateCommands()
         }
     }
-    @objc private func favoriteWork(_ sender: NSButton) {
-        guard !previewOnly, attached, collectionPopover.isShown, sender.isEnabled, !collectionSaving,
-              let selected = BangumiCollectionStatus(rawValue: sender.tag),
-              !workIsFavorite || selected != work?.collectionStatus else { return }
+    @objc private func toggleWorkFavorite() {
+        guard !previewOnly, attached, collectionPopover.isShown, !collectionSaving else { return }
         do {
             let value = try ensureWork()
-            try delegate.favoriteLibrary.addWork(workID: value.id)
+            if try delegate.favoriteLibrary.favoriteWorkIDs().contains(value.id) {
+                try delegate.favoriteLibrary.removeWork(workID: value.id)
+            } else {
+                try delegate.favoriteLibrary.addWork(workID: value.id)
+            }
+            closeCollectionPopover()
+            showWork()
+        } catch { showError(error) }
+    }
+    @objc private func setWorkCollectionStatus(_ sender: NSButton) {
+        let selected = BangumiCollectionStatus(rawValue: sender.tag)
+        guard !previewOnly, attached, collectionPopover.isShown, sender.isEnabled, !collectionSaving,
+              sender.tag == 0 || selected != nil,
+              sender.tag != (work?.collectionStatus?.rawValue ?? 0) else { return }
+        do {
+            let value = try ensureWork()
             collectionOperation?.cancel(); collectionGeneration = UUID()
             let token = collectionGeneration
             collectionIdentity = collectionKey(value)
+            guard let selected else {
+                // A local nil edit protects against stale remote reads; it never deletes a remote collection.
+                work = try delegate.workLibrary.setCollectionStatus(workID: value.id, status: nil)
+                status.stringValue = String(localized: "分類已保存本機。")
+                closeCollectionPopover()
+                showWork()
+                return
+            }
             showWork()
             collectionSaving = true
-            status.stringValue = String(localized: "正在保存收藏…")
+            status.stringValue = String(localized: "正在保存分類…")
             updateCommands()
             closeCollectionPopover()
             collectionOperation = Task { [weak self] in
@@ -2815,18 +2867,18 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                     let result = try await self.sync.setCollectionStatus(workID: value.id, status: selected)
                     guard self.acceptsCollection(token, workID: value.id) else { return }
                     self.work = result.work
-                    self.status.stringValue = String(localized: "已收藏至「\(selected.title)」。")
+                    self.status.stringValue = String(localized: "分類已同步。")
                 } catch {
                     guard self.acceptsCollection(token, workID: value.id) else { return }
                     if let saved = try? self.delegate.workLibrary.fetchWork(id: value.id) {
                         self.work = saved
                         if saved.collectionStatus == selected {
-                            self.status.stringValue = String(localized: "收藏與分類已保存本機；Bangumi 尚未同步：\(error.localizedDescription)")
+                            self.status.stringValue = String(localized: "分類已保存本機；Bangumi 尚未同步：\(error.localizedDescription)")
                         } else {
-                            self.status.stringValue = String(localized: "收藏已保存本機，但分類保存失敗：\(error.localizedDescription)")
+                            self.status.stringValue = String(localized: "無法保存分類：\(error.localizedDescription)")
                         }
                     } else {
-                        self.status.stringValue = String(localized: "收藏已加入；無法確認分類是否保存：\(error.localizedDescription)")
+                        self.status.stringValue = String(localized: "無法保存分類：\(error.localizedDescription)")
                     }
                 }
                 guard self.acceptsCollection(token, workID: value.id) else { return }
@@ -2834,7 +2886,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 self.showWork()
             }
         } catch {
-            status.stringValue = String(localized: "無法保存本機收藏：\(error.localizedDescription)")
+            status.stringValue = String(localized: "無法保存分類：\(error.localizedDescription)")
         }
     }
     @objc private func favoriteLink() {
@@ -2895,31 +2947,40 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         } catch { showError(error) }
     }
     @objc private func sourceChanged() {
-        guard !updating, !hasPinnedAnimeEpisode else { return }
+        guard !updating else { return }
         let index = sources.indexOfSelectedItem - 1
         guard links.indices.contains(index) else { return }
 
         let link = links[index]
         if classification.kind == .anime, selectedEpisodeIndex != nil {
-            do {
-                let episode = try selectedAnimeEpisode()
-                if let mapping = link.episodeMappings.first(where: { $0.episodeID == episode.id }) {
-                    loadSelection(mapping.selection)
-                    return
-                }
-            } catch { showError(error); return }
+            discoverAnimeSources(force: false, playWhenMatched: false, sourceLinks: [link])
+            return
         }
         loadAddress(link.sourceWork.pageURL)
     }
     @objc private func qualityChanged() {
         guard !updating, var choice = selection, qualityKeys.indices.contains(qualities.indexOfSelectedItem) else { return }
         choice.qualityID = qualityKeys[qualities.indexOfSelectedItem]; choice.lineID = nil
-        loadSelection(choice, loadCatalog: false)
+        if hasPinnedAnimeEpisode { resolvePinnedAnimeSelection(choice) }
+        else { loadSelection(choice, loadCatalog: false) }
     }
     @objc private func lineChanged() {
         guard !updating, var choice = selection else { return }
         choice.lineID = String(lines.indexOfSelectedItem)
-        loadSelection(choice, loadCatalog: false)
+        if hasPinnedAnimeEpisode { resolvePinnedAnimeSelection(choice) }
+        else { loadSelection(choice, loadCatalog: false) }
+    }
+    private func resolvePinnedAnimeSelection(_ choice: PlayableSelection) {
+        do {
+            guard let current = selection, let work else { return }
+            try animeSources.validateHandoff(current)
+            let episode = try selectedAnimeEpisode()
+            let candidate = try animeSources.candidate(for: choice, work: work, episode: episode, title: work.title)
+            let token = generation
+            runCommand(playback: false) { [self] in
+                try await resolveAnimeCandidate(candidate, work: work, episode: episode, token: token)
+            }
+        } catch { showError(error) }
     }
     @objc private func cancelLoading() {
         operation?.cancel(); invalidatePlayback(); generation = UUID(); loading = false; media = nil
@@ -3021,12 +3082,13 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         for episode in bangumiEpisodes {
             let kinds = [String(localized: "正篇"), String(localized: "SP"), String(localized: "OP"), String(localized: "ED"), String(localized: "預告"), String(localized: "MAD"), String(localized: "其他")]
             let kind = kinds.indices.contains(episode.type) ? kinds[episode.type] : String(localized: "類型未知")
-            guard WorkspaceDetailEpisodeAvailability.isUpdatedTitle(episode.title) else {
+            guard WorkspaceDetailEpisodeAvailability.isAvailable(episode) else {
                 updatingKinds.insert(kind)
                 if !groups.contains(where: { $0.0 == kind }) { groups.append((kind, [])) }
                 continue
             }
-            let title = "\(episode.sort) · \(episode.title)"
+            let title = WorkspaceDetailEpisodeAvailability.isUpdatedTitle(episode.title)
+                ? "\(episode.sort) · \(episode.title)" : "\(episode.sort)"
             let detail = [title, episode.airdate, episode.duration, episode.summary].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
             add(kind, "bangumi:\(episode.id)", title, detail)
         }
@@ -3061,7 +3123,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 placeholder.bezelStyle = .rounded
                 placeholder.isEnabled = false
                 placeholder.setAccessibilityLabel(String(localized: "更新中"))
-                placeholder.setAccessibilityHelp(String(localized: "未提供集名的集數尚未更新，不能選擇或播放。"))
+                placeholder.setAccessibilityHelp(String(localized: "尚未播出的集數或缺少標籤的本地集數不能選擇或播放。"))
                 buttons.append(placeholder)
             }
             grid.replace(buttons, rowHeight: 44)
@@ -3127,21 +3189,23 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         return local.indices.contains(index) ? local[index] : nil
     }
     @objc private func mapEpisode() {
-        guard classification.kind == .anime, let work, let choice = selection, choice.classification.kind == .anime, var link = currentLink, (selectedEpisodeIndex ?? -1) >= 0 else { return }
-        let row = (selectedEpisodeIndex ?? -1)
+        guard !previewOnly, !loading, !commanding, classification.kind == .anime,
+              let work, let choice = selection, choice.classification.kind == .anime,
+              let link = currentLink, (selectedEpisodeIndex ?? -1) >= 0 else { return }
         do {
-            let episode: Episode
-            if let existing = localEpisode(at: row) { episode = existing }
-            else if bangumiEpisodes.indices.contains(row) {
-                let remote = bangumiEpisodes[row]
-                let kind: Episode.Kind = remote.type == 0 ? .main : remote.type == 1 ? .special : remote.type == 2 ? .opening : remote.type == 3 ? .ending : .other
-                episode = Episode(workID: work.id, externalID: "bangumi:\(remote.id)", kind: kind, label: remote.title, sort: remote.sort)
-                try delegate.workLibrary.upsert(episode)
-            } else { return }
-            link.episodeMappings.removeAll { $0.episodeID == episode.id }
-            link.episodeMappings.append(EpisodeSourceMapping(episodeID: episode.id, selection: choice))
-            try delegate.workLibrary.upsert(link)
-            showWork(); status.stringValue = String(localized: "已保存明確集數映射；來源選擇與帳號保持不變。")
+            let episode = try selectedAnimeEpisode()
+            var mappingChoice = choice
+            if link.sourceWork.kind == .work {
+                mappingChoice.item = link.sourceWork
+                mappingChoice.episode = choice.episode ?? choice.item
+            }
+            let candidate = try animeSources.candidate(for: mappingChoice, work: work, episode: episode, title: work.title)
+            let token = generation
+            runCommand(playback: false) { [self] in
+                try await resolveAnimeCandidate(candidate, work: work, episode: episode, token: token)
+                guard accepts(token) else { return }
+                status.stringValue = String(localized: "已保存明確集數映射；來源選擇與帳號保持不變。")
+            }
         } catch { showError(error) }
     }
     private func loadUpdate(_ update: DiscoveryFavoriteUpdate) {

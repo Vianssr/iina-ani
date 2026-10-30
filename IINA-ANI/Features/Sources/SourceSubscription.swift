@@ -30,36 +30,8 @@ enum SourceSubscriptionError: Error, LocalizedError, Equatable {
 
 /// Converts css1 search metadata only. Playback, quality and authentication remain local adapter concerns.
 enum SourceSubscriptionConverter {
-    static let managedSourceIDs: Set<String> = [
-        "xifan", "girigiri", "didahd", "jibi", "eacg", "senfun", "fengche", "kanba",
-        "haixing", "yinghua", "dilidili", "youknow", "fqdm", "hanime1", "wedm", "rebo"
-    ]
+    static let managedSourceIDs = Set(SourceSubscriptionRules.hosts.keys)
 
-    // Identity is audited host ownership, never the remote display name or a suffix match.
-    private static let aliases: [String: [String]] = [
-        "xifan": ["dm1.xfdm.pro"],
-        "girigiri": ["ani.girigirilove.com"],
-        "didahd": ["www.didahd.pro", "didahd.pro", "www.didahd.xyz", "didahd.xyz"],
-        "jibi": ["www.jibi.cc", "jibi.cc"],
-        "eacg": ["www.eacg1.com", "eacg1.com"],
-        "senfun": ["senfun.in"],
-        "fengche": ["www.dongmandaquan.vip", "dongmandaquan.vip"],
-        "kanba": ["11kt.net", "www.11kt.net", "qkan8.com", "www.qkan8.com"],
-        "haixing": ["www.haixingdmx.com", "haixingdmx.com"],
-        "yinghua": ["www.yinghuabb.com", "yinghuabb.com", "www.yinghuaaa.com", "yinghuaaa.com", "www.yinghua2.com", "yinghua2.com"],
-        "dilidili": ["dilidili.io", "www.dilidili.io"],
-        "youknow": ["www.youknow.tv", "youknow.tv"],
-        "fqdm": ["www.fqdm.cc", "fqdm.cc"],
-        "hanime1": ["hanime1.me", "www.hanime1.me"],
-        "wedm": ["www.vdm5.com", "vdm5.com"],
-        "rebo": ["www.rebozj.cc", "rebozj.cc", "www.rebozj.pro", "rebozj.pro"]
-    ]
-    private static let excludedHosts: Set<String> = ["www.hc34567.com", "hc34567.com"]
-    private static let indexedSelectors: [String: (names: String, links: String)] = [
-        "xifan": ("body > .box-width .search-box .thumb-content > .thumb-txt", "body > .box-width .search-box .thumb-menu > a"),
-        "girigiri": ("body > .box-width .vod-detail .detail-info .slide-info-title", "body > .box-width .vod-detail .detail-info > a"),
-        "hanime1": ("#home-rows-wrapper > div.content-padding-new > div > div > div > div > a > div.title", "#home-rows-wrapper > div.content-padding-new > div > div > div > div > a")
-    ]
     private struct Candidate {
         let encoded: Data
         let signature: Data
@@ -101,9 +73,9 @@ enum SourceSubscriptionConverter {
             let config = arguments?["searchConfig"] as? [String: Any]
             let rawURL = config?["searchUrl"] as? String
             let host = rawURL.flatMap { URLComponents(string: $0)?.host?.lowercased() }
-            let id = host.flatMap { host in aliases.first(where: { $0.value.contains(host) })?.key }
+            let id = host.flatMap { host in SourceSubscriptionRules.hosts.first(where: { $0.value.contains(host) })?.key }
             if let id { seen.insert(id) }
-            if let host, excludedHosts.contains(host) {
+            if let host, SourceSubscriptionRules.excludedHosts.contains(host) {
                 entries.append(.init(sourceID: "forest", name: name, status: String(localized: "已排除"), detail: String(localized: "影视森林已移除；訂閱不會恢復其搜尋或播放能力。")))
                 continue
             }
@@ -188,7 +160,7 @@ enum SourceSubscriptionConverter {
                 search["hrefAttribute"] = "href"
             }
         case "indexed":
-            guard let expected = indexedSelectors[id],
+            guard let expected = SourceSubscriptionRules.indexedSelectors[id],
                   let spec = config["selectorSubjectFormatIndexed"] as? [String: Any],
                   let names = spec["selectNames"] as? String, let links = spec["selectLinks"] as? String else {
                 throw Rejection.unsupportedParser
@@ -213,7 +185,7 @@ enum SourceSubscriptionConverter {
         guard raw.utf8.count <= 4096, raw.contains("{keyword}"), !raw.contains(where: { $0.isWhitespace || $0.isNewline }),
               let incoming = URLComponents(string: raw), incoming.scheme == "https", incoming.user == nil,
               incoming.password == nil, incoming.port == nil, incoming.fragment == nil,
-              let host = incoming.host?.lowercased(), aliases[id]?.contains(host) == true,
+              let host = incoming.host?.lowercased(), SourceSubscriptionRules.hosts[id]?.contains(host) == true,
               baseline.hosts.contains(host), let local = URLComponents(string: baseline.search.url),
               incoming.path == local.path, !incoming.path.contains("..") else { throw Rejection.invalidURL }
         let fields = incoming.queryItems ?? []

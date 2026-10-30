@@ -1386,3 +1386,378 @@
 
 - 依要求將現有七個檔案變更整理為同一提交，包含收藏列互動、Discover 單擊、在地化、Skin、Hardened Runtime 工程設定與文件。
 - 本次核對 Git 工作區與變更摘要；功能驗證沿用上節既有記錄，未重新執行建置或 UI 驗收。
+
+## 2026-10-26 — iOS 簡化操作首版
+
+- 新增獨立 `iOS/ANI.xcodeproj`／`ANI` scheme，宣告 iOS 17+、iPhone／iPad，Bundle ID `com.LlS.iina-ani.ios`，版本 `0.1.0`；未修改桌面 target 或其儲存路徑。
+- SwiftUI 三入口：Bangumi 日曆／搜尋／分頁及詳情、本機收藏、HTTPS 直連與系統檔案匯入播放。使用 AVKit，關閉時停止播放器、釋放 security scope，音訊 session 在序列背景佇列啟用／停用；不保存媒體網址。
+- 收藏原子寫入與離線文字保存，讀取損壞檔案時拒絕覆寫；提供錯誤、空白與載入狀態。Bangumi 舊日曆封面僅針對已知 CDN 升級 HTTPS。36 個介面字串同步 en、zh-Hans、zh-Hant，沿用原有圖示及授權。
+- 原始碼／工程檢查：`git diff --check`、pbxproj `plutil -lint` 與三語 catalog 完整性通過。`bash Tests/run-ios.sh` 通過 API 稀疏解碼、編解碼、封面 HTTPS、媒體 URL 驗證、收藏跨實例恢復／取消與損壞資料保護。
+- 建置與執行：Xcode 27.1，iPhone 18 Pro／iOS 27.0 模擬器 Debug 建置並啟動正式 ANI App 成功。XCTest `ANIUITests.testMobileFlow` 最終 1 passed、0 failed，無工具回報警告；驗證無效 URL 提示、Apple 公開 HLS 串流開啟與關閉、搜尋 Cowboy Bebop、詳情、加入收藏及重啟保存，完成後恢復本次測試收藏狀態。播放截圖可見測試影片 00:00:05.10 畫面。繁體主頁即時資料與封面亦已目視檢查。
+- 證據：`.build/ios-discover-zh-Hant.jpg`、`.build/ios-player.png`；最終 XCTest result bundle 位於 `~/Library/Developer/XcodeBuildMCP/workspaces/IINA-ANI-9c4f2b951a90/result-bundles/test_sim_2026-10-26T08-08-37-365Z_pid5941_ccaf561a.xcresult`。專用工具點擊回報成功但未改變畫面，互動驗收因此改用 XCTest，未據前者宣稱通過。
+- 限制：未驗證實機簽署／IPA／TestFlight、最低 iOS 17、iPad 版面、橫向／大字級、VoiceOver、系統 Files 匯入實播、所有影片格式、背景／音訊中斷與 AirPlay。未移植站點解析、帳號同步、彈幕、下載、BT、Skin／Layout 或觀看歷史。桌面程式未改動，未重跑 macOS 建置與 UI 驗收；完整範圍與操作見 `docs/IOS_GUIDE.md`。
+
+## 2026-10-26 — iPad 觸控工作區
+
+- iPad 採 NavigationSplitView 側欄＋內容區，提供探索、收藏、播放與收藏數量；iPhone 維持底部分頁。系統支援在窄空間折疊側欄。
+- 寬版作品網格最小卡片寬 185 pt，整張卡片可點；側欄列、收藏、播放與檔案按鈕至少 56 pt 高。詳情在內容寬 700 pt 以上並排封面與資訊，播放在 740 pt 以上並排影片連結與檔案區；窄空間／輔助使用字級使用上下排列。
+- 手機回歸發現關閉播放器後網址欄重新取得焦點、鍵盤遮住底部分頁；新增 FocusState，在播放及選檔前釋放輸入焦點，修正後完整手機流程通過。新增三語字串，catalog 共 39 項。
+- 驗證：iPad Pro 11-inch (M5)／iOS 27.0 Debug 建置與啟動通過；XCTest `testTabletWorkspace` 最終 1 passed，驗證側欄切換、播放雙欄、按鈕／輸入框高度、無效網址提示、橫直向旋轉保留輸入、搜尋與作品詳情。iPhone 18 Pro `testMobileFlow` 修正後 1 passed，包含 HLS 播放與關閉、搜尋、收藏及重啟恢復。`git diff --check` 與三語 catalog 檢查通過。
+- iPad 最終 result bundle：`~/Library/Developer/XcodeBuildMCP/workspaces/IINA-ANI-9c4f2b951a90/result-bundles/test_sim_2026-10-26T08-56-56-817Z_pid5941_de614d05.xcresult`；手機：`test_sim_2026-10-26T08-55-42-014Z_pid5941_7adc7400.xcresult`（同一目錄）。XCUIScreen 真實畫面截圖：`.build/iPad-discover.png`、`.build/iPad-play.png`、`.build/iPad-detail.png`；初次 app.screenshot 的橫向裁切失真已改用完整螢幕截圖取證。
+- 限制：未實機驗證，未操作 Stage Manager／Split View 窄視窗、VoiceOver 或全部 Dynamic Type 字級；寬窄及大字級切換有程式處理但不宣稱全數實測。桌面端未修改，本輪未重建 macOS App；未加入來源解析、彈幕或下載。
+
+## 2026-10-26 — 行動端 mpv 內建播放器
+
+- 以 MPVKit 固定 revision 嵌入真正 libmpv／FFmpeg，取代行動版原有 AVKit 播放；透過 Metal layer 顯示影片，保留 HTTPS 憑證驗證及 CA 資源。不改動桌面 target。依賴鎖檔、授權與重建來源記錄於 `iOS/THIRD_PARTY.md`。
+- 加入播放／暫停、時間軸、0.5–2× 倍速、內嵌／外掛字幕選擇與關閉、播放清單選集、影片左右半邊雙擊倒退／快進；跳轉秒數可選 5／10／15／30／60 並保存偏好。不可跳轉媒體停用時間軸與跳轉按鈕。多選影片按檔名自然排序；播放中可追加檔案或 HTTPS 直連。
+- 彈幕使用實際媒體時間定位，支援 Bilibili XML、CDF／AcFun 相容 JSON、總開關、關鍵字與滾動／頂部／底部過濾；加入大小／數量界限、解析失敗保留原資料、彈幕密度限制。換集重設時間與軌道並清除舊彈幕，保留當次工作階段的過濾設定。
+- 核心操作與銷毀在序列佇列執行，銷毀完成後才釋放影片／字幕 security scope；保留 pause revision 避免 renderer 延後建立或舊狀態覆寫暫停要求。背景、音訊中斷與拔耳機會暫停，明確恢復時重新啟用音訊。媒體網址不持久化，libmpv 原始日誌不轉送。
+- 實際截圖發現中文字幕缺字及手機快進按鈕文字擠壓，補入官方 Noto Sans CJK TC 2.004／OFL 授權並調整控制列；最終手機截圖已目視確認中文字形、15s 按鈕及字幕／彈幕共同顯示。彈幕設定使用大型面板；新增介面與錯誤字串具 en／zh-Hans／zh-Hant，catalog 共 82 項。
+- 原始碼／資料驗證：`git diff --check`、工程 plist、三語 catalog 完整性通過；`Tests/run-ios.sh` 與 `Tests/run-ios-danmaku.sh` 通過，涵蓋資料／收藏回歸、XML／JSON 格式與時間單位、大小／筆數界限、無效資料保留、開關／關鍵字／類型過濾、密度以及暫停與雙向跳轉時間線。
+- 建置與執行：Simulator arm64／x86_64 Debug 建置成功；核心／字型整合後 generic iOS arm64 Release 無簽署建置成功，驗證字型／OFL／CA／授權資源存在、全部 `player-fixture*` 測試素材排除。iPhone 18 Pro 與 iPad Pro 11-inch (M5)／iOS 27.0 的 `testMPVPlayerControls` 最終各 1 passed、0 failed，操作真實 libmpv，驗證媒體時鐘、暫停、±15 秒按鈕與雙擊、倍速、兩軌字幕與關閉、6→5→4 條彈幕過濾、換集重設、背景暫停／恢復，以及關閉／重開。iPad 另實測橫向。手機 `testMobileFlow` 也通過真實 HTTPS HLS 時鐘前進及原有搜尋、收藏、重啟恢復。
+- 證據：最終手機 XCTest result `test_sim_2026-10-26T09-35-20-469Z_pid5941_1b6c788f.xcresult`、iPad `test_sim_2026-10-26T09-33-15-716Z_pid5941_db275475.xcresult`；HLS／舊流程在 `test_sim_2026-10-26T09-26-25-894Z_pid5941_4cc34901.xcresult` 的 `testMobileFlow` 通過（同次初版播放器測試的畫面可見範圍斷言失敗，修正後已另跑通過）。上述均在 `~/Library/Developer/XcodeBuildMCP/workspaces/IINA-ANI-9c4f2b951a90/result-bundles/`。實際螢幕截圖：`.build/mpv-iphone-subtitles.png`、`.build/mpv-iphone-player.png`、`.build/mpv-ipad-subtitles.png`、`.build/mpv-ipad-player.png`。
+- 限制：未實機驗證、最低 iOS 17、實際來電／Siri／耳機中斷、全部解碼器／HDR／ASS 字型樣式、系統 Files 選檔完整旅程或長時間效能；未提供自動尋源／站點彈幕、背景播放、PiP、AirPlay、DRM 或簽署發佈。測試使用可重建的本地影片／字幕及公開 HLS，未宣稱已涵蓋所有來源。桌面端未改動，未重跑 macOS 驗收。
+
+## 2026-10-26 — 播放器橫直向與觸控控制列
+
+- 重排行動播放器：縱向為影片、固定時間軸／六個功能按鈕與可捲動選集；橫向為頂部返回／片名、中央播放及跳轉、底部時間軸與功能列。倍速改為一次可見的網格；按鈕至少 44 pt，窄視窗可退為兩列功能按鈕。介面使用深色背景與高對比控制項，新增字串同步三語。
+- iPhone 透過所屬 UIWindowScene 的公開 geometry API 進出橫向；iPad 系統視窗模式可能拒絕程式旋轉，故按鈕在原視窗展開／收合，保留自然旋轉與多工能力。未設定 UIRequiresFullScreen，也不使用私有裝置方向 setter。旋轉沿用同一播放核心與 Metal layer，保留時間、暫停、選集和字幕軌。
+- 全螢幕播放閒置 3.5 秒收起控制項，單擊重新顯示，雙擊左右半邊依偏好跳轉；暫停、載入、拖動、面板或 VoiceOver 時保持可見。一般文字字幕在控制列顯示時提高位置，保留原本 ASS 樣式行為。
+- 修正 MPVKit MoltenVK 旋轉後的拉伸／裁切：維持固定 16:9 bounds 與相符 drawable 像素大小，只等比 transform／置中圖層；最大渲染畫布為 3840×2160。驗證同時觀察暫停旋轉畫面與恢復播放後重新繪製的畫面，未以 UI 狀態斷言代替影片目視驗收。測試中曾發現子圖層錯誤綁定 UIView delegate 的遞迴崩潰，移除後已重新建置及執行通過。
+- 工程檢查：`git diff --check`、工程 `plutil -lint`、96 項字串的 en／zh-Hans／zh-Hant 完整性通過。最終 generic iOS arm64 Release 無簽署建置成功（`.build/ios-mpv-device.log`），字型／OFL／NOTICE／CA／LGPL 資源齊全，Debug 測試素材與診斷入口未包含在正式包。
+- iPad Pro 11-inch (M5)／iOS 27.0 最終 `testMPVPlayerRotation` 1 passed：實際橫直向、視窗內全螢幕往返、暫停與選集／字幕／非零進度保留、繼續解碼、閒置隱藏與單擊恢復。result bundle：`test_sim_2026-10-26T10-22-41-068Z_pid5941_9fd70f44.xcresult`，位於 `~/Library/Developer/XcodeBuildMCP/workspaces/IINA-ANI-9c4f2b951a90/result-bundles/`。實際截圖 `.build/player-modern-ipad-portrait.png`、`.build/player-modern-ipad-landscape.png`、`.build/player-modern-ipad-landscape-redrawn.png` 已目視確認完整影片與中文字幕。
+- iPhone 18 Pro／iOS 27.0 最終 `testMPVPlayerControls` 與 `testMPVPlayerRotation` 共 2 passed、0 failed，涵蓋實際 mpv 時鐘、暫停／±15 秒按鈕及雙擊、倍速、字幕開關／選軌、彈幕過濾、切集、背景暫停／恢復、關閉／重開，以及感測旋轉／全螢幕按鈕往返與狀態保留。result bundle：`test_sim_2026-10-26T10-24-20-872Z_pid5941_51bb91d0.xcresult`（同上目錄）。最終 `.build/player-modern-iphone-portrait.png` 與 `.build/player-modern-iphone-landscape-redrawn.png` 已目視確認影片完整、字幕與功能按鈕可見。
+- 限制：未實機、最低 iOS 17、系統旋轉鎖定、Stage Manager／Split View 窄視窗、VoiceOver／全部 Dynamic Type 實測；固定 16:9 畫布對其他比例素材可能有額外黑邊，未重驗全部格式／HDR／ASS 樣式或長時間效能。窄版排列與 VoiceOver 保持控制項可見有程式處理，不宣稱已完成對應系統操作驗收。桌面 target 未變更，未重跑 macOS 或無關資料測試；操作與取捨記錄於 `docs/IOS_GUIDE.md`。
+
+## 2026-10-27 — iPhone 實機驗證準備與簽署阻塞
+
+- 偵測到 USB 連線的 iPhone 17／iOS 27.0.1，已配對且開發者模式啟用；以目前來源的 `iOS/ANI.xcodeproj`／`ANI` 執行 Debug `build-for-testing`，使用本機既有 Apple Development 憑證與自動 provisioning，未修改工程的團隊設定。
+- 建置在內嵌 `Libunibreak.framework` 的 CodeSign 階段以 `errSecInternalComponent` 失敗（exit 65）；同時觀察到 SecurityAgent 授權程序。已請使用者在系統提示中處理鑰匙圈授權，尚未確認根因或完成簽署。建置日誌：`.build/ios-device/build.log`。
+- 本機資料回歸 `bash Tests/run-ios.sh` 與彈幕回歸 `bash Tests/run-ios-danmaku.sh` 均 PASS；日誌分別為 `.build/ios-device/data-tests.log`、`danmaku-tests.log`。這兩項在 Mac 執行，不代表實機驗收通過。
+- 未完成實機安裝、啟動、播放／旋轉／搜尋／收藏 UI 測試；未清除裝置 App 或使用者資料，未宣稱 iPad 或最低 iOS 版本已驗證。
+
+### 同日續測 — 簽署通過，待裝置信任開發者
+
+- 使用者完成 Mac 鑰匙圈授權後重試，App 與 XCTest runner 建置／簽署階段通過，進入 iPhone 安裝／啟動測試階段。
+- iPhone 拒絕啟動 XCTest runner：`Developer App Certificate is not trusted`。Xcode 明確要求在裝置「設定 → 一般 → VPN 與裝置管理」信任對應開發者憑證。三項指定 UI 測試尚未執行，不計為功能測試失敗或通過。
+- 證據：`.build/ios-device/iphone-tests.log`、`.build/ios-device/iphone-tests.xcresult`。未代替使用者變更裝置信任設定。
+
+### 同日續測 — 免費簽署名額限制與正式 App 安裝
+
+- 使用者信任開發者後，XCTest runner 能啟動，但三項測試均在安裝 ANI 時被系統拒絕：裝置已達免費開發描述檔 App 數量上限（兩個既有 App 加上本次 runner）。沒有進入功能斷言階段。結果：`.build/ios-device/iphone-trusted-tests.xcresult`、同名 `.log`。
+- 僅移除本次安裝的 `com.LlS.iina-ani.ios.uitests.xctrunner` 以釋出名額，保留既有 App；本輪來源建置的 `com.LlS.iina-ani.ios` 隨後成功安裝至 iPhone。`codesign --verify --deep --strict` 通過。
+- 正式 App 的啟動仍被裝置安全檢查拒絕（簽章／entitlements／未信任 profile 的通用錯誤），再次啟動亦同；需在裝置確認新安裝 ANI 的開發者信任。證據：`.build/ios-device/app-launch.log`。未宣稱正式 App 已啟動或播放驗證通過；XCTest 仍需額外免費簽署名額。
+
+## 2026-10-27 — iOS 瀏覽與收藏操作優化
+
+- 收藏頁新增中文／原文名稱即時搜尋，以及最近收藏、名稱、評分排序；排序不改寫收藏檔或原始插入順序，新增字串具 en／zh-Hans／zh-Hant。
+- 探索下拉刷新直接等待載入完成，刷新失敗保留既有卡片；以請求識別及查詢版本阻止過時回應覆蓋新結果。作品詳情新增載入指示與失敗重試。
+- 原始碼／資料驗證：`bash Tests/run-ios.sh` 通過，涵蓋搜尋空白修剪、原文／中文匹配、無匹配、缺評分排序，以及收藏順序與磁碟內容保持；新增字串三語檢查通過。未變更依賴 manifest 或工程設定。
+- 建置：iOS Simulator Debug build 通過。正式 ANI App 的 `testLibraryPresentation` 在 iPhone 18 Pro／iOS 27.0 模擬器通過，操作搜尋、清空、三個排序選項及評分排序，附實際畫面截圖。證據位於 `.build/ios/Logs/Test/Test-ANI-2026.10.27_00-27-48-+0800.xcresult` 與 `.build/ios-library-ui-attachments/`。
+- 完整 `testMobileFlow` 未通過：首輪發現收藏搜尋欄預設收起，已改為常駐；第二輪搜尋與清空通過，但腳本使用不存在的系統 Cancel 按鈕，已改用重啟退出搜尋呈現；第三輪等待 Bangumi 搜尋結果逾時。完整在線流程仍待重驗，不以獨立收藏 UI 通過代替。
+- 限制：未驗證 iPad、實體裝置、最低 iOS 17、離線重試及快速切換查詢的 UI 情境；未更動桌面版，未執行 macOS App 驗收。模擬器完整流程加入的測試作品收藏因中途失敗可能保留；未清空沙盒或既有資料。
+
+## 2026-10-27 — iOS 詳情、尋源與內建播放串接
+
+- 詳情新增 Bangumi 集數分頁載入與正篇／SP／OP／ED 等分組，使用官方集內編號 `ep`（無則顯示 `sort`），未來放送日期禁選，載入失敗可重試。
+- 新增番茄動漫來源的明確啟用、可編輯名稱搜尋、結果分頁、作品確認、線路及實際集數選擇、解析與 mpv 全螢幕播放；退出播放器回到來源目錄。缺集不退回第一集、不以列表位置匹配、不自動跨作品／季度／站點。一次解析一集，未加入在線自動連播或持久來源映射。
+- 共用桌面 `SourceConfiguration`、`SourceItemRef` 與能力契約；僅以 `MOBILE_SOURCES` 編譯旗標隔離桌面錯誤型別，桌面原有錯誤行為不變。iOS 使用固定 SwiftSoup 2.13.7，新增鎖檔項目與隨包 MIT 授權。
+- 網路請求使用無 Cookie 的 ephemeral session，限制 HTTPS、來源 host、重新導向、20 秒逾時及 4 MiB 回應。解析核對作品／線路／集數，拒絕付費、試看與驗證頁；解析後的媒體 URL 僅在記憶體，不寫入記錄。取消、關閉或停用來源時撤銷工作，過期回應不啟播。
+- 原始碼／工程檢查：`git diff --check`、pbxproj 語法、新介面 en／zh-Hans／zh-Hant 字串檢查通過；Debug 使用 ONLY_ACTIVE_ARCH 避免目前模擬器與 Swift 套件架構不一致。
+- 資料／離線驗證：`Tests/run-ios.sh`、`Tests/run-ios-danmaku.sh`、`Tests/run-ios-sources.sh` 均通過。新來源回歸涵蓋 query 編碼、分頁、目錄過濾、缺集、錯作品／集數、付費／試看／URL 邊界、驗證頁、取消中途請求、失敗重試及完整 flow。測試包與快取只放 `.build`。
+- 相容性：macOS Debug App 建置與 `Tests/run-w3-sources.sh` 全部通過，涵蓋既有設定、來源註冊、目錄、搜尋、XiFan 及訂閱回歸；本次未走 macOS 視窗功能驗收。
+- iOS 建置：Debug 與雙架構 Simulator Release build 通過；Release bundle 檢查確認存在來源 JSON／MIT 授權，不含測試影片與 `-source-ui-fixture`／`-source-ui-failure` 啟動旗標。一次補截圖測試因與 Release 同時建置造成 build.db 鎖定，待建置完成後重跑通過。
+- 正式 App UI：`testDetailSourcePlayback` 在 iPhone 18 Pro 與 iPad Pro 13-inch (M5)／iOS 27.0 模擬器通過。從探索卡片進詳情、選集、搜尋、選作品／線路／集數，第一次回傳錯集數被拒絕，重試後真實 libmpv 播放並回報時間前進，最後返回來源與詳情。測試用 Debug 注入 Bangumi／HTML 回應，仍經正式解析；唯一指定的測試 HTTPS 媒體 URL 於播放器交接處換成本地 fixture，不宣稱這是外站串流播放驗收。
+- UI 證據：iPhone `.build/ios/Logs/Test/Test-ANI-2026.10.27_00-45-12-+0800.xcresult`；iPad `Test-ANI-2026.10.27_00-41-31-+0800.xcresult`（同目錄）。尋源及播放截圖匯出至 `.build/ios-source-final-attachments/`，已檢視。
+- 真實來源 smoke：公開名稱搜尋返回 2 個候選，來源目錄返回 5 條線路，選定集數成功解析為經驗證的 HTTPS 媒體；不輸出完整媒體 URL。此項只驗證實際搜尋／解析，不代表外站串流已在 App 播放。
+- 限制：目前只接入隨包 fqdm 來源；其他桌面解析器、來源訂閱、登入、同步及自動連播未移植。未驗證實體裝置、最低 iOS 17、真實站點端到端串流播放或所有作品／線路。網站更新、地區／授權限制、媒體失效或解碼能力仍可能造成播放失敗。
+
+## 2026-10-27 — iOS 完整來源配置清單與數字選集網格
+
+- 依使用者確認採用完整來源配置，新增 `iOS/ANI/source-list.json` 按序載入隨包來源；目前預設仍為 fqdm。新增 JSON 檔案匯入、名稱／ID／網域預覽、同 ID 替換提示及原子保存，重啟後恢復自訂來源；新匯入或更新的來源需再次啟用。無效檔案保留並隔離，限制單檔 1 MiB、最多 100 個自訂來源，無法讀取來源目錄時拒絕覆寫。
+- 行動解析器接入完整宣告式配置的 HTML／JSON 搜尋、分頁、目錄、播放器 payload、串流 URL 模板及檔案 query identity；沒有搜尋配置時可貼上符合配置的作品頁。切換來源或更新配置會重建來源流程並取消舊請求，作品及集數識別帶來源 ID。
+- 詳情頁與來源目錄改用自適應 LazyVGrid，選集按鈕僅顯示集數，保留線路／類型分組、未播禁選及輔助使用標題；新增介面字串提供 en／zh-Hans／zh-Hant。附完整 Internet Archive 配置範例於 `Examples/MobileSources/`，使用方式記於 `docs/IOS_GUIDE.md`。
+- 原始碼／工程檢查：`git diff --check`、pbxproj 語法及選集／尋源介面三語字串檢查通過。Debug 與雙架構 Simulator Release build 通過；Release 包含 source-list.json、fqdm.json、SwiftSoup 授權，未包含測試影片與三個來源測試啟動旗標。證據：`.build/ios-config-build.log`、`.build/ios-config-release.log`。
+- 離線回歸：`bash Tests/run-ios-sources.sh` 通過，涵蓋清單順序／重複／路徑拒絕、匯入／重啟／替換／無效覆寫保護、壞檔隔離、HTML 與 JSON 檔案 identity、JSON 搜尋／目錄／播放器、模板解析、來源隔離，以及既有錯集／付費／試看／URL／取消／重試案例。日誌：`.build/ios-config-sources-tests.log`。
+- 正式 App UI：iPhone 18 Pro 與 iPad Pro 13-inch (M5)／iOS 27.0 模擬器的 `testDetailSourcePlayback` 通過，檢查集數按鈕文字與網格寬度、切換第二個配置來源、搜尋／選作品、錯集拒絕後重試、實際 libmpv 播放時間前進及返回詳情；iPad 額外驗證切換來源後舊搜尋結果消失。證據：`.build/ios/Logs/Test/Test-ANI-2026.10.27_01-08-58-+0800.xcresult`、`Test-ANI-2026.10.27_01-11-26-+0800.xcresult`。來源網格截圖已檢視；UI 使用 Debug 回應注入與本地測試影片，不代表外站串流驗收。
+- 限制：系統 Files 選檔面板未做端到端自動化，匯入儲存與校驗由回歸測試驗證；未驗證實體裝置、最低 iOS 17、所有 Dynamic Type／VoiceOver 或新範例站點的真實端到端播放。不執行任意 JS，未移植 native-search.json 中僅有搜尋規則的桌面解析器、登入或訂閱。此輪未變更桌面程式，未重跑 macOS App；未清除既有使用者資料。
+- 最終 HTML query identity 調整後再次執行 iPhone `testDetailSourcePlayback`，1 passed／0 failed，亦驗證切換來源後舊結果消失及數字按鈕同排；結果：`.build/ios/Logs/Test/Test-ANI-2026.10.27_01-17-36-+0800.xcresult`，日誌 `.build/ios-config-final-ui.log`。
+
+## 2026-10-27 — macOS 與 iOS 基礎功能對齊規劃
+
+- 新增 `docs/planning/MULTIPLATFORM_BASELINE.md`，以共同追番主流程定義第一階段範圍，拆分身份／能力契約、作品庫與離線資料、精確來源映射、歷史續播、同源下一集及三端驗收；帳號分類同步、來源擴展等另列後續。README 文件索引加入入口。
+- 對照兩端實際資料及播放交接，列出 iOS URL／標題交接缺少穩定身份、舊收藏裸陣列遷移、來源 schema 版號與內容修訂區別、query identity 持久化、Files 授權和自然 EOF 判定等依賴。規劃保留既有桌面 Core Data、原生解析器及播放器，功能對齊不預設跨裝置同步。
+- 驗證：規劃內 22 個本機連結與 README 入口檢查通過，`git diff --check` 通過；只新增／更新規劃與文件，未更動功能程式，未執行建置或 App 驗收。各里程碑均為待實作目標，未以規劃冒充成果。
+
+## 2026-10-28 — M0 跨平台身份、能力與播放契約
+
+- 完成 `docs/planning/MULTIPLATFORM_BASELINE.md` 的 M0，更新里程碑狀態與 iOS 使用指南；M1 收藏遷移、M2 持久映射、M3 觀看歷史及 M4 自動連播未提前實作。
+- 共用 Foundation 值型別保留 Bangumi 作品／集數 ID、類型、原始 sort、本機／來源身份、精確 `PlayableSelection` 及配置修訂。身份使用有版本的 UTF-8 長度編碼，來源、季度、集數與分隔字元不互相碰撞；不變更桌面作品／歷史／來源更新基線的既有持久主鍵。
+- 配置 fingerprint 使用解碼後完整內容的 SHA-256，區分 schema v1 與內容變更；未放寬 v1 未知欄位或憑證限制。配置能力與解析器、平台後端取交集；保留桌面 native 能力，iOS 不因宣告而提供 IINA、下載、獨立品質或其他未實作操作。
+- iOS 從詳情、選源、解析到 PlaybackSession／MPVEngine 保留完整上下文；使用者要求的 Bangumi 集數與實際來源集數分開記錄，交接消費一次並重查啟用與配置修訂。分類錯誤提供三語訊息，取消／停用／配置更新後的舊回應不啟播。
+- 兩端播放器接入 session／load 身份、事件順序與共同 reducer，區分 URL 已解析、成功載入、實際進度、暫停、自然 EOF、停止、取消及錯誤。libmpv 按 playlist entry 隔離舊事件；桌面晚接 IPC 只以匹配 path 與實際 time-pos 確認載入。EOF 後重播採新 load 身份，等待 seek 成功與後端 playback restart，不把 seek 預測值當成實際觀看。
+- 原始碼／工程檢查：兩個 pbxproj `plutil -lint`、新 runner `bash -n` 及 iOS 全部有效字串 en／zh-Hans／zh-Hant 完整性通過；沒有修改依賴鎖檔或資料格式。
+- 契約／回歸：同份 `MultiplatformContractRegression` 與 `PlaybackContractRegression` 在 macOS 和真正 iOS Simulator executable 均 PASS；涵蓋 fqdm／Internet Archive 配置、跨來源／季度／集數、配置內容變更、能力交集、實際進度、舊 session、EOF 去重及重播。`Tests/run-ios-sources.sh`、`Tests/run-w3-sources.sh`、`Tests/run-dependency-regression.sh --unit` 通過。初次來源回歸的重複區域變數命名及 iOS 工程 source phase 遺漏已修正後通過。
+- 建置：最終 arm64 macOS Debug／Release、iOS Simulator Debug 與 generic iOS arm64 Release 無簽署建置均 exit 0。iOS Release 產物在 `.build/ios-m0-release`，確認沒有 `player-fixture*` 素材。macOS 編譯仍輸出既有並發／未使用值警告，以及 Xcode「command failed with exit code 0」診斷文字；未將本輪宣稱為零警告建置，實際 Debug 產物已供回歸與正式 App 執行。
+- 桌面執行：啟動本次建置的正式 AppDelegate／工作區，使用 `.build/m0-desktop-home` 隔離資料，操作開啟影片視窗並以 mpv 播放本機影片；隔離歷史觀察到實際 63 秒進度。正式畫面為 `.build/m0-evidence/macos-workspace.png`、`macos-mpv.png`。另執行 `LOCAL_QUEUE_SMOKE=1 bash Tests/run-dependency-regression.sh --playback`，真實 mpv 的完整隊列、實際進度、換集新 load 身份、連播開關、EOF 與重啟歷史均 PASS；驗證等待條件已改為等待目前 load 的新進度，避免把上一輪同集的歷史當作本輪事件。
+- iOS 正式 App：iPhone 18 Pro／iOS 27.0 模擬器 `testDetailSourcePlayback`、`testMPVPlayerControls` 共 2 passed／0 failed；iPad Pro 13-inch (M5) 同系統來源流程 1 passed／0 failed。覆蓋選集、切源、錯集拒絕／手動重試、實際 libmpv 時間、暫停／跳轉／倍速／字幕／彈幕、切集及背景暫停。額外臨時 UI smoke 跳到影片末尾，等待自然 EOF，再播放至非零時間，1 passed／0 failed；臨時測試入口已移除，保留永久純事件回歸。
+- iOS 證據：`.build/m0-evidence/iphone.xcresult`、`ipad.xcresult`、`replay.xcresult`；附件分別匯出於同目錄 `iphone-attachments/`、`ipad-attachments/`、`replay-attachments/`，實際來源播放與字幕／彈幕畫面已檢視。來源 UI 使用固定回應與本地測試影片，不冒充外站串流成功。
+- 限制：已偵測配對且 available 的 iPhone 17 與 iPad Pro，但本輪未做實機簽署、安裝、播放或最低 iOS 17／macOS 13.5 驗證；未重驗 IINA 外掛、全部桌面站點、真實來源端到端串流、多視窗／重連完整矩陣及所有無障礙尺寸。未清除使用者資料；M0 不代表 M5 三端整體驗收完成。
+
+## 2026-10-28 — M1 本機作品庫與離線資訊
+
+- 完成 `docs/planning/MULTIPLATFORM_BASELINE.md` 的 M1；同步 README、iOS／桌面使用指南與架構。M2 精確映射、M3 觀看歷史、M4 自動連播及 M5 三端整體驗收仍未交付。
+- iOS `MobileLibrary` 改用 `version: 1` 的獨立 `library.json`：舊 `favorites.json` 原樣保留並備份，暫存新檔經解碼與內容驗證後原子啟用，遷移可重試。舊收藏快照、身份、數量及原順序保留；未知建立時間／分類留空。穩定 `bangumi:<subjectID>` 作品記錄與收藏資格獨立，保存成功才發布 UI 狀態；壞檔／未來版本不回退空庫或舊權威檔覆寫。
+- 兩端共用 `CollectionStatus.swift` 的五類／未分類規則。iOS 新增分類與篩選，保留名稱搜尋／排序；macOS 移除讀取／加入收藏時自動寫入「想看」，詳情分開操作收藏與分類，補回未分類篩選。桌面清除分類保留本機修訂保護，不被舊 Bangumi 回應復原，不提交遠端刪除或顯示不可執行的待同步；Core Data 分類保存失敗回滾未提交狀態。已存在的分類不反向猜測其來源。
+- 基本資訊與完整集數獨立快取並記錄載入時間，保留真正集數 ID／類型／原始 sort；詳情先顯示快取再刷新，失敗保留舊資料及重試入口，壞快取不清除收藏／分類。封面新增 64 MiB／256 檔磁碟與 12 MiB／64 項編碼圖片記憶體上限，降採樣至最長邊 720 px，缺圖保留佔位。資訊快取不代表影片下載或可離線播放。
+- 原始碼／工程檢查：兩個 pbxproj `plutil -lint`、三個修改 runner 的 `bash -n` 通過；iOS catalog 168 個 key 中的有效項與桌面新增字串 en／zh-Hans／zh-Hant 完整，五份使用／架構／規劃文件的 61 個本機連結存在。未修改依賴版本或 Core Data 模型。
+- 資料回歸：`Tests/run-ios.sh`、`Tests/run-work-library.sh`、`Tests/run-w4-bangumi.sh`、`Tests/run-w5-favorites.sh` 通過；涵蓋舊檔遷移／重試、備份、未知版本／損壞檔案保護、收藏及分類寫入失敗、未分類保留、分類與收藏獨立、快取獨立損壞／重建、SQLite reopen 及舊遠端回應保護。`Tests/run-multiplatform-contracts.sh --macos`／`--simulator <獨立 iPhone UDID>` 的共同身份／能力／播放事件／分類 fixture 均 PASS。
+- 建置：arm64 macOS Debug／Release、iOS Simulator Debug、generic iOS arm64 Release 均 exit 0；移除臨時 UI smoke／離線故障注入後再建置最終 iOS Debug 成功。macOS 仍有既有並發／未使用值警告及 Xcode「command failed with exit code 0」診斷文字，不宣稱零警告。
+- 正式 iOS App：新建獨立 iPhone 18 Pro 與 iPad Pro 13-inch (M5)／iOS 27.0 模擬器，各完成一次本機作品庫 UI smoke（各 1 passed／0 failed），操作先改分類而不收藏、加入收藏、分類篩選、模擬斷網後重啟、讀取舊詳情與集數、離線改分類與移除／重新收藏、再次重啟並依新分類篩選。固定資訊回應與網路錯誤注入只證明本機離線行為，不宣稱實際網站或影片離線可用。
+- 正式升級驗收：iPhone 注入兩筆獨立舊格式收藏後，既有 `testLibraryPresentation` 通過（1 passed／0 failed），操作搜尋／排序與重啟；讀取 App 真正遷移產物確認原始 ID `[9102, 9101]`、文字與原順序未變，作品建立時間／分類仍 nil，原檔及備份逐位元組一致。排序畫面沒有改寫持久收藏順序。
+- 正式 macOS App：以本次 Debug 產物及隔離 HOME 走 AppDelegate／Workspace，實際操作未分類篩選、開啟詳情、五類／未分類彈窗、改分類、移除及重新加入收藏；正常退出後重新開庫，六個作品仍保留預期分類，未分類作品仍 nil。保留 `.build/m1-evidence/macos-unclassified.png`、`macos-collection-controls.png` 及 `desktop-restarted-statuses.txt`。
+- 額外封面 smoke：真實公開 Bangumi 封面下載／降採樣為 720×405，預先填入超額圖片檔後實際縮至 224 檔／66,974,966 bytes；新 cache actor 可從磁碟讀取不可連線 host 的已快取圖片。未以此宣稱完整記憶體壓力測試。
+- 證據／清理：`.build/m1-evidence/iphone.xcresult`、`ipad.xcresult`、`upgrade.xcresult` 與對應 `*-attachments/` 保留並檢視實際截圖，另保留去敏作品庫產物。臨時 UI 測試、故障注入、seed／AX／封面 smoke 程式與二進位、隔離 HOME／快取及本輪新建模擬器已清理；保留永久資料回歸，未清除使用者收藏、偏好、帳號或原有模擬器。
+- 限制：未做實機安裝／簽署、最低 iOS 17／macOS 13.5、Intel、完整 VoiceOver／Dynamic Type／iPad 窄視窗矩陣；未重驗真實來源播放、字幕／彈幕、IINA 外掛、下載、全部站點或跨裝置同步。本輪完成 M1，不等同 M5 整體對齊或正式發佈。
+
+## 2026-10-28 — M2 精確來源映射與配置失效
+
+- 完成跨平台規劃的 M2，更新里程碑、README、iOS／桌面使用指南及架構；M3 觀看歷史／續播、M4 自動連播、M5 整體驗收及 M6 仍未交付。此 M2 與較早下載規劃的真人帳號驗收不是同一里程碑。
+- 共用 `ConfirmedSourceMapping` 保存完整作品／集數身份、來源選擇、配置 fingerprint 與確認時間；配置型頁面只保存宣告的 query identity，涵蓋檔案型來源的 `file`，移除追蹤、帳號及憑證資料，拒絕媒體直連與不安全／重複身份參數。來源頁身份與當次 CDN／簽名 URL 分離，不將可播放 URL 寫入映射。
+- iOS 作品庫升至 v2，v1 先備份為 `library.json.v1.backup`，經獨立暫存檔驗證再原子啟用；舊收藏、分類與原順序保留，壞檔／未來版本不回退空庫覆寫。映射與缺集／配置失效狀態獨立保存，移除收藏或重建快取不刪映射；寫入／移除失敗保留已提交狀態並阻止播放交接。
+- iOS 明確選擇後，只有成功解析、精確身份成立且請求仍有效才保存映射。重啟恢復原來源卡片，重用時在線刷新目錄並解析原集／線路／品質；明確移除映射後才解鎖重新選源。每次操作、非同步返回及 `takeResolved()` 都重新核對磁碟配置與啟用權威；配置更新、停用、錯集、付費／試看、驗證頁及過期回應不啟播，不回退首集或換站。只有暫時網路錯誤提供一般重試，儲存錯誤分開處理。
+- 桌面沿用 Core Data 模型與主鍵，在既有映射 payload 加入可選確認上下文及目錄分組；舊配置型映射須重確認。原子保存該集首選映射，保留其他集數／來源連結，失敗回滾。解析、媒體準備及最終交接都重查精確身份與配置；移除配置型解析器將其他目錄線路當作自動備援品質的路徑，保留原生解析器。Bilibili PGC 試看不再視為成功解析。
+- macOS 新增「完整來源配置」匯入／重新載入／開啟資料夾入口，與 css1 搜尋規則訂閱分開。兩端均先預覽 ID、網域與有效／不可用能力，明確提示同 ID 替換，原子寫入後停用，清單按 ID 排序。桌面驗證完整 registry 後才發布，拒絕原生 ID／網域衝突、同目錄重複 ID、過時預覽及不相關檔名覆寫；iOS 損壞同 ID 匯入檔不暗中退回隨包配置。
+- 回歸：`bash Tests/run-ios.sh`、`bash Tests/run-ios-sources.sh`、`bash Tests/run-work-library.sh`、`bash Tests/run-w3-sources.sh`、`bash Tests/run-w7-usecases.sh` 均通過；同份 `Tests/run-multiplatform-contracts.sh --macos` 與 `--simulator <本輪 iPad UDID>` 通過。涵蓋 v1 升級／備份、保存失敗、跨來源／季度／集數、檔案 query、重啟重用、排序／替換、停用、缺集、配置變更、付費／驗證、取消與交接前變更。
+- 驗證中修正三項整合問題：映射 fingerprint 校驗最初未接受正式產物的 `sha256:` 前綴；未知分類的 JSON／模板來源清理選擇後遺失桌面明確番劇確認證據；桌面最終交接將分類 provenance 的正常更新誤認為選擇變更。最後一項改為核對作品／集數、品質、線路、帳號、Torrent 與分類種類，不以 provenance 作播放身份；重新連結最終 Debug 產物的 `AnimeSourceRegression` 通過，並保留改品質／線路／集數／帳號／種類仍拒絕的案例。
+- iOS 正式 App：新建 iPhone 18 Pro 與 iPad Pro 13-inch (M5)／iOS 27.0 模擬器，`testDetailSourcePlayback` 各 1 passed／0 failed。經完整介面切至第二來源、拒絕第一次錯集回應且沒有一般 Retry、明確重選同集、真實 libmpv 回報進度、重啟恢復原來源、重新解析播放、停用阻擋及移除映射解鎖。初次 UI 驗證發現卡片 identifier 覆蓋子按鈕，已以保留 children 的 accessibility container 修正；最終兩端通過。固定網站回應與本地 90 秒影片不冒充真實網站播放。
+- macOS 正式 App：使用本次 Debug 產物及獨立作品庫，保存／重啟重用 fqdm 原作品的第 2 集，實際刷新目錄並重新解析。操作完整 JSON 預覽、同 ID 替換、匯入後停用、手動啟用，再選原集時明示配置已變更，沒有可播替代來源；停用情境同樣阻擋。最終交接修正後，正式畫面保留第 2 集、原品質／伺服器及「Saved work/episode mapping」，顯示已提交播放且不自動換站。外部播放器 IPC 未連上，沒有成功載入／實際時間證據，未宣稱桌面真實串流播放成功。
+- 建置：最終 arm64 macOS Debug／Release、iOS Simulator Debug、generic iOS arm64 Release 均 exit 0。macOS 仍有既有並發／未使用值警告及 Xcode「command failed with exit code 0」診斷文字，不宣稱零警告。兩個 pbxproj 的 `plutil -lint`、六個相關 runner 的 `bash -n` 通過；五份使用／架構／規劃文件的 62 個本機連結存在。iOS catalog 181 個 key 的有效翻譯及桌面本輪新增字串具 en／zh-Hans／zh-Hant；桌面另有未在本輪改動的 `Copy URL`、`Home`、`Open in Browser` 三個 key 缺少三語資料。
+- 證據：`.build/m2-evidence/iphone-final.xcresult`、`ipad.xcresult` 及對應 `iphone-attachments/`、`ipad-attachments/` 保留；已檢視兩端映射恢復、停用及真實 libmpv 播放截圖。桌面保留 `desktop-disabled.png`、`desktop-import-preview.png`、`desktop-configuration-changed.png`、`desktop-reused-handoff.png`，配置更新原因與精確映射交接畫面已檢視。臨時 seed／AX／獨立回歸二進位、替換配置、隔離 HOME、失敗的中間 xcresult 及本輪新建模擬器已清理，正式 App 正常退出；原有模擬器保留。
+- 驗收隔離限制：桌面作品庫、來源配置及快取確實位於 `.build/m2-desktop-home`，但 `CFFIXED_USER_HOME`／`HOME` 沒有完整隔離一般 UserDefaults 域，來源啟用偏好寫入了正常偏好檔。結束時核對 fqdm 為啟用、播放器為 IINA，與第一次正式 App 畫面所見一致；未取得完整偏好域的事前快照，不能宣稱逐位元組復原。未清除使用者作品庫、收藏、帳號或原有模擬器。
+- 其他限制：未做實機安裝／簽署、最低 iOS 17／macOS 13.5、Intel、完整 VoiceOver／Dynamic Type／iPad 窄視窗矩陣；未重驗全站播放、IINA 外掛、下載、帳號同步或跨裝置同步。本輪完成 M2，不等同 M5 整體對齊或正式發佈。
+
+## 2026-10-28 — M3 觀看歷史、精確續播與本地授權
+
+- iOS 新增獨立 `version: 1` 的 `ANI/playback-history.json`、繼續觀看列表、單項刪除與儲存失敗重試。只保存來源身份／配置修訂或本地檔案引用及實際進度，不保存當次串流／簽名 URL；手動媒體直連仍只供當次播放。原子提交後才更新列表，壞檔／未知版本拒絕覆寫；收藏、分類、來源映射與歷史互不連帶刪除。
+- `PlaybackSession` 接入實際 libmpv 事件，每五秒及暫停／離開／切集提交有效樣本。以 session／load／entry lease 阻擋舊載入、舊播放器與刪除後收尾；載入失敗、UI seek 預測、未完成 resume seek 的早期樣本都不建立或覆寫觀看進度。續播 gate 在 worker 載入初始即安裝，等待成功載入、seek 命令確認、SEEK／PLAYBACK_RESTART 及目標附近的實際 time-pos 才開放記錄。
+- 在線續播重新核對保存的作品／集數／線路／品質與配置，再刷新原目錄並解析；配置變更、停用、缺集、錯集、取消及歷史已被更改時阻止交接，不自動換站／退回首集。歷史可獨立使用自己的精確來源上下文，不要求收藏或作品庫映射仍存在，也不暗中重建已刪除的映射。已播完的單集保留重播入口，不把目錄末集當成整季完結。
+- 本地 iOS 影片保存 bookmark、檔案長度與串流 SHA-256，重新授權須同內容，不能只憑檔名；改名的同內容影片可恢復原歷史。雜湊不阻塞主執行緒，security scope 持有到播放器關閉。桌面沿用原歷史 v1 與主鍵，新增可選上下文／bookmark，依檔案資源身份追蹤移動及拒絕同名替換，區分授權錯誤與儲存失敗。舊配置型歷史保留但要求重確認；配置宣告的 `file` query identity 不再被原生白名單誤刪。
+- 回歸通過：`Tests/run-ios-history.sh --macos` 及 `--simulator <本輪 iPad UDID>`、`Tests/run-ios-sources.sh`、`Tests/run-ios.sh`、`Tests/run-multiplatform-contracts.sh --macos`、`Tests/run-dependency-regression.sh --unit`。涵蓋實際樣本／失敗載入、跨 session／load 與刪除 fencing、重啟／壞檔／未來版本／保存失敗、本地內容身份、來源配置及選擇不匹配、歷史獨立於作品庫映射。新增桌面 fixture 初次漏傳 `VideoTreeNode.id`，修正後整組回歸通過。
+- 真實桌面播放：`bash Tests/run-dependency-regression.sh --playback` 通過，120 秒本地影片由 mpv IPC 回報 39.266667 秒、保存、建立新 owner、經 `AppServices.resolve/resume` 再次啟播，實際回報 41.266667 秒。初次續播的 GPU 輸出停在 `vo_wait_frame`／`MacCommon.swapBuffer`；runner 改用獨立 `MPV_HOME` 的 `vo=null`／`ao=null`，初次與重啟後的真實 mpv 均不依賴使用者輸出設定。這是實際解碼／IPC／持久化／續播證據，不是桌面影片視窗或音訊驗收。
+- 正式 iOS App：獨立 iPhone 18 Pro 與 iPad Pro 13-inch (M5)／iOS 27.0 模擬器的 `testLocalHistoryResume`、`testSourceHistoryResume` 各 2 passed／0 failed。實際 libmpv 播放、暫停、跳至約 22 秒、關閉 App、重啟、從繼續觀看恢復同集，實際播放器時間在 2 秒容差內；來源停用後保留歷史並阻止啟播。來源回應為 Debug fixture、本地影片為真實解碼，不宣稱真實網站串流已驗收。
+- 建置及靜態檢查：arm64 macOS Debug／Release、iOS Simulator Debug build-for-testing、generic iOS arm64 Release 均成功；兩個 pbxproj 的 `plutil -lint`、相關 runner `bash -n` 與 iOS 有效字串的 en／zh-Hans／zh-Hant 完整性通過。iOS Release 無 `player-fixture*` 素材。未修改依賴版本或 Core Data 模型；既有編譯警告未作零警告承諾。
+- 正式桌面 App 已使用本輪 Debug 產物啟動 AppDelegate／工作區，隔離 HOME 及驗收專用 bundle ID 避免正常 UserDefaults 域寫入。系統回報 `CGSSessionScreenIsLocked = 1`，視窗存在但 AX 不可取得工作區，截圖為黑畫面；因此本輪沒有宣稱桌面正式 UI 點擊續播或視覺驗收成功。未嘗試解鎖使用者工作階段，已結束本輪 App。
+- 證據：`.build/m3-evidence/iphone.xcresult`、`ipad.xcresult` 及兩份 `*-attachments/`；已檢視來源續播影片的實際畫面／時間、iPad 來源與本地歷史列表、來源停用阻擋畫面。桌面真實 IPC 輸出與獨立歷史位於 `.build/playback-history-smoke/47F39D23-8752-456D-9287-2FE86D1A9D9B/`。
+- Files 正式介面另有兩次成功 smoke：`files-scoped.xcresult` 從系統 Files 選擇原影片、實際播放／跳轉、退出並重啟續播（1 passed／0 failed）；`reauthorization.xcresult` 在移除本輪測試原檔後，觀察不可用提示、取消選檔保留原卡片／位置、選擇不同內容遭拒、再選同內容不同檔名及 inode 的影片恢復播放（1 passed／0 failed）。持久檔確認原歷史 ID 未變、bookmark 已替換、實際位置由 24.3 秒更新為 25.7 秒；未新增另一筆同片歷史。`reauthorization-attachments/` 的錯片拒絕與恢復後影片畫面已檢視。
+- Files smoke 的前置腳本問題已修正：冷啟動 Files 等待過短、以任意 descendant 選檔時誤中背景歷史卡片，改為等待面板及限定文件 cell；原本在暫停點擊完成後核對位置，多算了自動播放時間而出現 2.1 秒差值，改為核對首次觀察到的實際後端時間，維持原 2 秒容差。這些失敗未以放寬容差或修改產品進度來掩蓋。
+- 收尾：五份使用／架構／規劃文件共 66 個本機連結及四個相關 runner 語法通過；驗收 bundle ID 還原後，標準 macOS Debug 再建置成功；移除臨時 Files UI 測試後，最終 iOS Debug build-for-testing 成功。保留永久來源／本地重啟 UI 回歸、資料回歸及 `.build/m3-evidence/` 證據；刪除本輪 seed／AX 腳本及二進位、隔離 HOME／驗收專用偏好域與兩台新建模擬器，沒有清除原有模擬器、使用者作品庫、收藏或帳號資料。
+- 限制：未做實體 iPhone／iPad 安裝或簽署、最低 iOS 17／macOS 13.5、Intel、完整 VoiceOver／Dynamic Type／iPad 窄視窗、第三方雲端 File Provider、IINA 外掛或全站真實串流驗收。完成 M3 的實作、資料／實際播放與 Files 續播驗證；桌面工作區視覺限制如上，M4 下一集及 M5 三端完整旅程未提前宣稱完成。
+
+## 2026-10-28 — M4 同源下一集、播放生命週期與附件隔離
+
+- 完成多平台規劃的 M4，更新規劃狀態、README、兩端指南及架構。iOS 提供手動下一集及預設關閉、可持久保存的自動連播；macOS「導覽 → 下一集…」可明確選擇播放會話及取消待處理接續。每次接續刷新原目錄、核對原作品／集數分組／線路／品質及配置，再解析同源下一集；缺集、重複集號、來源停用、配置變更或品質缺失不換站、不降級、不回退首集，不推測下一集 Bangumi ID。
+- session／load、取消任務及來源／歷史 owner 共同阻擋過期接續。僅自然 EOF 接續一次；手動停止、關閉、失敗、取消、切集及直播不觸發，iOS 進入背景暫停並取消接續。自動連播在最後啟播邊界再次核對開關；桌面本地 queue 的延遲 EOF 任務取消／關閉後不能再切檔，之後明確手動下一集仍可用。已確認完季清理沿用既有條件，增加權威樣本／owner 檢查，不能刪除重播或其他播放器的新進度。
+- iOS 彈幕顯示、關鍵字及滾動／頂部／底部過濾保存至本機偏好；附件內容不混入偏好。字幕檔、關閉字幕狀態及彈幕按當次會話的集數隔離，切集先清除再恢復該集附件；匯入失敗不覆蓋成功附件，字幕僅在後端成功接受後記入該集。沿用 security scope 與停止釋放；不增加跨裝置同步、線上彈幕或自動站點匹配承諾。
+- 實際 UI 驗證發現並修正來源播放器的展示擁有者不穩定：控制面板曾觸發來源內容消失、停止與重建會話。改由穩定來源父頁持有 presentation，明確關閉才停止；Files／續播入口共用同一規則。另修正 libmpv 在新檔載入時繼承上一集 keep-open 暫停狀態，於匹配的 FILE_LOADED 套用本次載入的暫停意圖。最終手動下一集、自然 EOF 後新集實際開始播放及關閉連播後停留原集均通過。
+- 回歸通過：`Tests/run-ios-sources.sh`、`Tests/run-ios-danmaku.sh`、`Tests/run-ios-history.sh`、`Tests/run-multiplatform-contracts.sh`、`Tests/run-dependency-regression.sh --unit`、`node Tests/Playback/JSPlayerAutoplayRegression.js`；共用契約與行動歷史另在本輪 iPad Simulator 執行通過。涵蓋同源／同組與品質邊界、過期回應、實際時間、重複 EOF、停止／失敗、壞檔保留及偏好重建。
+- 真實 mpv：`LOCAL_QUEUE_SMOKE=1 bash Tests/run-dependency-regression.sh --playback` 及 `RETAINED_EOF_SMOKE=1 bash Tests/run-dependency-regression.sh --playback` 通過；驗證原播放器／socket 內切集、各集歷史獨立、EOF 單次通知、開關／取消接續及重播。正式桌面回放又發現本地 queue 在 EOF 後 seek 未重新開啟記錄；增加新 load／寫入身份，等待新實際樣本才確認載入，並保留真實 queue 重播進度回歸。修正後 local queue smoke 再通過。
+- 正式 iPhone 18 Pro／iOS 27.0：`testSourceNextEpisode`、`testEpisodeAttachmentIsolation`、`testMPVPlayerControls`、`testMPVPlayerRotation` 共 4 passed／0 failed。正式 iPad Pro 13-inch (M5)／iOS 27.0：同四項分兩次執行，3 + 1 passed／0 failed。從來源第 2 集手動接第 3 集、開啟自然連播接第 4 集、關閉後 EOF 不再接續；附件切集／返回、背景暫停、字幕／彈幕控制、倍速／實際 seek、全螢幕及旋轉保持載入均經介面操作。站點回應為 Debug fixture，90 秒影片由真實 libmpv 解碼，不代表外站串流驗收。
+- iPhone Files 額外 smoke 1 passed／0 failed：實際從系統文件介面匯入 SRT 並看到外部字幕；損壞 SRT 被拒且保留舊字幕，切至另一集沒有外部字幕，返回原集恢復；損壞 XML 被拒且原 6 筆彈幕保留。關閉顯示、設定頂部過濾及關鍵字後終止／重啟 App，三項設定仍保留。臨時測試最初誤用不存在的 pause helper，改用正式控制按鈕後通過，未修改產品以繞過匯入驗證。
+- macOS 正式 App：使用本輪 Debug 產物、專用 bundle ID 及 HOME，實際啟動 AppDelegate／工作區並經文件選擇器播放本地影片。「下一集」會話選擇器將 Episode 1 切至 Episode 2；先前 mpv 及最終已安裝 IINA 均有實際 IPC 證據。最終 IINA PID 10173 保持原 playlist／socket，末集 EOF 未越界，重播至 14 秒後歷史從舊 EOF 更新為 14；前景播放至 16 秒暫停，畫面、IPC 與保存檔均為 16 秒，第一集獨立保留 48.6 秒。背景 IINA 初次截圖仍為舊 EOF 畫面，前景重繪後已核對實際影格；不以舊截圖冒充重播畫面。此為本地檔案／外部播放器驗收，不是 IINA 彈幕外掛或外站播放矩陣。
+- 最終建置：arm64 macOS Debug／Release、iOS Simulator Debug 及 generic iOS arm64 Release 均成功；移除臨時 Files UI smoke 後，正式永久測試 target 的 Debug build-for-testing 再成功。iOS 203 個有效字串具 en／zh-Hans／zh-Hant；桌面本輪操作字串齊全，既有 `Copy URL`、`Home`、`Open in Browser` 三個缺翻譯項未在本輪擴大處理。未修改依賴版本、Core Data 模型或既有歷史 schema；保留既有建置警告，不宣稱零警告。
+- 證據：`.build/m4-evidence/iphone-final.xcresult`、`ipad.xcresult`、`ipad-rotation.xcresult`、`files-imports-live.xcresult` 及各自附件；已檢視手機／平板自然下一集、外部字幕、重啟後過濾設定與桌面 `desktop-final-next-chooser.png`、`desktop-final-replay-foreground.png`。`desktop-final-replay.json` 保存實際 IPC 與歷史位置；真實 local queue 資料位於 `.build/playback-history-smoke/queue-DD5CACC2-2E81-4EAA-B33F-A46A3A8B7B0C/`。
+- 限制：未做實體 iPhone／iPad 安裝／簽署、最低 iOS 17／macOS 13.5、Intel、完整 VoiceOver／Dynamic Type／iPad 窄視窗、第三方雲端 File Provider、全站真實串流或 IINA 彈幕外掛矩陣。主程式採隔離驗收資料與偏好域；外部 IINA 使用已安裝版本，未聲稱其一般偏好或最近使用列表逐位元組隔離。M4 完成不等於 M5 三端完整旅程、實機或正式發佈已通過。
+- 收尾：兩個 pbxproj 語法、五個相關 runner 語法及五份使用／架構／規劃文件的 69 個本機連結通過；iOS Release 沒有 `player-fixture*` 素材。保留永久 UI／資料／實際播放回歸與驗收證據，移除臨時 Files 測試、診斷串流、驗收 App／HOME／專用偏好域及本輪兩台新建模擬器；正式 App 與本輪外部播放器正常退出。未刪除原有模擬器、使用者作品庫、收藏或帳號資料。
+
+
+## 2026-10-29 — 清理本機建置快取
+
+- 清除 `.build` 中可識別的 Xcode DerivedData 建置產物、索引與編譯快取，共 40 個目錄，按 du 用量差約釋放 4.83 GiB。
+- 驗證：所有選定目錄已不存在；保留測試報告、驗收證據、依賴來源、原始碼及使用者資料。
+- 限制：未清理系統共用或 App 執行時快取，未重新建置，以免立即重建快取。
+
+
+## 2026-10-29 — 整理剩餘建置文件
+
+- 移除 `.build/torrent`、`.build/releases` 及各建置目錄的套件二進位 artifacts，共 7 個目錄；du 用量差約 9.44 GiB。
+- 在 `.build/README.md` 建立保留文件索引；維持驗收證據、測試報告、截圖與日誌原路徑，保留依賴 checkout。
+- 驗證：清理目標均已不存在；清理前後所有 Git 追蹤及未忽略的未追蹤檔案 SHA-256 完全相同（追加本記錄前）。
+- 限制：未重新建置；後續建置需重新下載二進位套件並重建原生核心。未清理 App 使用者資料或系統共用快取。
+
+## 2026-10-29 — M5 三端整體驗收與整合缺陷修正（最終完成）
+
+- 執行 `docs/planning/MULTIPLATFORM_BASELINE.md` 的 M5，補上逐用例證據、三端真實來源與分層續播結果，同步 README、桌面／iOS 使用指南及發佈說明。**M5 最終完成**：後續關閉實體 iPhone、桌面 VoiceOver 與窄窗手動操作門檻；未降低原門檻或開始 M6。下列首輪受阻紀錄保留時序，最終實機、語音、使用者人工確認與自動化限制見本節末段續驗。
+- 修正正式桌面 App 選集差異：真實 Bangumi `49696`／`912433` 集名與日期為空，iOS 可尋源而 macOS 顯示不可選「更新中」。`WorkspaceDetailEpisodeAvailability` 改以嚴格 JST 日期判定，僅有效未來日期阻擋，未知／無效日期可尋源；保留本地空標籤保護、完整陣列索引及身份。既有回歸涵蓋未知／過去／未來日期、metadata 刷新與映射邊界；修正後正式 App 已可選原集。
+- 修正真實串流有時間卻無歷史：debugger 在正式 App 觀察到 `PlaybackProgressRecorder` 的 durable／token 均 nil；`configuration.mappingSelection` 成功，但 `ConfirmedSourceMapping.validateForPersistence` 拒絕生產 `bangumi.subject.type=2` 分類依據。分類依據與來源線路／品質標籤分開驗證，允許內部等號表達式，仍拒絕 URL、複合查詢、控制字元及超長內容；未放寬來源頁憑證、線路或品質規則。沒有修改播放器事件順序或加入影片特例。
+- 永久歷史回歸改用真正 `BangumiSubject.classification`：修正前 `Tests/run-dependency-regression.sh --unit` 以 `Missing history entry` 失敗（exit 133），修正後同組通過，並核對配置身份、分類及繼續觀看。共用回歸補分類依據 roundtrip 與安全邊界，不以改寫／丟棄分類繞過驗證。證據：`.build/m5-evidence/core/configured-history-before.log`、`desktop-playback-final.log`。
+- 資料／契約驗證：`Tests/run-ios.sh`、`run-ios-sources.sh`、`run-ios-danmaku.sh`、`run-ios-history.sh --macos`／`--simulator`、`run-multiplatform-contracts.sh --macos`／`--simulator`、`run-work-library.sh`、`run-w5-favorites.sh`、`run-w3-sources.sh`、`run-w4-bangumi.sh`、`run-dependency-regression.sh --unit`、`run-workspace-detail-episodes.sh` 及 `node Tests/Playback/JSPlayerAutoplayRegression.js` 均有通過證據；受最後分類依據修正影響的來源／歷史／共用契約另以最終來源重跑通過。共用契約及行動歷史實際在 iOS 27.0 Simulator executable 執行，不只在 Mac 編譯。
+- 真實 CLI／來源 smoke：`LOCAL_QUEUE_SMOKE=1 bash Tests/run-dependency-regression.sh --playback` 通過真實 mpv 隊列、獨立歷史、EOF 開關／取消、重播與手動下一集。`SourceRegression --live` 對隨包 fqdm 取得 2 候選、5 線路並解析所選集數；此項僅到解析，不宣稱播放器已載入。結果在 `.build/m5-evidence/core/`，本地 queue 另保留 `.build/playback-history-smoke/queue-D5271C89-38A0-4406-82BE-6BB5F3C9D16D/`。
+- 最終建置：macOS arm64 Debug／Release、iOS Simulator Debug／generic iOS arm64 Release 均成功，包含最終修正；環境為 macOS 27.2、Xcode 27.1、Swift 6.4。初次 Boost 下載中斷及 MPVKit 二進位逾時在恢復下載／校驗後解決，未換用舊 App。iOS Release 無 `player-fixture*` 素材，檢查的 Debug fixture／offline 入口及 fixture URL 不存在；無簽署產物不代表實機安裝或發佈。桌面補齊三個既有空翻譯與新集數提示，最終 Release 三語 `Bundle.localizedString` smoke 通過；未宣稱零建置警告。
+- 正式 macOS App：隔離 bundle ID／HOME，走真正 AppDelegate／工作區；真實 Bangumi 搜尋、收藏及「在看」、選擇 `400602`／正篇 `1227087`，明選未修改 Internet Archive 配置的相符作品與 `01.mp4`。外部播放器實際 H.264／AAC、1920×1080、1559.985918 秒；最終 mpv 暫停 42.0 秒，歷史於正常退出前後均為 42，重啟首頁顯示 0:42。首頁卡片不提供 AXPress，透過 debugger 投遞實際 AppKit mouseDown/up 事件啟動續播，非直接呼叫 controller／service；新播放器重新解析原集，稍後 IPC 為 55.847458、歷史為 55.013292。兩筆作品／收藏及在看分類跨重啟保留。
+- 桌面精度分層：重擷取 UI 首樣本時桌面已鎖定，未以較晚的 55 秒樣本宣稱 2 秒容差。另用上述正式 App 歷史副本、同配置與最終生產 `AppServices.resumePlayback`，實際刷新目錄／重解析，再由真實 mpv（`vo=null`／`ao=null`／pause）讀到首個已載入時間 60.018292，等於保存時間，誤差 0 秒。這是服務／IPC 精度證據，不是正式 UI 首樣本、影像或音訊驗收。
+- 桌面證據：`.build/m5-evidence/desktop/desktop-acceptance-summary.json`、`final-source-panel.png`、`final-relaunch-home.png`、`final-actual-playback42.json`、`history-before-exit.json`、`history-after-exit.json`、`real-source-service-resume.json`、`actual-library-summary.json`、`final-release-compiled-localizations.log`。最終工作區／來源畫面已檢視；`actual-archive-mpv-frame.png` 是較早回合真實解碼畫面，與最終修正後 IPC 證據分開。錯擷取成背景或選單列的圖片已移除。
+- 正式行動 App：隔離 iPhone／iPad Simulator 分批各有 10／11 個不同案例通過，涵蓋收藏分類到 fixture 播放／重啟續播、自然／手動下一集、關閉連播、附件按集隔離、背景暫停、字幕／彈幕／倍速／跳轉／旋轉。兩台各遷移兩筆舊收藏，原身份／順序、nil 建立時間／分類及原檔／備份位元組一致；加入本輪作品後各四筆收藏、權威檔 v2。模擬網路失敗後的快取詳情／集數、收藏搜尋／分類及重啟通過，僅屬 Debug 注入離線，不冒充實際斷網。
+- 行動真實來源：未修改 Internet Archive 配置預置於隔離來源目錄，經真實 Bangumi `49696`／集數 `912433`、IA `BigBuckBunny_328`／`BigBuckBunny_512kb.mp4` 搜尋／目錄／解析與正式 App libmpv 播放後關閉重啟；最終 iPhone 保存 34.0 秒、恢復 34.5 秒（誤差 0.5），iPad 保存 34.5 秒、恢復 35.1 秒（誤差 0.6）。兩端均在 2 秒容差內，已檢視真實影格與恢復畫面；與桌面是同配置、不同真實作品，不宣稱三端同作品或本輪 Files 匯入。
+- 行動呈現：en／zh-Hant／zh-Hans、accessibility XXXL 下播放器主要控制可點且有 AX label。iPad 經系統拖曳由 834×1210 縮至 375×631，收藏詳情／集數、Play URL／Files 控制可經折疊導覽與捲動到達；截圖已檢視，不宣稱窄窗完整串流旅程。初次串流 smoke 的等待／歷史標題查找、控制列隱藏／Done 歧義，以及窄窗側欄／捲動定位錯誤均修正驗收腳本後分別重跑通過，未修改產品繞過斷言；初輪失敗紀錄保留，不把初輪 suite 標為全綠。
+- 行動證據：`.build/m5-evidence/mobile/acceptance-summary.json`、`phone-ui.xcresult`、`pad-ui.xcresult`、`phone-final-live.xcresult`、`pad-final-live.xcresult`、`pad-narrow-final.xcresult` 及對應附件／日誌，另有 `{phone,pad}-committed-storage/` 與 `release-exclusion-inspection.json`。臨時 UI smoke／offline 注入還原後最終 Debug／Release 再建置成功；保留本輪驗收 snapshot，不留下產品測試入口。
+- **未關閉門檻**：已配對實體 iPhone 17／iPad Pro 均 unavailable，`xctrace` 列 Offline，兩次指定裝置服務查詢均 `CoreDeviceError 4016`，沒有可用 connectivity／service assertion；未安裝或操作實機。桌面後段 `CGSSessionScreenIsLocked=true`，未繞過鎖屏；正式 UI 初始續播樣本及完整視窗／鍵盤／三語畫面仍缺。spoken VoiceOver 未完成，行動設定深連結被拒 `LSApplicationWorkspaceError 115`，不可將 XCTest AX 核對稱為 VoiceOver 通過。最低系統、Intel、完整外掛／全站矩陣、實機音訊中斷、正式簽署／TestFlight／公證未驗證；本輪未重跑 Files 附件匯入／重新授權完整旅程。
+- 隔離及副作用披露：只刪除本輪自有 simulator、驗收 App／HOME／偏好 domain 與臨時工具，保留使用者資料、原有模擬器及已安裝 App；桌面私有埠 19980 已釋放，日誌未保存憑證賦值或完整簽名媒體 URL。但原 IINA PID 最後已不存在；早期全域 Cmd-Q 本想退出驗收 App，當時 IINA 在前景且驗收 App 未退出，**[INFERENCE] 可能因此關閉原有 IINA 工作階段**。未確認原因，也未嘗試重建原播放狀態，不能宣稱使用者播放器生命週期完全未受影響。
+- 收尾檢查：五份修改文件共 76 個本機連結均存在；桌面 1,660／行動端 203 個有效字串均有 en／zh-Hans／zh-Hant。最終共用來源檔 SHA-256 與 iOS Release 檢查記錄一致；行動產品／UI 測試原始碼已無本輪臨時 M5 入口。檢查結果在 `.build/m5-evidence/core/final-document-resource-checks.json`；未執行無關格式化或清除既有建置／使用者資料。
+
+### 同輪解鎖後續驗：桌面正式 UI 續播與輔助使用
+
+- 上述桌面鎖屏限制已解除，補驗不覆寫前輪證據。發現正式首頁續看卡片僅公開 AX group／空 children，沒有 AXPress；`WorkspaceServicePanelController.swift` 改為 button role、動態 enabled、`accessibilityPerformPress`、鍵盤 Return／Space 及原生焦點環。以穩定歷史 ID 找回目前列並使用既有 `activateSelection`，保留選取狀態；未附著、忙碌及預覽狀態不可操作。
+- 最終正式 App 經真正 AXPress 重解析原 Internet Archive 集數，mpv 首個實際時間為 60.018292 秒，等於先前正式 App 保存的 60.018292 秒，誤差 0 秒。透明 wrapper 不改播放參數，僅在取得首樣本後暫停；不是直接呼叫 service，也不是 null 影音輸出。另以實際卡片焦點及只送往自有 PID 的原生 Space 啟動第二次續播，實際時間同為 60.018292 秒。
+- 已檢視最終解碼畫面及 960×700 Home；另取得 1280×832、繁中／簡中／英文 Home 畫面。證據位於 `.build/m5-evidence/desktop/`：`unlocked-official-ui-resume.json`、`unlocked-official-resume-events.jsonl`、`unlocked-keyboard-resume.json`、`unlocked-final-mpv-frame.png`、`unlocked-accessible-home-{960,wide}.png`、`unlocked-{zh-Hant,zh-Hans}-home.png`。前輪服務／IPC 精度證據仍保留，但正式 UI 首樣本缺口已關閉。
+- 此修正後 macOS Debug／Release 再建置成功，日誌為 `debug-build-resume-accessibility.log`／`release-build-resume-accessibility.log`；最終 Debug 連結的 `bash Tests/run-workspace-renderer.sh` 通過，日誌為 `.build/m5-evidence/core/desktop-renderer-final.log`。Release 三語資源 smoke 另記於 `accessibility-final-release-localizations.log`。
+- spoken VoiceOver 仍未通過：先前獨立 CLI 缺 UI testing 授權，故另建臨時、獨立 macOS XCTest UI target 以正常 ad-hoc runner 實測，未修改產品 project。修正 runner sandbox 寫入位置後，`XCUIApplication.activate`／等待自有 App 成功；真正 `voiceOverService.enable()` 於約 14.8 秒失敗，`com.apple.dt.XCTest.XCTFuture Code 1000: Timed out while enabling VoiceOver`。當時 on-console／未鎖屏且 VoiceOver executable 已安裝；沒有語音輸出，不把 AX 核對當作 VoiceOver。
+- VoiceOver 原值與收尾值均為 false，獨立只讀查詢再次確認；證據為 `voiceover-ui-session-summary.json`、`voiceover-ui-speech.xcresult`、`voiceover-ui-speech-runner.log`、`voiceover-ui-final-restored-state.log`。自有 App 正常退出 0；臨時 project／工具／HOME／runner container 與自有偏好 domain 清理，19981 無 listener。本續輪未使用全域鍵盤或退出使用者播放器，前輪原 IINA 生命週期疑慮仍保留披露。
+
+### 同輪行動續驗：iOS 27 VoiceOver 與窄窗真實續播
+
+- iPad 真正 375×631 系統視窗從先前已確認的真實來源映射出發，完成 Bangumi `49696`／`912433`、IA `BigBuckBunny_328`／`BigBuckBunny_512kb.mp4` 的重新解析、播放、離開、退出重啟及同集續播；實際 libmpv 保存 21.8 秒、恢復 22.0 秒，誤差 0.2 秒，兩張窄窗影片畫面已檢視。`testM5NarrowSavedSourceJourney` 通過，但同一批另有 VoiceOver 導覽定位失敗，不把整份 `acceptance.log` 宣稱全綠；此案不包含重新搜尋或 Files 配置匯入。
+- iOS 27 新 `XCUIVoiceOverService` 實際可 enable／currentSpeech／moveForward／moveBackward／disable，取代首輪僅嘗試設定深連結的不足。iPhone 與全寬 iPad 均有發現、收藏、詳情、來源入口／結果、播放器的真正服務 utterance；定向 XCTest `doubleTap()` 操作作品、尋源及恢復播放，實際 libmpv 分別由 1.9 到 3.1 秒、2.0 到 4.2 秒。全寬 iPad 另核對所選詳情身份及 `Find sources Button` 語音；iPhone 先前 helper 在尋源處匹配 heading，不能據此宣稱 heading 本身可啟動。
+- 這是實際 VoiceOver 服務輸出與選定目標操作，不是音訊錄音，也不是全程 VO-only 或任意位置雙點手勢證明。語音畫面覆蓋使用固定資訊／來源回應與真正 libmpv；窄窗外站串流案另行取證。通過後均確認服務關閉，未改 host/global VoiceOver。
+- 保留未通過證據：窄窗影片 68 秒焦點在 Source Flow Fixture，定向雙點後 69 秒開啟 Migration Second。原始觸控事件為 `(327.75,504.25)`、parent window 375×631、場景原點 `(230,232)`；**[INFERENCE]** 可能是注入座標重複加場景原點，但未證明 App 導覽／資料身份缺陷。一般窄窗導覽與真實續播、全寬 VoiceOver 通過均不能覆蓋此失敗。最新 iPhone 嚴格焦點重跑於正確詳情身份檢查後，以 `XCTFuture Code 1000: Timed out while moving VoiceOver forward` 失敗（318.9 秒），收尾仍確認服務關閉；不將先前成功稱為所有重跑通過。
+- 補充證據根目錄 `.build/m5-evidence/mobile/voiceover-narrow/`：`supplement-summary.json`、`acceptance.log`、`narrow-attachments/`、`phone-core-vo-targeted.log`、`pad-wide-core-vo.log`、`pad-core-vo-targeted.log`、`phone-final-core-vo.log`、`narrow-library-doubletap-touch-points.json` 及對應 xcresult／影片。原 `mobile/acceptance-summary.json` 已更新；臨時 UI 測試還原後 `restored-final-build.log` 顯示 `TEST BUILD SUCCEEDED`，原始碼已無本輪 M5 測試入口。只刪除此續輪新建的三台隔離 simulator，未修改行動產品程式或清除使用者資料。實機與剩餘輔助使用門檻仍阻止 M5 簽收。
+
+### 最終續驗與簽收：授權實機、真正語音及使用者手動操作
+
+- 實體裝置後續恢復連線，兩台實機的 apps／details 服務成功且 Developer Mode enabled。原 iPhone 已安裝使用者 App，故不覆寫；隔離簽署首次因沒有 profile 失敗後，使用者明確選擇「允許隔離開發簽署」。使用既有團隊與 `-allowProvisioningUpdates` 建立／更新隔離 App／runner 描述檔，不上傳 App Store，也未使用 `-allowProvisioningDeviceRegistration`。簽署建置及 iPhone 安裝成功；首次啟動受鎖定阻擋，使用者解鎖後繼續。
+- 正式來源、正常入口的隔離 iPhone App（iPhone 17、iOS 27.0.1）實際完成 Bangumi `49696` 搜尋、收藏／在看、集數 `912433`、未修改 IA 配置的真實搜尋／目錄／解析、libmpv 播放、Home／返回維持暫停、關閉／退出／重啟及原集重新解析續播。實際保存 22.5 秒、恢復 23.2 秒，誤差 0.7 秒；`testM5PhysicalRealSourceJourney` 1/1 通過（71.170 秒），已檢視實機影片畫面並保存隔離 library／history。
+- 實體 iPhone 的 VoiceOver 播放器語音／焦點巡覽 1/1 通過，包含 seek、Resume、可調整時間軸、倍速、字幕、彈幕、集數、下一集、設定及全螢幕；使用 fixture 影片檢查控制，不冒充外站播放。原 VoiceOver 關閉狀態已恢復，不宣稱完整實機 VO-only 旅程。證據在 `.build/m5-evidence/mobile/physical-authorized/summary.json`、`phone-real-source.log`／xcresult／附件、`phone-voiceover.log` 及 `phone-library.json`／`phone-playback-history.json`。
+- iPad 實機隔離簽署建置亦成功，但安裝被既有三個免費開發 profile App 配額阻擋（CoreDevice 3002／IXUserPresentable 14／MIInstaller 13）。未移除任何使用者 App，不宣稱 iPad 實機已運行。iPhone 隔離 App／runner 在保存證據後移除，原 App 仍為 0.1.0／build 1，資料未操作；經授權的隔離 App ID／profile 留在既有團隊，未撤銷其他憑證。
+- 桌面先前的 VoiceOver 啟用逾時已由後續實測關閉。使用者解鎖並要求重開 VoiceOver 後，標準系統 App 啟動真正 VoiceOver；正規 XCTest UI session 以 `currentSpeech`／`moveIn`／`moveOut`／`moveForward`，在隔離正式 Home 讀到真實 caption「葬送的芙莉莲 · Frieren: Beyond Journey’s End - 01.mp4 · Watched 1:00 / 25:59, button」。1 test／0 failures／exit 0，已檢視 caption 與焦點畫面；範圍為英文 Home 核心續看朗讀／導航，不延伸為全部控制／語言。證據：`.build/m5-evidence/desktop/voiceover-spoken-final-summary.json`、`voiceover-direct-ui-collection.xcresult`、`voiceover-direct-ui-collection-runner.log`、`voiceover-final-resume-spoken.png`。
+- 桌面原 VoiceOver=false、原焦點 PID1344 均已恢復；自有 App 正常退出 0，臨時 App／HOME／UI project／工具／runner container／自有偏好清理，19983 已釋放。沒有修改 TCC、AllowVoiceOverControl 或隱藏偏好，未全域退出其他 App；先前 IINA 工作階段疑慮仍按原紀錄披露。
+- 窄窗輔助使用的測試注入問題保留完整紀錄：XCTest 原定向雙點誤選作品，scene-local 座標、DeviceHub 自有視窗／PID 限定 CGEvent 及 windowNumber 綁定 NSEvent 則未啟動作品；沒有證明事件以真正 VoiceOver 啟動手勢送達 iPad，不能據此判定 App 身份缺陷。未加入來源或尺寸 workaround。額外證據為 `.build/m5-evidence/mobile/narrow-local-voiceover/`、`native-simulator-voiceover/`。
+- 使用者明確選擇「手動完成驗收」，沒有接受豁免。隔離 iPad 375×631 的真正 VoiceOver 焦點為 `Source Flow Fixture Button`；使用者手動啟動並回報同名詳情，`manual-test.log:109` 的即時斷言亦確認正確身份，而非另一筆收藏。這是通過的階段斷言，不代表整份 suite 全綠。
+- 來源階段首次 600 秒等待結束時，尚在等使用者回覆作品階段，未提示操作來源按鈕，屬協調窗口。重設來源專用階段時視窗已為 609×817，真正焦點為 `Find sources Button`；使用者明確回報「出現 Source Flow Fixture」，作為手動候選觀察接受。**來源 XCTest 的 1200 秒等待仍為逾時／exit 65，不能改寫成 PASS**；事件／回報與 instrumentation 時間未對齊，結束後截圖為 Springboard，也不作為候選畫面的獨立佐證。不再要求使用者重複確認或重跑；具體手動手勢未記錄，不宣稱全程 VO-only。
+- 人工證據總表：`.build/m5-evidence/mobile/manual-narrow-voiceover/summary.json`、`manual-test.log`、`manual-source-only.log`、對應 xcresult／附件與兩個 evidence Swift snapshots。兩次測試均恢復原 VoiceOver 設定；原測試／project 還原後 `restored-final-manual-build.log` 為 `TEST BUILD SUCCEEDED`。自有視窗、模擬器、streamers／FIFO 已清理，host 焦點恢復，未留下行動產品測試入口或修改使用者原 App／資料。
+- 依核心／升級資料、三端正式 App、真實來源、授權 iPhone 實機、核心語音及使用者手動正確身份／來源核對，M5 基礎對齊完成；自動注入誤選造成的產品身份疑慮由手動正確操作關閉。所有自動化失敗與逾時仍保留，未宣稱全部測試綠燈。最低系統、Intel、iPad 實機運行、完整語言／字級／VO-only 交叉矩陣、電話等外部音訊中斷、全站／外掛及正式發佈依然在未驗證範圍；M6 未開始。
+- 最終文件／資源檢查：五份更新文件共 76 個本機連結均存在；桌面 1,660／行動 203 個有效字串的 en／zh-Hans／zh-Hant 無缺漏；共用來源檔 SHA-256 仍與已驗證 Release 一致。`iOS/` 原始碼已無臨時 M5 測試或隔離 Bundle ID。結果在 `.build/m5-evidence/core/signed-off-document-resource-checks.json`。
+
+## 2026-10-29 — M6 帳號與共同擴充
+
+- 實作跨平台規劃 M6 的五項擴充：Bangumi 帳號／收藏分類同步、詳情補充資訊、保守自動尋源與搜尋訂閱、有限自動點播彈幕、獨立連結收藏；更新 README、兩端使用指南、架構及規劃的範圍與資料契約。
+- iOS 以官方 PAT／`/v0/me` 驗證、device-only Keychain 保存權杖。分類先存本機，pending operation 持久保存數值 user ID／本機修訂；未指派離線修改需明確交給目前帳號，A 的操作不能送往 B。重啟／前景／手動重試與帳號 epoch、在途提交序列化、舊回應保護共同維持本機優先。只送收藏 `type`，不送 DELETE、觀看秒數、逐集進度、評分或評論。遠端完整分頁取完再去重／原子合併，不刪本機多出的收藏或覆蓋待同步修改。
+- `MobileLibrary` 升至 v3，v1／v2 先各自備份再切換，保留舊身份、順序、分類及映射，不把舊分類當成新的遠端操作。提交前核對磁碟權威內容，外部改寫後禁止用過期記憶體覆蓋。桌面 `WorkLibrary` 補持久 pending owner；`SiteAccounts` 拒絕把同一 Bangumi 紀錄重新授權成另一位使用者。
+- 詳情新增標籤、關聯作品、角色、製作人員及唯讀短評子頁；短評沿用公開 Bangumi HTML，不假設不存在的 v0 評論 API。分頁限定同作品，請求版本／取消阻擋舊回應，補充資料錯誤不阻塞播放。
+- 自動尋源要求名稱、年份、類型、明確季度與唯一正篇集數證據完整；未搜完、歧義、重複線路／集號及失效映射均轉人工，不回退首集或暗換站。CSS1 更新與桌面共用已審核 host／selector 規則，行動端探測後預覽、明確套用及原子保存搜尋 overlay；不改來源啟用狀態、不新增播放器能力、不執行遠端腳本。
+- 自動彈幕只接受完整來源配置 v2 的精確播放頁／aid／cid 綁定及訪客公開 Bilibili XML；先核對 metadata，再核對 chatid。拒絕 redirect、身份錯配、超限與不支援格式，依 session／load／請求版本／持久配置權威隔離結果；手動附件優先，關閉、取消、切集不附上舊下載。隨包 fqdm 沒有虛構綁定；桌面保留原生站點／外掛路徑，未宣稱通用配置新增桌面彈幕後端。
+- 配置格式收斂：初稿將新欄位加在 v1，與規劃的新欄位升版門檻不符。先增加拒絕 v1 彈幕欄位的回歸，觀察 `Unsafe automatic danmaku configuration accepted`／exit 133，再修正為 v2；v1 繼續原樣載入，新欄位只接受 v2，內容 fingerprint 與格式版號分開。修正後完整桌面來源回歸、行動來源及共用身份／事件回歸通過。
+- 連結收藏獨立保存於 `ANI/link-favorites.json` v1，使用正規化公開 HTTPS 頁及 `SourceItemRef` 身份，提供新增、搜尋、編輯、移除及瀏覽器開啟；拒絕憑證／追蹤／簽名媒體身份，不自動建立 Bangumi 作品或播放映射。原子提交、磁碟權威核對及壞檔／未知版本保護均有回歸。
+- 回歸通過：`Tests/run-ios.sh`、`run-ios-sources.sh`、`run-ios-danmaku.sh`、新增 `run-ios-links.sh`、`run-multiplatform-contracts.sh --macos`、`run-work-library.sh`、`run-w3-sources.sh`、`run-w4-bangumi.sh`、`run-w5-favorites.sh`。涵蓋帳號／在途切換／持久 pending、匯入去重與失敗回滾、來源／配置身份、短評分頁／取消、彈幕匹配與附件優先。作品庫／收藏測試故意損壞儲存及製造寫入衝突的 Core Data 診斷保留，套件最終通過。
+- 整合時修正 `MobileBangumiKeychain` 的 MainActor 預設引數建構編譯錯誤，加入無狀態 `nonisolated init()`；不改憑證邊界。來源 regression 的模擬重啟另修正為在另一個 library instance 提交後先重新載入，再讓舊 instance 寫入；debugger 已定位為新磁碟權威保護正確拒絕 stale writer，未放寬產品保護來配合測試。
+- iPhone 18 Pro／iOS 27.0 正式 UI：三個不同 smoke 案例分別通過。公開 Bangumi `400602` 的標籤、關聯、角色、staff、短評及第二頁為真網；來源／訂閱／Bilibili 回應為臨時固定 transport，但走正式解析、持久映射及真正 libmpv，觀察時間前進、附加兩條彈幕、切未綁定下一集清零。連結新增／重啟仍在；固定帳號 HTTP 回應配合真正 Keychain 完成登入、重複遠端 ID 去重匯入、登出後保留兩筆本機收藏，權威檔實際為 v3。
+- 初輪帳號 UI 失敗為未簽名 Simulator App 無法存 Keychain；改用 `CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=-`，沒有加入明文儲存替代。下一輪僅錯把 LabeledContent 的「Signed in as, M6 Account A」查成獨立名稱；修正驗收 selector 後 1/1 通過。初輪 `phone-ui.xcresult` 是 2 passed／1 failed，不標成全綠；最後帳號證據為 `phone-account-final.xcresult`。
+- 真實 provider smoke 使用生產 `MobileBilibiliDanmakuProvider`，對公開 aid `85440373`／cid `146044693` 核對 metadata／XML chatid，成功解析 1,200 條。這只證明公開 provider 取得／格式路徑，不代表該影片與任何第三方片源相同；沒有用合成綁定冒充真實同集驗證。
+- macOS 正式 Debug App 使用隔離 HOME、驗收專用 bundle ID 及私有埠 19986，實際新增公開 Bilibili 來源頁為連結收藏，作品收藏保持 0；真正 CSS1 訂閱顯示 19 預覽項／15 可套用配置，按捨棄後明示原配置未變。視窗截圖已檢視。只向本輪 PID 2502 請求正常退出，服務 exit 0；未使用全域 Cmd-Q，也未操作使用者播放器。
+- 最終生產建置（移除臨時 transport 後、包含 v2 修正）：macOS arm64 Debug／Release、iOS Simulator ad-hoc Debug build-for-testing、generic iOS arm64 Release 均成功。macOS Xcode 仍輸出既有警告及「command failed with exit code 0」診斷，但命令 exit 0、產品連結成功且 Debug 來源 regression 執行通過；不宣稱零警告。舊 `.build/ios` 缺已清理的 MPVKit XCFramework，改從保有完整校驗 artifacts 的 `.build/m5-mobile-debug/SourcePackages` 建置目前原始碼，未換用舊 App。
+- 最終未注入的 iPhone App 已安裝／啟動並檢視正式首頁；Release 無 `player-fixture*` 素材，二進位無本輪 smoke 或原 Debug fixture 啟動標記。兩個 pbxproj 與六個相關 runner 語法通過；行動 317／桌面 1,662 個有效字串均具 en／zh-Hans／zh-Hant，五份更新文件的 79 個本機連結均存在。
+- iPad 首輪三案失敗：導航腳本誤以第一個 navigation button 當返回而點到側欄；彈幕已回報成功附加，但未先捲出 Form 底部計數列。Xcode 另在收集失敗診斷等待 600 秒逾時。修正腳本為明確 BackButton／Show Sidebar 與捲出計數列，不改產品判定；重跑改用獨立來源副本注入 transport，正式工程保持乾淨。獨立副本初次缺少未加引號的 Tests fixture 相對路徑，補回資源根參照，不修改正式檔案。
+- 限制：未取得／使用真人 Bangumi 權杖，未驗證真實帳號遠端寫入；沒有 M6 實體 iPhone／iPad 安裝、最低 iOS 17／macOS 13.5、Intel、完整 VoiceOver／字級／窄窗矩陣、全站自動選源／彈幕或 IINA 外掛矩陣。M5 的實機／語音證據保留但不冒充 M6 新功能驗收；不等於 TestFlight、發佈簽署或公證。
+- iPad 修正腳本及隔離副本資源路徑後，`ipad-corrected-ui.xcresult` 最終 3 tests／0 failures／exit 0（實際測試約 129.5 秒）：v2 完整配置、取消及套用訂閱、自動可信候選、真實 libmpv 時間前進、兩條彈幕及下一集清零；帳號真實 Keychain／固定 HTTP 匯入／登出保留、連結重啟；Bangumi 真網補充資訊及短評第二頁。已檢視 `ipad-attachments/` 的實際影片／兩條彈幕、兩筆收藏及關聯作品；首輪失敗仍保留，不加入產品 workaround。iPhone 另以相同最終 v2 配置執行 `phone-v2-source.xcresult`，自動尋源／訂閱／彈幕 1/1 通過。
+- 最終證據集中於 `.build/m6-evidence/`：`acceptance-summary.json`、`verification-facts.json`、上述 xcresult／附件及桌面連結／訂閱預覽／捨棄畫面。最終非注入行動產物保留於 `.build/m6-ios-final` 與 `.build/m6-ios-release`；暫時驗收 source／build、transport／UI／AX／provider 工具、注入 App 產物及本輪兩台隔離 Simulator 均已移除，桌面隔離 App／HOME／自有偏好亦已清理。保留永久回歸與驗收證據，沒有刪除使用者作品庫、帳號、原有模擬器或已安裝 App。M6 五項交付完成，未測授權／實機／相容範圍如上。
+
+## 2026-10-29 — 行動端 Trending、Calendar、URL 配置與 BT 入口
+
+- **內容**：iPhone 底部與 iPad 側欄新增 Trending／Calendar，保留探索、收藏、播放。Trending 使用 Bangumi `sort: heat` 收藏人數排序，提供本季／歷來與分頁；刷新錯誤重試從首頁重新載入，保留舊內容直到成功。Calendar 保留七天分組、今天快捷鍵、空白／錯誤狀態及星期可存取性說明。縮小新頁面的介紹區並提高選中日期對比。
+- **配置**：探索與播放頁可直接進入片源設定；原本完整 JSON 檔案匯入改為 HTTPS URL 下載、預覽、確認套用。沿用 1 MiB 格式限制、同 ID 取代與原子保存；取消、下載失敗和過期回應不改資料，匯入後仍需手動啟用。請求不攜帶 Cookie／帳號憑證。搜尋規則訂閱保留原本獨立契約。
+- **BT**：播放頁新增 TorrServer 入口，接受 HTTPS 伺服器、magnet 或 HTTPS `.torrent` URL，輪詢中繼資料並按伺服器檔案 ID 選片，再交由既有 mpv 播放。拒絕重導向、保留取消／錯誤／重試；輸入與串流 URL 僅在記憶體，不寫入觀看歷史，關閉頁面不刪除伺服器傳輸。大型檔案清單使用 LazyVStack。
+- **原始碼／工程**：五個新 Swift 檔已加入 iOS target；87 個新增／調整字串具 en、zh-Hans、zh-Hant。`plutil -lint iOS/ANI.xcodeproj/project.pbxproj`、三語字串／來源引用檢查與 `git diff --check` 通過。未修改桌面播放流程或清除使用者資料。
+- **資料回歸**：`bash Tests/run-ios.sh`（作品庫與帳號）、`bash Tests/run-ios-catalog.sh`（熱度請求、季度邊界、星期分組、解碼／錯誤）、`bash Tests/run-ios-sources.sh`（既有來源流程＋URL 匯入／取消／過期回應）、`bash Tests/run-ios-bt.sh`（地址、輪詢、檔案身份、錯誤／取消）通過。
+- **建置／執行**：Xcode 27.1 Debug ad-hoc simulator build 成功、最終建置無警告。正式 ANI App 在 iPhone 18 Pro／iPad Pro 11-inch (M5)、iOS 27.0 模擬器上，`testMobileBrowseAndURLConfiguration` 與 `testBTEntryPlayback` 均通過，涵蓋 Trending 詳情導覽、星期切換／空白狀態、無效 URL、成功配置預覽及取消保留原資料、BT 選檔後真實 libmpv 時間推進／關閉。第一次手機瀏覽測試因確認按鈕位於 Form 可視範圍以外失敗；補上捲動及明確預覽取消識別後重跑通過。結果與截圖存於忽略的 `.build/mobile-redesign/`。另以繁中非 fixture App 確認真實 Bangumi Trending／Calendar 可載入並截圖。
+- **限制**：BT 為遠端 TorrServer 入口，沒有移植本機 libtorrent 引擎；目前只支援免登入 HTTPS 伺服器，不支援 HTTP、Basic Auth 或本機種子檔。BT UI 驗收使用固定回應與隨包影片，尚未驗證真實 TorrServer／P2P 傳輸；URL 匯入的網路邏輯由離線 transport 測試與 UI fixture 驗證，未對外部配置站點完整驗收。本次未在實機、最低 iOS 17 或桌面 App 執行驗收。
+
+## 2026-10-29 — 預設匯入 CSS1 訂閱
+
+- **內容**：依使用者指定，將 `https://sub.creamycake.org/v1/css1.json` 設為行動端預設訂閱。App 啟動時在沒有既有訂閱的情況下，使用原有 CSS1 轉換／搜尋驗證契約自動匯入相容內建來源規則；成功保存的訂閱檔就是一次性完成標記，包含內容未變更的情況。離線、取消、格式錯誤或寫入失敗不記為成功，可於下次啟動或設定頁重試。
+- **保留資料**：不覆蓋使用者匯入的完整配置或既有訂閱檔（包括損壞檔案），不改來源啟用狀態。下載期間若手動匯入了相同 fingerprint 的配置或訂閱，也會在提交前再次核對並保留手動操作。設定頁與尋源頁共用 App 的來源資料。
+- **介面**：URL 匯入預填指定網址，辨識為 CSS1 時走搜尋訂閱預覽／套用；其他 HTTPS URL 沿用完整配置驗證。加入預設訂閱狀態、失敗重試、清除網址按鈕及 en／zh-Hans／zh-Hant 翻譯。更新 iOS 使用指南。
+- **驗證**：`Tests/run-ios-sources.sh` 通過，新增一次性保存／重啟跳過、既有與損壞資料保護、啟用狀態、離線／探測／儲存失敗後重試、同時請求、過期回應與取消回歸。Xcode 27.1 iPhone 18 Pro（iOS 27.0）Simulator Debug 建置成功；正式 App 的 `testDefaultSubscriptionImport`、`testMobileBrowseAndURLConfiguration` 最終均通過。預填網址使舊測試的游標刪除方式無法清空欄位，改用新增的清除網址按鈕後回歸通過。`git diff --check` 通過。
+- **真實來源證據**：非 fixture App 從指定 URL 成功下載並保存，確認本機訂閱 SHA-256 與本次直接下載的 CSS1 內容相符，保存的相容來源為 `fqdm`；繁中設定頁顯示匯入成功。證據位於忽略的 `.build/mobile-default-subscription/`。
+- **限制**：CSS1 是搜尋規則，不能補齊未移植的目錄／播放解析器。目前隨包完整來源是番茄動漫，其他不相容條目保留為不支援，不宣稱全部 18 項可播放。本次未重新執行 iPad／實機／最低 iOS 17 或桌面驗收。
+
+## 2026-10-29 — 行動端版面精簡
+
+- **內容**：主分頁改用頂部 inline 小標題，移除探索、Trending、Calendar 與播放頁的宣傳／介紹區塊及重複頁腳；日曆直接顯示星期選擇與作品，Trending 精簡首位卡片，縮減網格與外圍間距。播放頁優先顯示直連、檔案及 BT 入口；BT 詳細說明改為預設收合。來源設定前移匯入按鈕與來源開關，合併訂閱狀態／URL，匯入頁只保留必要格式與確認提示。
+- **互動**：保留錯誤／空白／載入狀態、搜尋／篩選、來源開關、URL 預覽確認、播放器流程與可存取性識別。主要操作保留至少 44 pt 點擊範圍，原有平板媒體輸入高度斷言同步改為新的 44 pt；未更動資料或網路契約。
+- **驗證**：Xcode 27.1 Debug iPhone 18 Pro／iPad Pro 11-inch (M5) 模擬器建置並啟動成功，無建置警告。iPhone 的既有 `testMobileBrowseAndURLConfiguration`、`testDefaultSubscriptionImport`、`testBTEntryPlayback` 全數通過；檢視繁中 Trending／Calendar／來源設定與 iPad 播放畫面，未見重疊或操作被遮擋。新增四條文案具 en／zh-Hans／zh-Hant；`git diff --check` 通過。截圖與結果位於忽略的 `.build/mobile-density/`。
+- **限制**：此輪為介面整理，未重跑資料層回歸、完整 iPad UI 套件、實機或最低 iOS 17 驗收；未新增鏡像式版面測試。
+
+## 2026-10-30 — 行動端通用 URL／CSS1 匯入與移除預設來源
+
+- 修復根因：舊匯入介面依固定網址分流，CSS1 也僅能覆蓋既有來源的搜尋規則，清單內其他條目不會成為來源。現在依 JSON 內容識別單份配置、配置陣列、含內嵌配置／相對或絕對 HTTPS URL 的清單，以及 CSS1；相對清單網址以重新導向後的最終回應位置解析。
+- CSS1 使用獨立行動端靜態頁解析器，將支援的 `web-selector` 條目轉為 v3 `webSelector` 配置，不依賴內建網站 ID 或基線。支援 a／indexed／簡單 JSONPath 搜尋、分組或無分組目錄、video/source 直連、MacCMS player JSON 的 encrypt 0／1／2，以及 iframe 參數中的直接媒體 URL；不執行遠端腳本。作品與集數持久身份使用已驗證的公開頁 URL，集數顯示文字與目錄位置不作播放身份。配置不保存 CSS1 Cookie、自訂 header 或影片匹配程式。
+- CSS1 根層級 `mediaSources` 優先，缺少時才兼容舊巢狀清單。不支援條目逐條顯示原因；全部不支援仍可查看預覽，但不能保存。下載的實際 CSS1 樣本 20 筆中可轉換 18 筆，另外 2 筆為未支援的 json-api 解析器及 HTTP 入口。原生清單先驗證全數項目與重複 ID，再透過 `ConfigurationImports/state.json` 單次原子提交，避免半份清單落盤。
+- 移除啟動自動訂閱、固定訂閱網址、輸入欄預填值及 iOS 的 fqdm／source-list 資源引用。正式啟動只載入使用者已匯入配置；既有來源 JSON、搜尋覆蓋、收藏及歷史資料保留。僅明確 Debug 測試參數會注入隔離測試來源；Release 包不含預設配置或測試媒體。
+- 原始碼／工程檢查：新增解析器已加入 Xcode sources phase；移除預設來源的 resources phase 與 file references；新增字串具 en／zh-Hans／zh-Hant；`git diff --check` 通過。v1／v2 原生配置與既有身份流程維持；v3 不向桌面宣稱可執行能力。更新 `docs/IOS_GUIDE.md` 及外部來源清單範例。
+- 資料回歸：`Tests/run-ios-sources.sh` 通過，涵蓋任意 URL、最終 URL 相對解析、清單限額／重複／取消、空庫、批次原子保存失敗、重載、CSS1 18/20 轉換、HTML／JSONPath 解析、精確 URL 身份、秘密參數拒絕、動態腳本／不明加密拒絕、原生配置 revision 與既有映射／下一集流程。`Tests/run-ios-history.sh` 通過。來源測試保留既有 weak variable 提示，App 建置無警告。
+- 真實網路驗證：使用帶 query 的 CSS1 URL（舊入口不會視為預設）透過正式匯入 transport 取得並轉換 18 筆；以正式 MobileSourceClient 分別搜尋、讀目錄、解析首個候選首集。番茄返回 16 個搜尋結果／4 線路、集比 16／4、微爾 10／1，三者均解析到 m3u8。測試只記筆數與副檔名，不記完整媒體 URL，未以此宣稱真實站點影片已完成播放。
+- App 建置／執行：XcodeBuildMCP Debug build-and-run 與 Release simulator build 通過；核對 Release ANI.app 無 fqdm.json、source-list.json、player-fixture 資源。iPhone 18 Pro／iOS 27 模擬器的 `testMobileBrowseAndURLConfiguration` 及 `testConfigurationOnlyURLImport` 通過；後者從空庫、任意鏡像 URL 匯入 CSS1 與原生清單，啟用 CSS1、搜尋選集，再用正式 mpv 播放本地映射的測試影片，實際時鐘超過 1 秒，關閉正常。結果位於 `.build/css1-import-final-ui.xcresult` 與 `.build/css1-playback-ui.xcresult`，截圖已匯出並檢視於 `.build/css1-proof/`。
+- 限制：可匯入不代表所有網站／線路可播放；尚不支援 json-api POST、自訂 Cookie／header、動態 JS 資源捕捉、其他加密、非 HTTPS 網站及跳到未宣告網域的來源重新導向。真實網路抽樣未驗證全部 18 站；此次沒有真機、iOS 17 或 iPad 執行驗收，也未建置 macOS App。
+
+
+### 2026-10-30 — 新增程式碼審查
+
+- 審查未提交變更，重點追蹤桌面播放接續／目錄驗證及 iOS 播放、歷史與來源流程；未修改產品程式碼。
+- 發現配置型來源的下一集目錄以集數作為 selection.item，但後續驗證要求與原作品 item 相等，導致手動／自動接續被拒絕；已於審查回報。
+- 實際驗證：`bash Tests/run-multiplatform-contracts.sh` 與 `bash Tests/run-ios-history.sh` 均通過。
+- 限制：未重新建置、啟動正式 App 或執行實機／串流驗收；上述問題依呼叫鏈與原始碼確認，測試通過不代表所有新增功能已驗收。
+
+
+### 2026-10-30 — Sources 範圍審查
+
+- 審查 `IINA-ANI/Features/Sources/` 的未提交變更及 `IINA-ANI/Sources/` 配置，追蹤來源匯入、身份、映射與訂閱流程；未修改產品程式碼。
+- 在隔離暫存目錄重現兩項來源匯入問題：`native-search` ID 匯入成功後於重載消失；不帶尾端斜線的 userDirectory URL 會讓 replacement 漏出預覽驗證，接受與內建 `bilibili` 衝突的配置，重載才拋出 RegistryError。
+- 實際驗證：標準 macOS Debug xcodebuild 建置成功；`bash Tests/run-w3-sources.sh` 全部通過；Sources 範圍 `git diff --check` 通過。額外重現程式連結本次建置產物，使用隔離資料目錄，結果已回報。
+- 限制：未啟動正式 App 進行 UI／真實來源串流驗收；回歸測試通過未涵蓋上述額外邊界情境。
+
+
+### 2026-10-30 — 修正來源匯入目錄比較與保留 ID
+
+- `SourceRegistry` 以 standardizedFileURL.path 比較待匯入檔案的父目錄，確保有／無尾端斜線的目錄都將 replacement 納入完整驗證與新快照。
+- 匯入時拒絕 `native-search` ID（不分大小寫），避免寫入載入器排除的保留檔名；檢查同時適用於預覽與套用。
+- 回歸測試在兩種目錄 URL 上執行完整匯入／替換／重載流程，並驗證保留 ID 及內建 bilibili ID 被拒絕且不建立目錄、不發布新快照。
+- 原始碼檢查：`git diff --check` 通過。建置：標準 macOS Debug xcodebuild 成功。自動驗證：`bash Tests/run-w3-sources.sh` 全部通過（含新增測試）。
+- 正式 App 驗收：以本次建置的 `.build/xcode/Build/Products/Debug/IINA-ANI.app` 啟動，設定 CFFIXED_USER_HOME 為本次測試目錄，走正式 AppDelegate；操作設定 → 來源 JSON 匯入，選取 native-search 測試配置後顯示失敗，未進入確認匯入，已透過 CUA 截圖確認並退出 App。
+- 限制：正常匯入與重載由隔離回歸測試驗證；未重跑真實串流、播放或彈幕驗收，本次未變更其邏輯。
+
+
+### 2026-10-30 — 正式組件配置匯入與真實串流實測
+
+- 使用本輪已建置的 macOS Debug IINA-ANI.app、正式 AppDelegate 與隔離 CFFIXED_USER_HOME `.build/sources-fix-ui-home`。未直接呼叫解析 service 代替 UI。
+- 在設定組件匯入 `Examples/MobileSources/internet-archive.json`，檢查預覽後確認匯入；新來源預設停用，手動啟用並按重新載入後仍存在且啟用。核對隔離資料目錄的持久 JSON 保留 internet-archive ID。
+- 經正式「開啟網址」入口載入 IA BigBuckBunny_328 的 BigBuckBunny_512kb.mp4 集數頁，詳情組件顯示來源準備完成；開啟「選集與來源」組件後按播放所選集數，由預設 IINA 播放真實網路串流。
+- IINA 實際呈現動畫畫面；暫停顯示 00:35／09:56，恢復播放後再暫停顯示 00:44／09:56，確認後端時間前進與暫停／恢復可用。畫面存於忽略的 `.build/sources-playback-proof.png`。
+- 關閉測試影片後 IINA 返回起始視窗；關閉來源選擇視窗並正常退出本次 IINA-ANI，進程 exit 0。未清除使用者資料，未記錄憑證或完整簽名串流 URL。
+- 限制：本次驗證桌面單一 v1 完整配置、直接指定來源集數、IINA 播放；不代表搜尋配對、所有來源、iOS CSS1、彈幕、多視窗或斷線重連已驗收。沿用前輪成功建置，未修改產品程式碼。
+
+
+### 2026-10-30 — 預設 CSS1 訂閱真實媒體抽測
+
+- 重新取得 https://sub.creamycake.org/v1/css1.json，使用目前 MobileCSS1Configuration／MobileSourceClient 正式實作測試搜尋、選集、解析，18 個可轉換來源全部完成；另 2 個因不支援 parser／非 HTTPS 跳過。
+- FFmpeg 真實讀取媒體並解碼：girigiri愛動漫、叽哔动漫、番茄动漫、wedm 首幀成功；第 10 秒複測後三者成功，girigiri愛動漫逾時。部分線路須換作品／線路才能取得畫面。
+- 其餘 14 個來源未取得可驗證媒體：搜尋失敗 7、搜尋無結果 1、選集／解析未通過 6。失敗不等於網站沒有影片；authenticationRequired 可能為 401／403 或反爬阻擋。
+- 目視抽樣發現片頭與廣告浮水印；媒體存在不代表完整正片／集數一致或穩定播放。每來源抽查最多兩部作品、各前三條線路第一集，每次媒體讀取限制 30 秒。
+- 本次僅建置隔離驗證工具並執行真實網路／解碼；未修改產品程式碼，未重做正式 App UI、全片、音訊、彈幕、重連及多視窗驗收。未修改使用者配置。
+- 脫敏報告與截圖：.build/css1-media-audit/REPORT.md、results.json、recheck.json、*-frame.png；不記錄憑證或完整簽名媒體 URL。
+
+
+### 2026-10-30 — CSS1 匯入檢查與站點直接連線修復
+
+- 延續 URL 模組優化：接回原本未使用的 probe，CSS1 匯入前抽測搜尋、選集、媒體 URL 解析；3 個並行、每來源 45 秒期限，失敗只跳過本次匯入，保留既有來源。原生完整配置不套用 CSS1 檢查；加入部分失敗、取消、原生跳過探測與配置保留回歸測試及三語說明。
+- 直接請求 18 個配置的首頁／搜尋。確認 2k、嘀嗒、熱播轉址新主機；僅隔離測試遷移，搜尋與選集恢復但媒體仍解析失敗，未放寬正式主機限制。多個站點首頁 200 但搜尋 403，沒有誤標可用或繞過驗證。
+- 修正 indexed 搜尋誤將無 href 收藏按鈕算作作品連結；稀飯搜尋恢復 3 部作品、選集成功，媒體仍未通過。
+- 森之屋新增限 senfun.in 的公開 JSON 解析路徑，使用選定集數與網站預設首條媒體，保留 URL 限制、付費／預覽拒絕、取消語義；不執行遠端 JS、不暗換線路。新增精確端點、首條線路及不安全 URL 拒絕測試。
+- 驗證：來源回歸全部通過，iOS Debug 工程建置與正式 App 啟動成功，diff check 通過。即時預設 URL 匯入結果由 4 通過／16 跳過提升為 5／15。森之屋搜尋→選集→解析→FFmpeg 第 10 秒 PNG 解碼成功，另一個第 1 集樣本也成功。
+- UI 限制：操作模擬器來源設定與匯入表單，但注音輸入法干擾自動 URL 輸入，已取消且未套用；完整匯入預覽仍未驗收。未重測 macOS App（修改範圍為 iOS CSS1）。未驗證全片、音訊、彈幕、重連或多視窗。畫面含廣告，不宣稱無廣告或全片正確。
+- 詳細脫敏報告：.build/css1-connectivity/REPORT.md；網站／解析結果與影片截圖均保留在該忽略目錄。保留使用者資料。
+
+
+### 2026-10-30 — 提交跨平台功能與整理記錄
+
+- 整合目前桌面與 iOS App、共用播放／來源邏輯、回歸測試、授權與文件變更，準備提交至 main。
+- 本輪驗證：變更 diff 空白檢查、變更 shell runner 語法及兩份 Xcode 工程 plist 語法通過。
+- 限制：本輪僅提交前檢查，未重新建置或執行 App 驗收；歷次功能驗證及限制見上述各筆記錄。忽略的快取、驗收產物與本機憑證不納入提交。
