@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 import Observation
 
@@ -312,6 +313,25 @@ extension PlaybackFailure {
         case .sourceDisabled: return String(localized: "This source is disabled. Enable it before sending a request.")
         case .configurationChanged: return String(localized: "The source configuration changed. Return to sources and confirm the episode again.")
         case .network: return String(localized: "The source request failed. Check your connection and retry.")
+        case .httpForbidden: return String(localized: "The source refused the request (HTTP 403). This does not identify a video format or prove that sign-in will help.")
+        case .websiteVerification: return String(localized: "The source returned a website verification or blocking page instead of source data.")
+        case .sourceRedirect: return String(localized: "The source redirected to an address outside its configured hosts. Check the source domain configuration.")
+        case .searchStructure: return String(localized: "The search response does not match the configured selectors or JSON fields. Update the search rules.")
+        case .catalogStructure: return String(localized: "The episode page does not match the configured episode rules, or contains no usable episode links.")
+        case .invalidPlayerData: return String(localized: "The player data is malformed, incomplete, or could not be decoded.")
+        case .unsupportedEncryption: return String(localized: "The player declares an unsupported URL encryption method for this site or line.")
+        case .indirectMedia: return String(localized: "The page provides a player identifier, embedded player, or URL without a supported media extension. Further resolution is required.")
+        case .unsupportedMediaFormat: return String(localized: "The media URL extension is not supported by this source configuration.")
+        case .unsafeMediaAddress: return String(localized: "The media address violates the source URL rules (HTTPS, host, credentials, port or fragment).")
+        case .ambiguousMedia: return String(localized: "The page contains multiple different media addresses; the selected episode cannot be resolved unambiguously.")
+        case .missingMedia: return String(localized: "No supported media address was found in the page. The site may require a separate API or dynamic player.")
+        case .invalidResponseBody: return String(localized: "The source returned an empty response or exceeded the response size limit.")
+        case .missingMediaQuality: return String(localized: "The page does not offer the resolution specified by this source configuration. No other resolution was selected.")
+        case .appOnlyPlayback: return String(localized: "This line is restricted to the source's own app. Select the website line.")
+        case .mediaSignatureMissing: return String(localized: "The source returned a legacy URL without an expiry signature (HTTP 401). Open the new XiFan site and reselect the work and episode; old IDs cannot be reused.")
+        case .mediaNotFound: return String(localized: "The media file is unavailable on the source server (HTTP 404 or 410). Select another line.")
+        case .playerServiceUnavailable: return String(localized: "The website player service could not resolve this stream. Retry later or select another line.")
+        case .mediaPortUnsupported: return String(localized: "The media URL specifies a port that this source configuration does not support.")
         case .unsupportedResponse: return String(localized: "This source response or media format is unsupported. Confirm another source episode or choose a different source.")
         case .authenticationRequired: return String(localized: "This source requires sign-in or verification, which is not supported on iOS. Choose another source.")
         case .mediaPlayback: return String(localized: "The media could not be played. Choose another source episode or try again.")
@@ -346,7 +366,7 @@ struct MobileSourceContinuation {
         }
     }
 
-    func resolve(after context: PlaybackContext, next: Bool) async throws -> MobileResolvedPlayback? {
+    func resolve(after context: PlaybackContext, next: Bool, currentTitle: String) async throws -> MobileResolvedPlayback? {
         try validate(context)
         let work = MobileSourceWork(item: context.selection.item, title: "")
         let catalog = try await client.catalog(work)
@@ -362,6 +382,16 @@ struct MobileSourceContinuation {
         try validate(context)
         let resolvedContext = try client.playbackContext(episode, in: catalog,
             requestedWork: context.work, requestedEpisode: next ? nil : context.episode)
-        return MobileResolvedPlayback(url: url, title: catalog.work.title + " · " + episode.title, context: resolvedContext)
+        // CSS1 catalogues preserve the supplied work title instead of extracting one.
+        // Recover it only from the exact current episode suffix, preserving separators
+        // inside the work name and never carrying the previous episode into the next title.
+        let currentEpisode = try client.episode(matching: context.selection, in: catalog)
+        let suffix = " · " + currentEpisode.title
+        let previousWorkTitle = currentTitle.hasSuffix(suffix)
+            ? String(currentTitle.dropLast(suffix.count)).trimmingCharacters(in: .whitespacesAndNewlines) : ""
+        let catalogTitle = catalog.work.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let workTitle = catalogTitle.isEmpty ? previousWorkTitle : catalogTitle
+        let title = workTitle.isEmpty ? episode.title : workTitle + " · " + episode.title
+        return MobileResolvedPlayback(url: url, title: title, context: resolvedContext)
     }
 }

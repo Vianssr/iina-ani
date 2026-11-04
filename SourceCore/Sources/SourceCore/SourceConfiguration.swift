@@ -1,129 +1,130 @@
 import Foundation
 import CryptoKit
 
-struct SourceConfiguration: Decodable, Sendable {
+public struct SourceConfiguration: Decodable, Sendable {
     /// Declarative CSS1 selectors. Executed by the iOS static-page adapter only.
-    struct WebSelector: Codable, Sendable {
-        let baseURL: String
-        let relativeLinksUseSearchURL: Bool?
-        let subjectFormat: String
-        let searchNames: String
-        let searchLinks: String
-        let linkTemplate: String?
-        let channelFormat: String
-        let channelNames: String?
-        let episodeLists: String?
-        let episodeNames: String
-        let episodeLinks: String?
+    public struct WebSelector: Codable, Sendable {
+        public let baseURL: String
+        public let relativeLinksUseSearchURL: Bool?
+        public let preferredVideoHeight: Int?
+        public let subjectFormat: String
+        public let searchNames: String
+        public let searchLinks: String
+        public let linkTemplate: String?
+        public let channelFormat: String
+        public let channelNames: String?
+        public let episodeLists: String?
+        public let episodeNames: String
+        public let episodeLinks: String?
     }
-    struct Route: Codable, Sendable {
-        let pattern: String
-        let idGroup: Int
-        let lineGroup: Int?
-        let episodeGroup: Int?
-        let detailTemplate: String
-        let queryIdentityParameter: String?
-        let idIsPositiveInteger: Bool?
+    public struct Route: Codable, Sendable {
+        public let pattern: String
+        public let idGroup: Int
+        public let lineGroup: Int?
+        public let episodeGroup: Int?
+        public let detailTemplate: String
+        public let queryIdentityParameter: String?
+        public let idIsPositiveInteger: Bool?
     }
-    struct Catalog: Codable, Sendable {
-        let url: String
-        let format: String
-        let titleSelector: String?
-        let coverSelector: String?
-        let coverAttribute: String?
-        let panelSelector: String?
-        let lineTitleSelector: String?
-        let episodeSelector: String?
-        let episodeTitleSelector: String?
-        let episodeURLAttribute: String?
-        let jsonTitlePath: String?
-        let jsonCoverPath: String?
-        let jsonEntriesPath: String?
-        let jsonEpisodeTitlePath: String?
-        let jsonEpisodeURLPath: String?
-        let jsonEpisodeIdentityPath: String?
-        let jsonMediaPath: String?
-        let jsonEntryExtensions: [String]?
-        let jsonLineTitlePath: String?
-        let jsonLineNumberPath: String?
-        let jsonEpisodeNumberPath: String?
-        let labelLinkTemplate: String?
+    public struct Catalog: Codable, Sendable {
+        public let url: String
+        public let format: String
+        public let titleSelector: String?
+        public let coverSelector: String?
+        public let coverAttribute: String?
+        public let panelSelector: String?
+        public let lineTitleSelector: String?
+        public let episodeSelector: String?
+        public let episodeTitleSelector: String?
+        public let episodeURLAttribute: String?
+        public let jsonTitlePath: String?
+        public let jsonCoverPath: String?
+        public let jsonEntriesPath: String?
+        public let jsonEpisodeTitlePath: String?
+        public let jsonEpisodeURLPath: String?
+        public let jsonEpisodeIdentityPath: String?
+        public let jsonMediaPath: String?
+        public let jsonEntryExtensions: [String]?
+        public let jsonLineTitlePath: String?
+        public let jsonLineNumberPath: String?
+        public let jsonEpisodeNumberPath: String?
+        public let labelLinkTemplate: String?
     }
-    struct Player: Codable, Sendable {
-        let format: String
-        let payloadPattern: String?
-        let idKey: String?
-        let lineKey: String?
-        let episodeKey: String?
-        let paidKey: String?
-        let previewKey: String?
-        let encodingKey: String?
-        let urlKey: String?
-        let idIsString: Bool?
-        let allowedExtensions: [String]
-        let streamURLTemplate: String?
-        let rejectSelectors: [String]?
+    public struct Player: Codable, Sendable {
+        public let format: String
+        public let payloadPattern: String?
+        public let idKey: String?
+        public let lineKey: String?
+        public let episodeKey: String?
+        public let paidKey: String?
+        public let previewKey: String?
+        public let encodingKey: String?
+        public let urlKey: String?
+        public let idIsString: Bool?
+        public let allowedExtensions: [String]
+        public let streamURLTemplate: String?
+        public let rejectSelectors: [String]?
     }
-    struct Search: Codable, Sendable {
-        let url: String
-        let format: String
-        let queryParameter: String
-        let pageParameter: String
-        let rowsPerPage: Int
-        let firstPage: Int?
-        let resultsSelector: String?
-        let titleSelector: String?
-        let coverSelector: String?
-        let coverAttribute: String?
-        let linkSelector: String?
-        let hrefAttribute: String?
-        let nextPageSelector: String?
-        let rejectSelectors: [String]?
-        let jsonResultsPath: String?
-        let jsonTitlePath: String?
-        let jsonCoverPath: String?
-        let jsonIdentifierPath: String?
-        let jsonTotalPath: String?
+    public struct Search: Codable, Sendable {
+        public let url: String
+        public let format: String
+        public let queryParameter: String
+        public let pageParameter: String
+        public let rowsPerPage: Int
+        public let firstPage: Int?
+        public let resultsSelector: String?
+        public let titleSelector: String?
+        public let coverSelector: String?
+        public let coverAttribute: String?
+        public let linkSelector: String?
+        public let hrefAttribute: String?
+        public let nextPageSelector: String?
+        public let rejectSelectors: [String]?
+        public let jsonResultsPath: String?
+        public let jsonTitlePath: String?
+        public let jsonCoverPath: String?
+        public let jsonIdentifierPath: String?
+        public let jsonTotalPath: String?
     }
     /// Explicit, reviewed episode bindings, never title or catalogue-index matches.
     /// This guest XML provider is consumed by iOS, not the desktop generic decoder.
-    struct Danmaku: Codable, Sendable {
-        struct Episode: Codable, Sendable, Equatable {
-            let pageURL: String
-            let aid: Int64
-            let cid: Int64
+    public struct Danmaku: Codable, Sendable {
+        public struct Episode: Codable, Sendable, Equatable {
+            public let pageURL: String
+            public let aid: Int64
+            public let cid: Int64
         }
-        let provider: String
-        let episodes: [Episode]
+        public let provider: String
+        public let episodes: [Episode]
     }
-    enum ConfigurationError: Error, Equatable { case invalidConfiguration, invalidURL, unsupportedCapability, invalidMedia }
-    struct CompiledPattern: @unchecked Sendable { let value: NSRegularExpression }
+    public enum ConfigurationError: Error, Equatable { case invalidConfiguration, invalidURL, unsupportedCapability, invalidMedia }
+    public struct CompiledPattern: @unchecked Sendable { public let value: NSRegularExpression }
 
-    let id: String
-    let name: String
-    let version: Int
-    let hosts: [String]
-    let mediaHosts: [String]
-    let anonymousExternalHTTPSMedia: Bool
-    let credentialHosts: [String]
-    let capabilities: Set<SourceCapability>
-    let route: Route
-    let catalog: Catalog
-    let player: Player
-    let search: Search?
-    let danmaku: Danmaku?
-    let webSelector: WebSelector?
+    public let id: String
+    public let name: String
+    public let version: Int
+    public let hosts: [String]
+    public let mediaHosts: [String]
+    public let anonymousExternalHTTPSMedia: Bool
+    public let credentialHosts: [String]
+    public let capabilities: Set<SourceCapability>
+    public let route: Route
+    public let catalog: Catalog
+    public let player: Player
+    public let search: Search?
+    public let danmaku: Danmaku?
+    public let webSelector: WebSelector?
     /// Content revision, separate from the schema version (v2 adds danmaku bindings).
-    let configurationRevision: String
-    let contentKind: MediaContentKind?
-    var classification: MediaClassification {
+    public let configurationRevision: String
+    public let contentKind: MediaContentKind?
+    public var classification: MediaClassification {
         guard let contentKind else { return .unknown }
         return MediaClassification(kind: contentKind, provenance: "source-schema:" + id + ":contentKind:v" + String(version))
     }
-    let compiledRoutePattern: CompiledPattern
-    let compiledPlayerPattern: CompiledPattern?
+    public let compiledRoutePattern: CompiledPattern
+    public let compiledPlayerPattern: CompiledPattern?
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         let cookie = try c.decodeIfPresent(String.self, forKey: .cookie)
         let token = try c.decodeIfPresent(String.self, forKey: .token)
@@ -190,7 +191,7 @@ struct SourceConfiguration: Decodable, Sendable {
         let webSelector: WebSelector?
     }
     /// Lossless decoded-rule serialization for full-config and search-rule updates.
-    func encodedData() throws -> Data {
+    public func encodedData() throws -> Data {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
         return try encoder.encode(RevisionContent(id: id, name: name, version: version,
@@ -198,7 +199,7 @@ struct SourceConfiguration: Decodable, Sendable {
             credentialHosts: credentialHosts, capabilities: capabilities.map(\.rawValue).sorted(),
             route: route, catalog: catalog, player: player, search: search, contentKind: contentKind, danmaku: danmaku, webSelector: webSelector))
     }
-    static func load(data: Data) throws -> Self {
+    public static func load(data: Data) throws -> Self {
         guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw ConfigurationError.invalidConfiguration }
         let schemas: [String: Set<String>] = [
             "": ["id","name","version","hosts","mediaHosts","anonymousExternalHTTPSMedia","credentialHosts","capabilities","route","catalog","player","search","contentKind","danmaku","webSelector","cookie","token","authorization","headers"],
@@ -206,7 +207,7 @@ struct SourceConfiguration: Decodable, Sendable {
             "catalog": ["url","format","titleSelector","coverSelector","coverAttribute","panelSelector","lineTitleSelector","episodeSelector","episodeTitleSelector","episodeURLAttribute","jsonTitlePath","jsonCoverPath","jsonEntriesPath","jsonEpisodeTitlePath","jsonEpisodeURLPath","jsonEpisodeIdentityPath","jsonMediaPath","jsonEntryExtensions","jsonLineTitlePath","jsonLineNumberPath","jsonEpisodeNumberPath","labelLinkTemplate"],
             "player": ["format","payloadPattern","idKey","lineKey","episodeKey","paidKey","previewKey","encodingKey","urlKey","idIsString","allowedExtensions","streamURLTemplate","rejectSelectors"],
             "search": ["url", "format", "queryParameter", "pageParameter", "rowsPerPage", "firstPage", "resultsSelector", "titleSelector", "linkSelector", "nextPageSelector", "rejectSelectors", "coverSelector", "coverAttribute", "hrefAttribute", "jsonResultsPath", "jsonTitlePath", "jsonCoverPath", "jsonIdentifierPath", "jsonTotalPath"],
-            "webSelector": ["baseURL", "relativeLinksUseSearchURL", "subjectFormat", "searchNames", "searchLinks", "linkTemplate", "channelFormat", "channelNames", "episodeLists", "episodeNames", "episodeLinks"],
+            "webSelector": ["baseURL", "relativeLinksUseSearchURL", "preferredVideoHeight", "subjectFormat", "searchNames", "searchLinks", "linkTemplate", "channelFormat", "channelNames", "episodeLists", "episodeNames", "episodeLinks"],
             "danmaku": ["provider", "episodes"]
         ]
         for (section, allowed) in schemas {
@@ -237,9 +238,9 @@ struct SourceConfiguration: Decodable, Sendable {
         }
         return try JSONDecoder().decode(SourceConfiguration.self, from: data)
     }
-    static func load(fileURL: URL) throws -> Self { try load(data: Data(contentsOf: fileURL)) }
+    public static func load(fileURL: URL) throws -> Self { try load(data: Data(contentsOf: fileURL)) }
 
-    func validate() throws {
+    public func validate() throws {
         let hostRegex = try NSRegularExpression(pattern: "^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$")
         func validHost(_ host: String) -> Bool {
             hostRegex.firstMatch(in: host, range: NSRange(host.startIndex..., in: host)) != nil && !host.contains("..") && !host.hasPrefix(".") && !host.hasSuffix(".")
@@ -275,6 +276,9 @@ struct SourceConfiguration: Decodable, Sendable {
                   !expanded(searchURL, values: ["query": "test"]).contains("{"),
                   !expanded(searchURL, values: ["query": "test"]).contains("}"),
                   (try? requestURL(expanded(searchURL, values: ["query": "test"]))) != nil else {
+                throw ConfigurationError.invalidConfiguration
+            }
+            if let height = spec.preferredVideoHeight, !(1...4320).contains(height) {
                 throw ConfigurationError.invalidConfiguration
             }
             let fields = [spec.searchNames, spec.searchLinks, spec.episodeNames] +
@@ -389,7 +393,7 @@ struct SourceConfiguration: Decodable, Sendable {
     }
     /// The approved configuration supplies the cross-provider identity assertion.
     /// Runtime provider metadata and XML chatid must still be verified before use.
-    func danmakuBinding(for selection: PlayableSelection, revision: String?) throws -> Danmaku.Episode? {
+    public func danmakuBinding(for selection: PlayableSelection, revision: String?) throws -> Danmaku.Episode? {
         guard revision == configurationRevision else { throw PlaybackFailure.configurationChanged }
         guard let danmaku, selection.classification.kind != .live else { return nil }
         let durable = try mappingSelection(selection)
@@ -404,25 +408,25 @@ struct SourceConfiguration: Decodable, Sendable {
         .information, .resolve, .episodes, .lines, .search, .iina, .mpv, .download
     ]
 
-    func effectiveCapabilities(on platform: SourcePlatform) -> Set<SourceCapability> {
+    public func effectiveCapabilities(on platform: SourcePlatform) -> Set<SourceCapability> {
         if webSelector != nil && platform != .iOS { return [] }
         return capabilities.intersection(Self.parserCapabilities).intersection(platform.capabilities)
     }
 
-    func descriptor(on platform: SourcePlatform) -> SourceDescriptor {
+    public func descriptor(on platform: SourcePlatform) -> SourceDescriptor {
         SourceDescriptor(id: id, name: name, version: version, capabilities: effectiveCapabilities(on: platform))
     }
 
-    var descriptor: SourceDescriptor {
+    public var descriptor: SourceDescriptor {
         #if os(iOS)
         return descriptor(on: .iOS)
         #else
         return descriptor(on: .macOS)
         #endif
     }
-    func matches(_ raw: String) -> Bool { (try? item(raw)) != nil }
+    public func matches(_ raw: String) -> Bool { (try? item(raw)) != nil }
 
-    func item(_ raw: String) throws -> SourceItemRef {
+    public func item(_ raw: String) throws -> SourceItemRef {
         if webSelector != nil { return try webItem(raw, kind: .work) }
         guard let c = URLComponents(string: raw), let scheme = c.scheme?.lowercased(), ["http", "https"].contains(scheme),
               c.port == nil, c.user == nil, c.password == nil, let host = c.host?.lowercased(), hosts.contains(host) else {
@@ -455,7 +459,7 @@ struct SourceConfiguration: Decodable, Sendable {
     }
 
     /// CSS1 keeps the actual public page URL; selector order is never a durable identity.
-    func webItem(_ raw: String, kind: SourceItemRef.Kind) throws -> SourceItemRef {
+    public func webItem(_ raw: String, kind: SourceItemRef.Kind) throws -> SourceItemRef {
         guard webSelector != nil, kind == .work || kind == .episode,
               raw.utf8.count <= 8192 else { throw ConfigurationError.invalidURL }
         let url = try requestURL(raw)
@@ -473,7 +477,7 @@ struct SourceConfiguration: Decodable, Sendable {
 
     /// Canonical durable page identities for configured sources only; native adapters
     /// retain their existing selection and URL behavior.
-    func mappingSelection(_ selection: PlayableSelection) throws -> PlayableSelection {
+    public func mappingSelection(_ selection: PlayableSelection) throws -> PlayableSelection {
         guard selection.torrent == nil, selection.item.sourceID == id,
               selection.item.kind == .work, let selectedEpisode = selection.episode,
               selectedEpisode.sourceID == id, selectedEpisode.kind == .episode else {
@@ -531,7 +535,7 @@ struct SourceConfiguration: Decodable, Sendable {
         return durable
     }
 
-    func parts(_ raw: String) throws -> (item: SourceItemRef, id: String, line: Int?, episode: Int?, episodeIdentity: String?) {
+    public func parts(_ raw: String) throws -> (item: SourceItemRef, id: String, line: Int?, episode: Int?, episodeIdentity: String?) {
         let ref = try item(raw)
         guard let c = URLComponents(string: ref.pageURL),
               let match = compiledRoutePattern.value.firstMatch(in: c.path, range: NSRange(c.path.startIndex..., in: c.path)),
@@ -547,7 +551,7 @@ struct SourceConfiguration: Decodable, Sendable {
         } else { identifier = capturedID }
         return (ref, identifier, line, episode, queryID ?? episode.map(String.init))
     }
-    func expanded(_ template: String, values: [String: String]) -> String {
+    public func expanded(_ template: String, values: [String: String]) -> String {
         var safe = CharacterSet.alphanumerics
         safe.insert(charactersIn: "-._~")
         return values.reduce(template) { current, entry in
@@ -555,22 +559,33 @@ struct SourceConfiguration: Decodable, Sendable {
             return current.replacingOccurrences(of: "{\(entry.key)}", with: value)
         }
     }
-    func requestURL(_ raw: String, media: Bool = false) throws -> URL {
+    /// Verified CSS1 site moves. Keep saved page identities intact and permit only
+    /// these exact HTTPS destinations, never arbitrary redirect hosts.
+    public var requestHosts: Set<String> {
+        var result = Set(hosts)
+        guard webSelector != nil else { return result }
+        let moves = ["www.2kdm.com": "www.mutedm.com",
+                     "www.didahd.pro": "www.didahd.xyz",
+                     "www.rebozj.pro": "www.rebozj.cc"]
+        for (old, current) in moves where result.contains(old) { result.insert(current) }
+        return result
+    }
+
+    /// XiFan currently publishes HTTPS media on this one non-default endpoint.
+    /// This does not authorize ports on source pages or on other media hosts.
+    public func allowsMediaPort(_ url: URL) -> Bool {
+        url.port == nil || (webSelector != nil && hosts.contains("dm1.xfdm.pro") &&
+            url.scheme?.lowercased() == "https" && url.host?.lowercased() == "play.xfvod.pro" && url.port == 8088)
+    }
+
+    public func requestURL(_ raw: String, media: Bool = false) throws -> URL {
         guard let c = URLComponents(string: raw), c.scheme?.lowercased() == "https", c.user == nil, c.password == nil,
-              c.port == nil, let host = c.host?.lowercased(),
-              media ? (mediaHosts.contains(host) || anonymousExternalHTTPSMedia) : hosts.contains(host),
-              let url = c.url else { throw ConfigurationError.invalidURL }
+              let host = c.host?.lowercased(),
+              media ? (mediaHosts.contains(host) || anonymousExternalHTTPSMedia) : requestHosts.contains(host),
+              let url = c.url, media ? allowsMediaPort(url) : c.port == nil else { throw ConfigurationError.invalidURL }
         return url
     }
-    // Keep the desktop error contract while allowing the validated parser to be shared with iOS.
-    private static var invalidMediaError: any Error {
-        #if MOBILE_SOURCES
-        return ConfigurationError.invalidMedia
-        #else
-        return VideoGetError.notFountData
-        #endif
-    }
-    func validatedPlayerMediaURL(_ payload: [String: Any], id: String, line: Int, episode: Int) throws -> String {
+    public func validatedPlayerMediaURL(_ payload: [String: Any], id: String, line: Int, episode: Int) throws -> String {
         let s = player
         guard let idKey = s.idKey, let lineKey = s.lineKey, let episodeKey = s.episodeKey,
               let paidKey = s.paidKey, let previewKey = s.previewKey, let encodingKey = s.encodingKey, let urlKey = s.urlKey else {
@@ -583,7 +598,7 @@ struct SourceConfiguration: Decodable, Sendable {
               (payload[paidKey] as? NSNumber)?.doubleValue == 0, (payload[previewKey] as? NSNumber)?.doubleValue == 0,
               let encoding = payload[encodingKey] as? NSNumber, encoding.doubleValue == Double(encoding.intValue),
               let encoded = payload[urlKey] as? String else {
-            throw Self.invalidMediaError
+            throw ConfigurationError.invalidMedia
         }
         let decoded: String?
         switch encoding.intValue {
@@ -594,7 +609,7 @@ struct SourceConfiguration: Decodable, Sendable {
         }
         guard let decoded, let url = URL(string: decoded), url.scheme?.lowercased() == "https", url.user == nil, url.password == nil, url.port == nil,
               let host = url.host?.lowercased(), mediaHosts.contains(host) || anonymousExternalHTTPSMedia,
-              player.allowedExtensions.contains(url.pathExtension.lowercased()) else { throw Self.invalidMediaError }
+              player.allowedExtensions.contains(url.pathExtension.lowercased()) else { throw ConfigurationError.invalidMedia }
         return url.absoluteString
     }
 }

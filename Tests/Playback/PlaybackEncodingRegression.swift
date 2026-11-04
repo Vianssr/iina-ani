@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 @testable import IINA_ANI
 
@@ -25,6 +26,27 @@ import Foundation
 
     static func main() throws {
         let endpoint = HTTPServerEndpoint(host: "127.0.0.1", port: 43210)
+        for site in [SupportSites.didahd, .rebo, .mutedm, .xiFan] {
+            var direct = YouGetJSON(url: "https://media.invalid/stream?signature=synthetic")
+            direct.site = site
+            let context = PlaybackEncodingContext(endpoint: endpoint, enableDanmaku: false, danmakuFile: nil)
+            let encoder = PlaybackEncoder(media: direct, context: context)
+            let address = encoder.iinaURLScheme("url", type: .plugin)!
+            let items = URLComponents(string: address)!.queryItems!
+            try require(items.first(where: { $0.name == "url" })?.value == direct.streams["url"]?.url,
+                        "Resolved public streams must reach IINA directly, not load a plugin placeholder")
+        }
+        var newXiFan = YouGetJSON(url: "https://media.invalid/episode.mp4?sign=fixture")
+        newXiFan.site = .xiFan
+        newXiFan.rawUrl = "https://next.xifanacg.com/anime/44/play/501?source=xfxf1"
+        let newEncoder = PlaybackEncoder(media: newXiFan, context: PlaybackEncodingContext(endpoint: endpoint, enableDanmaku: false, danmakuFile: nil))
+        for type in [IINAUrlType.plugin, .normal] {
+            let items = URLComponents(string: newEncoder.iinaURLScheme("url", type: type)!)!.queryItems!
+            try require(!items.contains(where: { $0.name == "mpv_referrer" }),
+                        "Signed XiFan media must not send plugin metadata as an HTTP Referer")
+            try require(items.first(where: { $0.name == "url" })?.value == newXiFan.streams["url"]?.url,
+                        "The signed URL must remain unchanged")
+        }
         let alternative = "https://media.invalid/watch.mp4?token=a%2Bb&title=%E5%8B%95%E7%95%AB"
         var media = YouGetJSON(url: "https://media.invalid/primary.mp4")
         media.site = .bilibili
@@ -33,6 +55,19 @@ import Foundation
         media.selection = PlayableSelection(item: SourceItemRef(sourceID: "bilibili", pageURL: "https://www.bilibili.com/video/BV1", kind: .video), lineID: "1", qualityID: "url")
         let context = PlaybackEncodingContext(endpoint: endpoint, enableDanmaku: true, danmakuFile: nil)
         let encoder = PlaybackEncoder(media: media, context: context)
+        try require(!encoder.usesNativeIINAProcess, "Danmaku must retain the plugin handoff")
+        var dashMedia = media
+        dashMedia.audio = "https://media.invalid/audio.m4s?signature=audio%2Bfixture"
+        let native = PlaybackEncoder(media: dashMedia, context: PlaybackEncodingContext(endpoint: endpoint, enableDanmaku: false, danmakuFile: nil))
+        try require(native.usesNativeIINAProcess && native.videoUrl("url") == alternative,
+                    "Bilibili without danmaku must launch the selected signed video directly")
+        try require(native.mpvOptions.contains("audio-file=" + dashMedia.audio) &&
+                    native.mpvOptions.contains("referrer=https://www.bilibili.com/") &&
+                    native.mpvOptions.contains("ytdl=no"),
+                    "Native DASH launch must preserve external audio, Referer and resolved-media mode")
+        try require(native.nativeIINAOptions.contains("audio-files=" + dashMedia.audio.replacingOccurrences(of: ":", with: "\\:")) &&
+                    !native.nativeIINAOptions.contains(where: { $0.hasPrefix("audio-file=") }),
+                    "IINA libmpv options must use the external-audio path list, not CLI-only aliases")
         try require(encoder.videoUrl("url") == alternative, "Selected alternative line must survive playback encoding")
         guard let scheme = encoder.iinaDefaultUrl("url"), let components = URLComponents(string: scheme),
               let encodedMedia = components.queryItems?.first(where: { $0.name == "url" })?.value else {

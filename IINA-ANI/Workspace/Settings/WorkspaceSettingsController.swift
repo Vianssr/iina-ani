@@ -1,3 +1,4 @@
+import SourceCore
 import AppKit
 import SwiftUI
 import SDWebImage

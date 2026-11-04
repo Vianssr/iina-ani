@@ -93,7 +93,7 @@ struct MobileSourceURLImportView: View {
                         .disabled(importer.busy || address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("source-import-download")
                     if importer.busy {
-                        ProgressView("Downloading configuration…")
+                        ProgressView().accessibilityLabel(Text("Downloading configuration…"))
                         Button("Cancel request") { importer.cancel() }
                             .frame(minHeight: 44).accessibilityIdentifier("source-import-cancel-request")
                     }

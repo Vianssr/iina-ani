@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 import SwiftSoup
 
@@ -227,7 +228,12 @@ actor ConfiguredSource: SupportSiteProtocol {
                   let parsed = try JSONSerialization.jsonObject(with: payload) as? [String: Any] else { throw VideoGetError.notFountData }
             player = parsed
         }
-        return try configuration.validatedPlayerMediaURL(player, id: id, line: line, episode: episode)
+        do {
+            return try configuration.validatedPlayerMediaURL(player, id: id, line: line, episode: episode)
+        } catch SourceConfiguration.ConfigurationError.invalidMedia {
+            // Keep the native decoder error contract at the desktop boundary.
+            throw VideoGetError.notFountData
+        }
     }
 
     private func request(_ url: URL, searchRequest: Bool = false) async throws -> Data {

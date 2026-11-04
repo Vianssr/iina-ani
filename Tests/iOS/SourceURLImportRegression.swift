@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 private actor ConfigurationDownloadGate {
@@ -250,6 +251,11 @@ private actor ConfigurationDownloadGate {
         }
         precondition(checked.drafts.map(\.configuration.id) == ["healthy-source"])
         precondition(checked.notices.count == 1 && checked.notices[0].contains("Custom source"))
+        for reason in [PlaybackFailure.unsupportedEncryption, .catalogStructure, .httpForbidden, .websiteVerification, .indirectMedia] {
+            let diagnosed = try await MobileSourceURLImport.verified(mixedBatch) { _ in throw reason }
+            precondition(diagnosed.drafts.isEmpty)
+            precondition(diagnosed.notices.count == 2 && diagnosed.notices.allSatisfy { $0.contains(reason.mobileMessage) })
+        }
         let nativeDraft = MobileSourceDraft(configuration: baseline, data: try baseline.encodedData())
         let nativeChecked = try await MobileSourceURLImport.verified(.init(drafts: [nativeDraft])) { _ in
             preconditionFailure("Native configuration should not be sampled")

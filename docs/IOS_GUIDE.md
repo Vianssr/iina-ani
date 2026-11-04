@@ -2,6 +2,8 @@
 
 獨立的 SwiftUI iPhone／iPad App，宣告最低 iOS 17。工程位於 `iOS/ANI.xcodeproj`，scheme 為 `ANI`；透過 Swift Package Manager 固定版本的 MPVKit 嵌入 libmpv／FFmpeg；不需要安裝外部 IINA／mpv App，不連結桌面版 HuyaKit 或 Torrent 核心。首次建置會下載二進位 XCFramework，依賴與授權見 [iOS 播放核心](../iOS/THIRD_PARTY.md)。
 
+兩端透過本機 Swift Package [SourceCore](../SourceCore/README.md) 共用來源身份、配置驗證、能力及公開播放器協議；iOS 工程引用 `../SourceCore`，不再直接編譯 macOS 目錄中的來源核心檔案。平台的完整配置／CSS1 轉換、HTTP 傳輸及播放器適配仍各自管理。
+
 ## 五個入口
 
 - **探索**：顯示 Bangumi 本週日曆（當天優先），搜尋番劇、載入更多結果、查看作品詳情與原始 Bangumi 頁面。載入失敗可重試，下拉可重新整理；刷新完成前保留既有內容，失敗時也不清空。切換搜尋時不會混入上一個請求的結果。
@@ -32,6 +34,7 @@ xcodebuild -project iOS/ANI.xcodeproj -scheme ANI \
 ## 驗證
 
 ```sh
+swift test --package-path SourceCore --scratch-path .build/source-core
 bash Tests/run-ios.sh
 bash Tests/run-ios-catalog.sh
 bash Tests/run-ios-sources.sh
@@ -131,6 +134,8 @@ BT 傳輸由 TorrServer 處理，iPhone／iPad 沒有內建 P2P 引擎。這個�
 
 ### 觀看歷史與續播
 
+啟動或重試讀取歷史時，舊版「· 第03集」這類缺少作品名的記錄，會按既有 Bangumi 作品 ID 從同作品的詳情快取或收藏資料補回名稱；集數、播放位置、完成狀態與觀看時間不變。無法確認作品名時保留原記錄，取得該作品資料後可於下次啟動再修復。
+
 - 探索與播放頁的「繼續觀看」顯示每部作品最近觀看的一集，本地影片獨立列出。點選後重新驗證原來源、配置、集數、線路與品質；媒體載入後，等待 mpv 確認 seek 與實際時間才更新進度。網路或媒體失敗保留舊記錄，來源變更／停用不暗中換站。
 - 歷史位於 `Application Support/ANI/playback-history.json`（version 1），獨立於作品庫及快取。只有實際載入並回報有效時間才建立記錄；定期保存，暫停、背景、關閉及切集提交最後有效值。拖曳時間軸的預測數字不算觀看；舊播放器或刪除前的延遲事件不能覆寫／重建記錄。
 - 本地影片保存 document-provider 書籤、檔案大小及串流計算的 SHA-256。重新開啟時核對內容；權限失效或原檔找不到時按「重新選擇影片」。移動或改名後內容一致才接受，同名不同內容會拒絕；取消選檔保留歷史。大檔核對期間顯示載入指示，不把整部影片讀入記憶體。
@@ -179,7 +184,12 @@ API 與解析參考：[Bangumi API](https://bangumi.github.io/api/)、[SwiftSoup
 
 - 在「匯入片源配置」貼上任意 HTTPS 訂閱網址，App 依下載內容辨識 CSS1，不要求固定網域或預設地址。支援的條目可直接新增為來源，空庫也能匯入，無需先安裝同名內建配置。若同時包含根層級 `mediaSources` 與舊格式 `exportedMediaSourceDataList.mediaSources`，以根層級清單為準；只有缺少根層級清單時才讀取舊格式，不混合兩份規則。
 - 相容範圍為 `web-selector` 來源：支援 `a`、`indexed` 與可辨識的簡單 JSONPath 搜尋，以及分組或無分組的集數目錄。作品與集數以選定的頁面 URL 識別，不從網站名稱推測原生路由，也不將顯示集號當成播放身分。
-- 播放解析限靜態頁面中的直接影片連結、支援的 MacCMS `player_*` payload（明文、URL 編碼或 Base64），以及可直接取得媒體 URL 的 iframe 網址參數。需要執行 JavaScript、其他加密、驗證／登入或額外服務端邏輯的網站，不會因成功匯入而取得這些能力。
+- 播放解析支援靜態頁面的直接影片連結、MacCMS `player_*` payload（明文、URL 編碼或 Base64），以及 iframe 參數中的直接媒體 URL；另支援森之屋及嘀哩嘀哩由所選頁面明確指定的同站公開播放 API。目錄文字位於連結內時按 DOM 關係配對，排除沒有集數標籤的分頁連結。
+- 已知 CSS1 舊站網域可跟隨限定遷移：`www.2kdm.com` → `www.mutedm.com`、`www.didahd.pro` → `www.didahd.xyz`、`www.rebozj.pro` → `www.rebozj.cc`。保存的作品／集數身分不變。`encrypt=3` 按站點協議處理：2k 的 m2 播放器、嘀嗒／熱播的 artplayer 公開 API 與 AES 解密；不是通用的 encrypt=3 解密器，也不執行下載的 JavaScript。
+- 稀飯僅允許 `https://play.xfvod.pro:8088` 的媒體地址，並按所選線路讀取官方二級播放器；上游返回失敗時顯示「網站播放器服務無法解析此串流」。帶 `.image` 副檔名的已知 byteimg 媒體及指定 cmecloud 主機的無副檔名媒體，必須通過 64-byte `ftyp` MP4 檢查才交給播放器。匯入相容性抽樣最多檢查前三條線路，實際播放仍使用使用者選定線路。
+- CSS1 的 `defaultResolution` 可保存為 v3 `webSelector.preferredVideoHeight`（1–4320 的整數）。單一 HTML5 video 提供帶 `size` 的多畫質 source 時，僅選指定畫質；缺少該畫質時停止，不選其他解析度。舊配置沒有此欄位仍可載入；要使用訂閱的畫質設定需重新預覽／匯入，配置變更後重新確認映射。
+- 來源錯誤分別顯示 HTTP 403、網站驗證、轉址、搜尋／目錄規則不符、播放器資料錯誤、未支援加密、間接播放器、網址／連接埠限制、畫質缺失或多地址歧義。匯入檢查保留解析失敗原因；不能把「已取得媒體 URL」當成實播成功。逐站樣本與限制見[來源排查記錄](development/source-diagnostics.md)。
+- 需要執行 JavaScript、其他加密、驗證／登入或尚未接入的額外服務端邏輯，仍不會因成功匯入而取得這些能力。
 - 預覽逐條列出可匯入來源與不支援原因。未支援的 factory、非 HTTPS 入口或無法轉換的規則會保留在結果說明中，不會當作已匯入來源。CSS1 提供的 Cookie、授權內容與自訂 request header 不會匯入或執行。
 - 全部條目不支援時仍顯示略過原因，不能確認保存。確認後只保存已支援的來源；取消或下載失敗不改本機資料。來源需手動啟用，有效內容 fingerprint 改變時，既有精確映射需重新確認。匯入成功表示格式可供相容解析器使用，不代表網站可連線、每條線路能解析或影片已實測可播。
 - 既有使用者匯入檔案保留；舊版已保存的搜尋 overlay 保留其資料與驗證規則；它仍只修改對應來源的搜尋部分，不等同新增 CSS1 播放能力。

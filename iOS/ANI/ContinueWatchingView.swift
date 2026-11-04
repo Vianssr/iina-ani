@@ -1,3 +1,4 @@
+import SourceCore
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -88,7 +89,7 @@ private struct ResumeHistoryView: View {
                             .foregroundStyle(.secondary)
                     }
                     if busy || flow?.busy == true {
-                        ProgressView("Preparing resume…")
+                        ProgressView().accessibilityLabel(Text("Preparing resume…"))
                         Button("Cancel request") { cancel() }.frame(minHeight: 48)
                     }
                     if let message = failure ?? flow?.failure?.mobileMessage {

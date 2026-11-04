@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 actor RetryTransport {
@@ -52,6 +53,7 @@ actor MappingTransport {
         try await DefaultSubscriptionRegression.run(root: root)
         try MobileCSS1Regression.run(root: root)
         try await CSS1ClientRegression.run(root: root)
+        try await CSS1ProtocolRegression.run()
         try await CSS1IdentityRegression.run(root: root)
         if let option = CommandLine.arguments.firstIndex(of: "--css1-url"), CommandLine.arguments.indices.contains(option + 1) {
             let importer = MobileSourceURLImport()
@@ -336,7 +338,9 @@ extension SourceRegression {
             precondition(!rejected.canRetry && rejected.resolved == nil && rejected.catalog != nil)
             precondition(library.mapping(for: requestedWork, episode: requestedEpisode) == nil)
         }
-        for status in [401, 403] { precondition(MobileSourceClient.responseFailure(statusCode: status) == .authenticationRequired) }
+        precondition(MobileSourceClient.responseFailure(statusCode: 401) == .authenticationRequired)
+        precondition(MobileSourceClient.responseFailure(statusCode: 403) == .httpForbidden)
+        precondition(MobileSourceClient.responseFailure(statusCode: 302) == .sourceRedirect)
         for status in [408, 429, 500, 503] { precondition(MobileSourceClient.responseFailure(statusCode: status) == .network) }
         precondition(MobileSourceClient.responseFailure(statusCode: 415) == .unsupportedResponse)
 
@@ -719,11 +723,12 @@ extension SourceRegression {
             guard enabled else { throw PlaybackFailure.sourceDisabled }
             return revision
         })
-        let result = try await continuation.resolve(after: context, next: true)!
+        let result = try await continuation.resolve(after: context, next: true, currentTitle: "Old name · Episode 2")!
         precondition(result.context.work == context.work && result.context.episode != context.episode)
         precondition(result.context.episode.bangumiID == nil) // A source ordinal is not the next Bangumi episode ID.
         precondition(result.context.selection.episode == third.item && result.context.selection.lineID == "1")
         precondition(result.url.lastPathComponent == "third.mp4")
+        precondition(result.title == "Fixture · Episode 3") // Fresh catalogue title wins.
 
         let missing = MobileSourceCatalog(work: catalog.work, lines: [
             MobileSourceLine(id: 1, title: "line", episodes: [third])])
@@ -751,7 +756,7 @@ extension SourceRegression {
 
         for endpoint in [MappingTransport.Endpoint.catalog, .player] {
             await transport.hold(endpoint)
-            let pending = Task { try await continuation.resolve(after: context, next: true) }
+            let pending = Task { try await continuation.resolve(after: context, next: true, currentTitle: "Old name · Episode 2") }
             while !(await transport.waiting) { await Task.yield() }
             enabled = false
             await transport.release()
@@ -760,7 +765,7 @@ extension SourceRegression {
             enabled = true
         }
         await transport.hold(.player)
-        let changed = Task { try await continuation.resolve(after: context, next: true) }
+        let changed = Task { try await continuation.resolve(after: context, next: true, currentTitle: "Old name · Episode 2") }
         while !(await transport.waiting) { await Task.yield() }
         revision = "changed"
         await transport.release()
@@ -769,7 +774,7 @@ extension SourceRegression {
         revision = config.configurationRevision
 
         await transport.hold(.player)
-        let cancelled = Task { try await continuation.resolve(after: context, next: true) }
+        let cancelled = Task { try await continuation.resolve(after: context, next: true, currentTitle: "Old name · Episode 2") }
         while !(await transport.waiting) { await Task.yield() }
         cancelled.cancel()
         await transport.release()

@@ -2,6 +2,36 @@ import XCTest
 import UIKit
 
 final class ANIUITests: XCTestCase {
+    /// Exercises the production error presentation with deterministic transport failures.
+    @MainActor func testSpecificSourceDiagnostics() throws {
+        for (reason, text) in [("unsupportedEncryption", "unsupported URL encryption"), ("httpForbidden", "HTTP 403"), ("playerServiceUnavailable", "website player service could not resolve")] {
+            let app = XCUIApplication()
+            app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US", "-source-ui-fixture",
+                "-source-list-ui-fixture", "-source-ui-diagnostic", reason, "-mobile.sources.fqdm.enabled", "YES"]
+            app.launch()
+            let work = app.buttons["Source Flow Fixture"].firstMatch
+            XCTAssertTrue(work.waitForExistence(timeout: 15)); work.tap()
+            let episode = app.buttons["catalog-episode-4202"]
+            for _ in 0..<6 where !episode.isHittable { app.swipeUp() }
+            XCTAssertTrue(episode.waitForExistence(timeout: 5)); episode.tap()
+            if app.buttons["source-reconfirm"].exists { app.buttons["source-reconfirm"].tap() }
+            app.buttons["source-picker"].tap()
+            app.buttons["Tomato Anime"].tap()
+            app.buttons["Find sources"].tap()
+            let candidate = app.buttons["source-work"].firstMatch
+            XCTAssertTrue(candidate.waitForExistence(timeout: 5)); candidate.tap()
+            let sourceEpisode = app.buttons["source-episode-1-2"]
+            XCTAssertTrue(sourceEpisode.waitForExistence(timeout: 5)); sourceEpisode.tap()
+            let error = app.staticTexts["source-error"]
+            for _ in 0..<4 where !error.isHittable { app.swipeUp() }
+            XCTAssertTrue(error.waitForExistence(timeout: 5))
+            XCTAssertTrue(error.label.contains(text), error.label)
+            XCTAssertFalse(app.buttons["playerTogglePause"].exists)
+            attachPlayerScreenshot("source-diagnostic-" + reason)
+            app.terminate()
+        }
+    }
+
     @MainActor func testConfigurationOnlyURLImport() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US",

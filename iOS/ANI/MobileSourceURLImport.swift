@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 import CoreFoundation
 import Observation
@@ -170,7 +171,7 @@ final class MobileSourceURLImport {
                         switch reason {
                         case .authenticationRequired: message = String(localized: "Site requires authentication or blocked the request; skipped this import.")
                         case .network: message = String(localized: "Source check timed out or failed to connect; skipped this import. Retry later.")
-                        default: message = String(localized: "No sample media URL resolved; skipped this import. Retry later.")
+                        default: message = reason.mobileMessage
                         }
                         return (index, message)
                     }
@@ -198,11 +199,12 @@ final class MobileSourceURLImport {
                     works = try await client.search(query).works
                     if !works.isEmpty { break }
                 }
+                var lastFailure: Error?
                 for work in works.prefix(2) {
                     try Task.checkCancellation()
                     do {
                         let catalog = try await client.catalog(work)
-                        for line in catalog.lines.prefix(2) {
+                        for line in catalog.lines.prefix(3) {
                             guard let episode = line.episodes.first else { continue }
                             do {
                                 _ = try await client.resolve(episode, in: catalog)
@@ -210,14 +212,19 @@ final class MobileSourceURLImport {
                                 return true
                             } catch {
                                 try Task.checkCancellation()
-                                if MobileSourceClient.failure(for: error) == .authenticationRequired { throw error }
+                                let failure = MobileSourceClient.failure(for: error)
+                                if [.authenticationRequired, .httpForbidden, .websiteVerification].contains(failure) { throw error }
+                                lastFailure = error
                             }
                         }
                     } catch {
                         try Task.checkCancellation()
-                        if MobileSourceClient.failure(for: error) == .authenticationRequired { throw error }
+                        let failure = MobileSourceClient.failure(for: error)
+                        if [.authenticationRequired, .httpForbidden, .websiteVerification].contains(failure) { throw error }
+                        lastFailure = error
                     }
                 }
+                if let lastFailure { throw lastFailure }
                 return false
             }
             group.addTask {

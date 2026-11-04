@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 @main
@@ -236,6 +237,8 @@ struct MobileRegression {
         library.cacheEpisodes(episodes, for: anime.id, fetchedAt: secondDate)
         let restored = MobileLibrary(file: legacy)
         precondition(restored.cachedDetail(for: anime.id)?.anime == anime)
+        precondition(restored.confirmedHistoryWorkTitle(for: anime.id) == anime.title)
+        precondition(restored.confirmedHistoryWorkTitle(for: 999999) == nil)
         precondition(restored.cachedDetail(for: anime.id)?.fetchedAt == firstDate)
         precondition(restored.cachedEpisodes(for: anime.id)?.episodes == episodes)
         precondition(restored.cachedEpisodes(for: anime.id)?.fetchedAt == secondDate)
@@ -250,6 +253,7 @@ struct MobileRegression {
         try broken.write(to: detailFile)
         let damaged = MobileLibrary(file: legacy)
         precondition(damaged.cachedDetail(for: anime.id) == nil && damaged.cacheError)
+        precondition(damaged.confirmedHistoryWorkTitle(for: anime.id) == anime.title) // Exact-ID favorite fallback.
         precondition(damaged.cachedEpisodes(for: anime.id)?.episodes == episodes)
         precondition(damaged.favorites == [anime] && damaged.status(for: anime.id) == .doing)
         precondition(!damaged.storageError && damaged.isReadable && tryRead(detailFile) == broken)
@@ -271,6 +275,8 @@ struct MobileRegression {
         let wrongDetailBytes = try JSONSerialization.data(withJSONObject: wrongDetail)
         try wrongDetailBytes.write(to: detailFile)
         precondition(damaged.cachedDetail(for: anime.id) == nil && tryRead(detailFile) == wrongDetailBytes)
+        precondition(damaged.confirmedHistoryWorkTitle(for: anime.id) == anime.title)
+        precondition(damaged.confirmedHistoryWorkTitle(for: sparse.id) == nil)
         try broken.write(to: episodeFile)
         let independentlyDamaged = MobileLibrary(file: legacy)
         precondition(independentlyDamaged.cachedEpisodes(for: anime.id) == nil)

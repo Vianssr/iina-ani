@@ -1,3 +1,4 @@
+import SourceCore
 import Cocoa
 import Darwin
 @testable import IINA_ANI

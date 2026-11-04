@@ -6,6 +6,7 @@
 //  Copyright © 2018 xjbeta. All rights reserved.
 //
 
+import SourceCore
 import Foundation
 import Marshal
 import Cocoa
@@ -479,6 +480,13 @@ final class Processes: NSObject, Sendable {
                 throw ProcessesError.openFailed(String(localized: "Missing local playlist"))
             }
             try await openWithProcess(playlist.path, args: encoder.mpvOptions + ["playlist-start=\(index)"],
+                                      uuid: selectedJSON.uuid, autoplay: autoplay)
+        case .iina where encoder.usesNativeIINAProcess:
+            // Pass the issued URL as a process argument: IINA's URL-scheme path
+            // can transform the percent-escaped signature before media loading.
+            // For Bilibili, pass the selected video and audio tracks with their real
+            // Referer instead of relying on the plugin's placeholder load hook.
+            try await openWithProcess(encoder.videoUrl(key), args: encoder.nativeIINAOptions,
                                       uuid: selectedJSON.uuid, autoplay: autoplay)
         case .iina where type == .plugin:
 			// IINA Danmaku Plguin

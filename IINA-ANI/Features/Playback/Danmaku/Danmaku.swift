@@ -6,6 +6,7 @@
 //  Copyright © 2018 xjbeta. All rights reserved.
 //
 
+import SourceCore
 import Cocoa
 import Alamofire
 import Marshal

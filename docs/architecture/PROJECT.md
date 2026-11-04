@@ -4,7 +4,7 @@ IINA-ANI 是以 Swift、AppKit、Core Data 與 WebKit 組成的 macOS 影音工�
 
 ## 工程與分層
 
-主工程為 `IINA-ANI.xcodeproj`，target 與 scheme 為 `IINA-ANI`，Swift module 為 `IINA_ANI`。`App`、`Workspace`、`Features`、`Infrastructure` 與 `Shared` 是同一 module 內的功能分層；`HuyaKit` 為獨立 Swift Package，`Native` 提供原生核心與輔助程式。
+主工程為 `IINA-ANI.xcodeproj`，target 與 scheme 為 `IINA-ANI`，Swift module 為 `IINA_ANI`。`App`、`Workspace`、`Features`、`Infrastructure` 與 `Shared` 是同一 module 內的功能分層；`SourceCore` 是 macOS／iOS 共同依賴的本機 Swift Package，`HuyaKit` 提供虎牙串流代理套件，`Native` 提供原生核心與輔助程式。
 
 ```mermaid
 flowchart TD
@@ -12,6 +12,8 @@ flowchart TD
     App --> Features[Features：業務服務]
     Workspace --> Features
     Features --> Infrastructure[Infrastructure：儲存、HTTP 與快取]
+    Features --> SourceCore[SourceCore：來源契約、配置驗證與公開播放器協議]
+    iOS[iOS：ANI] --> SourceCore
     Features --> HuyaKit[HuyaKit：虎牙串流代理]
     Features --> Torrent[Native：Torrent 核心]
     Workspace --> LayoutScript[Native：LayoutScript helper]
@@ -32,7 +34,8 @@ flowchart TD
 | `IINA-ANI/Features/Accounts/` | 站點帳號、OAuth、Cookies、Keychain 與登入介面 |
 | `IINA-ANI/Features/Bangumi/` | Bangumi 模型、查詢與作品同步 |
 | `IINA-ANI/Features/Discovery/` | 搜尋、推薦聚合、Bilibili 動態、YouTube 瀏覽與 trace.moe 識圖 |
-| `IINA-ANI/Features/Sources/` | 來源登記、能力、配置、訂閱、選擇與統一媒體結果；`Decoders/` 存放解析器 |
+| `IINA-ANI/Features/Sources/` | 平台來源登記、配置／訂閱管理與統一媒體結果；`Decoders/` 存放解析器 |
+| `SourceCore/` | macOS／iOS 共用的來源身份、能力、配置驗證、訂閱規則與固定公開播放器協議 |
 | `IINA-ANI/Features/Playback/` | 播放協調、播放器參數、進度與歷史；`Danmaku/`、`JSPlayer/`、`OpenFiles/` 分別處理彈幕、網頁播放器及本機影片入口 |
 | `IINA-ANI/Features/Downloads/` | 下載任務、來源解析、直連與 HLS 後端 |
 | `IINA-ANI/Features/Torrent/` | 原生 session、RSS 搜尋、metadata、下載後端、HTTP Range 與串流播放 |
@@ -104,7 +107,7 @@ Bilibili 動態及 YouTube 瀏覽使用各自的服務。`TraceMoeSearchService`
 
 內建 JSPlayer 透過 WebKit 載入網頁播放器。播放進度回傳至 `PlaybackHistoryStore`；續看由 `AppServices.resumePlayback` 依保存的選擇重新取得媒體並定位播放時間。
 
-M0 的純值契約由兩個 target 共用：`SourceSelection.swift` 的 `PlaybackWorkIdentity`／`PlaybackEpisodeIdentity`／`PlaybackContext` 保留領域與來源身份；`SourceConfiguration` 計算內容 fingerprint，並以宣告、解析器與平台能力的交集產生有效能力。`PlaybackContract.swift` 定義 session／load、分類錯誤與事件狀態；桌面 `PlayerProgressSession` 和 iOS `MPVEngine` 只把實際後端事實轉入共用狀態，解析 URL 或 seek UI 預測不建立觀看進度。M2 的 `ConfirmedSourceMapping` 保存完整上下文與確認時間，配置型頁面只保留宣告的身份 query，不保存媒體 URL 或帳號憑證。兩端都在成功解析後重新核對來源／配置／集數，先提交映射再交接播放；重用時刷新原目錄並重新解析原選擇，不以首集、其他線路或其他來源補缺。M3 在 iOS `SourcePicker → MobileSourceFlow → PlaybackSession` 的完整上下文上接入 `MobilePlaybackHistory`；續播重新解析原選擇，worker 在實際載入後 seek，經命令成功、seek／restart 事件與實際時間確認後才解除歷史寫入保護。桌面歷史沿用原主鍵，增加配置上下文及本地書籤；兩端以 recorder 所有權與刪除版本阻擋舊事件。
+M0 的純值契約由兩個 target 共用：`SourceSelection.swift` 的 `PlaybackWorkIdentity`／`PlaybackEpisodeIdentity`／`PlaybackContext` 保留領域與來源身份；`SourceConfiguration` 計算內容 fingerprint，並以宣告、解析器與平台能力的交集產生有效能力。`PlaybackContract.swift` 定義 session／load 與事件狀態，分類錯誤由 `SourceCore.PlaybackFailure` 提供；桌面 `PlayerProgressSession` 和 iOS `MPVEngine` 只把實際後端事實轉入共用狀態，解析 URL 或 seek UI 預測不建立觀看進度。M2 的 `ConfirmedSourceMapping` 保存完整上下文與確認時間，配置型頁面只保留宣告的身份 query，不保存媒體 URL 或帳號憑證。兩端都在成功解析後重新核對來源／配置／集數，先提交映射再交接播放；重用時刷新原目錄並重新解析原選擇，不以首集、其他線路或其他來源補缺。M3 在 iOS `SourcePicker → MobileSourceFlow → PlaybackSession` 的完整上下文上接入 `MobilePlaybackHistory`；續播重新解析原選擇，worker 在實際載入後 seek，經命令成功、seek／restart 事件與實際時間確認後才解除歷史寫入保護。桌面歷史沿用原主鍵，增加配置上下文及本地書籤；兩端以 recorder 所有權與刪除版本阻擋舊事件。
 
 M4 的 `MobileSourceContinuation` 將原來源 client 與持久配置權威帶入 iOS 播放工作階段；手動／自然 EOF 下一集都重新取得同分組目錄及原線路／品質，不沿用舊媒體 URL，不自動寫入未確認的 Bangumi 集數映射。session／load／請求修訂及前景狀態共同限制一次性交接。桌面 `Processes` 依播放器 session 管理接續，`PlayerProgressSession` 保留 EOF socket，關閉／換片／重播可以撤銷尚未交接的結果；重播建立新 recorder lease，完季清理另驗證原 owner。iOS 字幕／彈幕附件按當次 `PlaybackEpisode.id` 保存，切集先清空再恢復目前附件，字幕僅在後端匯入成功後登記；檔案授權持有到核心銷毀。彈幕偏好獨立存於 UserDefaults，時間軸只使用實際媒體時間。
 
@@ -158,7 +161,7 @@ Core Data 模型位於 `Core Data/DataModel.xcdatamodeld`，目前模型為 `Lib
 
 ## 套件與資源組成
 
-Swift 依賴由 Xcode 的 Swift Package Manager 整合，`HuyaKit/Package.swift` 定義虎牙 library 與 `huyaproxy` executable。`Native` 的 C++ 核心透過 `TorrentBridge.h` 與 Swift 交換 session、metadata、檔案及傳輸狀態。
+Swift 依賴由 Xcode 的 Swift Package Manager 整合。根工程以 `SourceCore`、iOS 工程以 `../SourceCore` 引用同一個本機套件，兩端使用 `import SourceCore`；來源契約與配置驗證不再透過重複 target membership 或 `MOBILE_SOURCES` 分支編譯。`PublicPlayerProtocol` 的 HTTP transport 留在 App 端，桌面解碼錯誤亦在適配層轉換；JSON 欄位、配置 fingerprint 與持久化身份維持原格式。套件邊界及獨立測試見 [SourceCore](../../SourceCore/README.md)。`HuyaKit/Package.swift` 定義虎牙 library 與 `huyaproxy` executable。`Native` 的 C++ 核心透過 `TorrentBridge.h` 與 Swift 交換 session、metadata、檔案及傳輸狀態。
 
 `WebFiles/package.json` 管理網頁播放器與彈幕所需的 JavaScript 資源；`InstallDeps.sh` 準備這些資源與外部 IINA 彈幕外掛。圖像位於 `Assets/`，來源規則位於 `Sources/`，本地化字串由字串目錄及各網頁／Storyboard 資源提供。
 

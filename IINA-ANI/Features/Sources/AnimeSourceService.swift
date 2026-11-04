@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 struct AnimeSourceCandidate: Sendable, Identifiable {
@@ -510,6 +511,19 @@ final class AnimeSourceService {
         case .authenticationRequired: return String(localized: "來源要求登入或授權；請在原站確認可用性後重試，不會保存失敗映射。")
         case .network: return String(localized: "來源網路請求失敗；請檢查連線後重試，原映射保留。")
         case .unsupportedResponse: return String(localized: "來源回應無法安全解析；請檢查來源配置後重新尋源。")
+        case .httpForbidden: return String(localized: "The source refused the request (HTTP 403). This does not identify a video format or prove that sign-in will help.")
+        case .invalidPlayerData: return String(localized: "The player data is malformed, incomplete, or could not be decoded.")
+        case .unsupportedEncryption: return String(localized: "The player declares an unsupported URL encryption method for this site or line.")
+        case .indirectMedia: return String(localized: "The page provides a player identifier, embedded player, or URL without a supported media extension. Further resolution is required.")
+        case .unsupportedMediaFormat: return String(localized: "The media URL extension is not supported by this source configuration.")
+        case .unsafeMediaAddress: return String(localized: "The media address violates the source URL rules (HTTPS, host, credentials, port or fragment).")
+        case .ambiguousMedia: return String(localized: "The page contains multiple different media addresses; the selected episode cannot be resolved unambiguously.")
+        case .invalidResponseBody: return String(localized: "The source returned an empty response or exceeded the response size limit.")
+        case .appOnlyPlayback: return String(localized: "This line is restricted to the source's own app. Select the website line.")
+        case .mediaSignatureMissing: return String(localized: "The source returned a legacy URL without an expiry signature (HTTP 401). Open the new XiFan site and reselect the work and episode; old IDs cannot be reused.")
+        case .mediaNotFound: return String(localized: "The media file is unavailable on the source server (HTTP 404 or 410). Select another line.")
+        case .playerServiceUnavailable: return String(localized: "The website player service could not resolve this stream. Retry later or select another line.")
+        case .mediaPortUnsupported: return String(localized: "The media URL specifies a port that this source configuration does not support.")
         default: return String(localized: "此來源沒有可用的公開播放網址。")
         }
     }
@@ -847,4 +861,9 @@ final class AnimeSourceService {
         // Named non-main episodes require exact labels; neither sort nor position alone is evidence.
         return episode.kind != .main && !normalize(label).isEmpty && normalize(label) == normalize(episode.label)
     }
+}
+
+
+extension PlaybackFailure: @retroactive LocalizedError {
+    public var errorDescription: String? { AnimeSourceService.diagnostic(self) }
 }

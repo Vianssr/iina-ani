@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 /// Resolves only the saved episode/quality/line, never a replacement or default account.

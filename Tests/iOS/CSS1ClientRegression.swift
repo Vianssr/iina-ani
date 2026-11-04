@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 private actor CSS1ResponseGate {
@@ -46,6 +47,26 @@ private actor CSS1ResponseGate {
         precondition(episode.identity == "https://fixture.example/play?id=101")
         let media = "https://media.example/video.m3u8?signature=fixture"
         let encoded = media.addingPercentEncoding(withAllowedCharacters: .alphanumerics)!
+        // CSS1 has no work-title selector: advancing from a full playback title must
+        // retain the work name, including separators, across subsequent resolutions.
+        let continuationPayload = try player(url: media)
+        let continuationClient = MobileSourceClient(configuration: configuration) { url in
+            url.path == "/show" ? catalogHTML : continuationPayload
+        }
+        let continuation = MobileSourceContinuation(client: continuationClient,
+            authority: { configuration.configurationRevision })
+        let context = try continuationClient.playbackContext(episode, in: catalog,
+            requestedWork: .bangumi(400602), requestedEpisode: nil)
+        let advanced = try await continuation.resolve(after: context, next: true,
+            currentTitle: "葬送 · 芙莉蓮 · Episode one")!
+        precondition(advanced.title == "葬送 · 芙莉蓮 · Episode two")
+        precondition(advanced.context.work == context.work)
+        let reloaded = try await continuation.resolve(after: advanced.context, next: false,
+            currentTitle: advanced.title)!
+        precondition(reloaded.title == advanced.title)
+        let unnamed = try await continuation.resolve(after: context, next: true,
+            currentTitle: " · Episode one")!
+        precondition(unnamed.title == "Episode two") // No dangling separator.
         for encoding in 0...2 {
             let value = encoding == 0 ? media : encoding == 1 ? encoded : Data(encoded.utf8).base64EncodedString()
             let payload = try player(url: value, encoding: encoding)
@@ -74,6 +95,49 @@ private actor CSS1ResponseGate {
                         Data("<iframe src='https://parser.example/execute'></iframe>".utf8)] {
             let client = MobileCSS1Client(configuration: configuration, fetch: { _ in invalid })
             await SourceRegression.rejects { _ = try await client.resolve(episode: episode, catalog: catalog) }
+        }
+        // Diagnostics preserve why resolution failed; no raw URL enters the message.
+        let failurePages: [(Data, PlaybackFailure)] = [
+            (try player(url: media, encoding: 3), .unsupportedEncryption),
+            (try player(url: "%%%", encoding: 2), .invalidPlayerData),
+            (try player(url: "opaque-player-id"), .indirectMedia),
+            (Data("<video src='https://media.example/video.avi'></video>".utf8), .unsupportedMediaFormat),
+            (Data("<video src='https://media.example:8088/video.mp4'></video>".utf8), .mediaPortUnsupported),
+            (Data("<video src='http://media.example/video.mp4'></video>".utf8), .unsafeMediaAddress),
+            (Data("<video src='https://media.example/a.mp4'></video><video src='https://media.example/b.mp4'></video>".utf8), .ambiguousMedia),
+            (Data("<iframe src='/dynamic-player'></iframe>".utf8), .indirectMedia),
+            (Data("<div>No media here</div>".utf8), .missingMedia),
+            (Data("<form action='/ajax/verify_check.html'><input name='verify'></form>".utf8), .websiteVerification),
+            (Data(), .invalidResponseBody)
+        ]
+        for (html, expected) in failurePages {
+            do {
+                _ = try await MobileSourceClient(configuration: configuration, fetch: { _ in html }).resolve(episode, in: catalog)
+                fatalError("Invalid page resolved")
+            } catch { precondition(MobileSourceClient.failure(for: error) == expected) }
+            precondition(!expected.mobileMessage.contains("media.example"))
+        }
+        do {
+            _ = try await MobileCSS1Client(configuration: configuration, fetch: { _ in
+                Data("<form action='/ajax/verify_check.html'></form>".utf8)
+            }).search(keyword: "sample")
+            fatalError("Verification page became empty search results")
+        } catch { precondition(MobileSourceClient.failure(for: error) == .websiteVerification) }
+        for height in [720, 1080, 2160] {
+            var object = try JSONSerialization.jsonObject(with: configuration.encodedData()) as! [String: Any]
+            var selector = object["webSelector"] as! [String: Any]
+            selector["preferredVideoHeight"] = height
+            object["webSelector"] = selector
+            let qualityConfig = try MobileSourceLibrary.validate(JSONSerialization.data(withJSONObject: object))
+            let client = MobileCSS1Client(configuration: qualityConfig, fetch: { _ in
+                Data("<video><source size='480' src='https://media.example/480.mp4'><source size='1080' src='https://media.example/1080.mp4'><source size='720' src='https://media.example/720.mp4'></video>".utf8)
+            })
+            do {
+                let result = try await client.resolve(episode: episode, catalog: catalog)
+                precondition(height != 2160 && result.lastPathComponent == "\(height).mp4")
+            } catch {
+                precondition(height == 2160 && MobileSourceClient.failure(for: error) == .missingMediaQuality)
+            }
         }
         let neverFetch = MobileCSS1Client(configuration: configuration, fetch: { _ in preconditionFailure("Invalid identity reached transport") })
         let changed = MobileSourceEpisode(item: episode.item, title: "Changed", line: episode.line, number: episode.number, identity: episode.identity)
@@ -156,6 +220,37 @@ private actor CSS1ResponseGate {
             }
         }
 
+        // Nested labels pair with their containing anchor, excluding pagination.
+        let nested = try source(channel: ["channelFormatId": "no-channel", "selectorChannelFormatNoChannel": [
+            "selectEpisodes": "a span", "selectEpisodeLinks": "a"]])
+        let nestedWork = MobileSourceWork(item: try nested.webItem(work.item.pageURL, kind: .work), title: "Nested")
+        let nestedCatalog = try await MobileCSS1Client(configuration: nested, fetch: { _ in
+            Data("<a href='/play?id=2'><em><span>Episode 2</span></em></a><a href='?page=2'>Next page</a><a href='/play?id=1'><span>Episode 1</span></a>".utf8)
+        }).catalog(work: nestedWork)
+        precondition(nestedCatalog.lines[0].episodes.map(\.item.pageURL) == ["https://fixture.example/play?id=2", "https://fixture.example/play?id=1"])
+        // The exact page button determines Dilidili's API id, and the response must echo it.
+        let dilidili = try MobileSourceLibrary.validate(Data(String(decoding: try configuration.encodedData(), as: UTF8.self)
+            .replacingOccurrences(of: "fixture.example", with: "dilidili.io").utf8))
+        let diliWork = MobileSourceWork(item: try dilidili.webItem("https://dilidili.io/anime/sample", kind: .work), title: "Sample")
+        let diliEpisode = MobileSourceEpisode(item: try dilidili.webItem("https://dilidili.io/watch/sample-ep2", kind: .episode), title: "2", line: 1, number: 2)
+        let diliCatalog = MobileSourceCatalog(work: diliWork, lines: [.init(id: 1, title: "Default", episodes: [diliEpisode])])
+        for matches in [true, false] {
+            let client = MobileCSS1Client(configuration: dilidili, fetch: { url in
+                if url.path == "/watch/sample-ep2" {
+                    return Data("<iframe id='player_iframe'></iframe><button class='play-btn' play_id='42'></button><button class='play-btn' play_id='99'></button>".utf8)
+                }
+                precondition(url.absoluteString == "https://dilidili.io/_get_play?id=42")
+                return try JSONSerialization.data(withJSONObject: ["id": matches ? "_get_play_42" : "_get_play_99",
+                    "result": ["play_cfg": "m3u8", "play_data": media]])
+            })
+            if matches {
+                let resolved = try await client.resolve(episode: diliEpisode, catalog: diliCatalog)
+                precondition(resolved.absoluteString == media)
+            } else {
+                do { _ = try await client.resolve(episode: diliEpisode, catalog: diliCatalog); fatalError("Wrong API identity accepted") }
+                catch { precondition(MobileSourceClient.failure(for: error) == .invalidPlayerData) }
+            }
+        }
         let gate = CSS1ResponseGate(data: searchHTML)
         let cancellable = MobileCSS1Client(configuration: configuration, fetch: { _ in await gate.fetch() })
         let request = Task { try await cancellable.search(keyword: "test") }

@@ -234,6 +234,25 @@
         "titleSelector": "self",
         "hrefAttribute": "href"
       }
+    },
+    "mutedm": {
+      "hosts": [
+        "www.mutedm.com",
+        "www.2kdm.com"
+      ],
+      "resultURLTemplate": "https://www.mutedm.com/voddetail/{id}.html",
+      "search": {
+        "url": "https://www.mutedm.com/index.php/ajax/suggest?mid=1&wd={query}",
+        "format": "json",
+        "queryParameter": "wd",
+        "pageParameter": "page",
+        "rowsPerPage": 100,
+        "jsonResultsPath": "list",
+        "jsonTitlePath": "name",
+        "jsonIdentifierPath": "id",
+        "jsonCoverPath": "pic",
+        "jsonTotalPath": "total"
+      }
     }
   }
 }

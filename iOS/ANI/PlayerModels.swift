@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 import Observation
 
@@ -202,11 +203,12 @@ final class PlaybackSession: Identifiable {
         let expected = advanceRevision
         let load = engine.playbackState.identity
         let episodeID = current.id
+        let currentTitle = current.title
         isAdvancing = true
         advancingAutomatically = automatic
         advanceTask = Task { [weak self] in
             do {
-                let result = try await continuation.resolve(after: context, next: next)
+                let result = try await continuation.resolve(after: context, next: next, currentTitle: currentTitle)
                 try Task.checkCancellation()
                 guard let self, !stopped, foreground, advanceRevision == expected,
                       current.id == episodeID, engine.playbackState.identity == load,

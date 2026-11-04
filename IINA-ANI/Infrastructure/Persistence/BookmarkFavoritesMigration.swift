@@ -1,4 +1,5 @@
 @preconcurrency import CoreData
+import SourceCore
 import Darwin
 import Foundation
 import SQLite3

@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 import CryptoKit
 import SwiftSoup
@@ -41,11 +42,24 @@ enum MobileSourceError: Error { case unavailable, invalidResponse, invalidSelect
 struct MobileSourceClient: Sendable {
     let configuration: SourceConfiguration
     private let fetch: @Sendable (URL) async throws -> Data
+    private let playerRequest: PublicPlayerProtocol.Request?
 
-    init(configuration: SourceConfiguration, fetch: (@Sendable (URL) async throws -> Data)? = nil) {
+    init(configuration: SourceConfiguration, playerRequest: PublicPlayerProtocol.Request? = nil,
+         fetch: (@Sendable (URL) async throws -> Data)? = nil) {
         self.configuration = configuration
-        let hosts = Set(configuration.hosts)
+        let hosts = configuration.requestHosts
         self.fetch = fetch ?? { try await SourceTransport.fetch($0, hosts: hosts) }
+        // Injected page fixtures never fall through to a real player/API request.
+        if let playerRequest { self.playerRequest = playerRequest }
+        else if fetch == nil {
+            self.playerRequest = { request in
+                guard PublicPlayerProtocol.permits(request, configuration: configuration), let host = request.url?.host else {
+                    throw PlaybackFailure.unsafeMediaAddress
+                }
+                let prefix = request.value(forHTTPHeaderField: "Range") == "bytes=0-63"
+                return try await SourceTransport.fetch(request, hosts: [host], prefixOnly: prefix)
+            }
+        } else { self.playerRequest = nil }
     }
 
     static func make(configuration: SourceConfiguration) -> Self {
@@ -82,7 +96,9 @@ struct MobileSourceClient: Sendable {
     }
 
     static func responseFailure(statusCode: Int) -> PlaybackFailure? {
-        if statusCode == 401 || statusCode == 403 { return .authenticationRequired }
+        if statusCode == 401 { return .authenticationRequired }
+        if statusCode == 403 { return .httpForbidden }
+        if (300..<400).contains(statusCode) { return .sourceRedirect }
         if statusCode == 408 || statusCode == 429 || (500..<600).contains(statusCode) { return .network }
         return (200..<300).contains(statusCode) ? nil : .unsupportedResponse
     }
@@ -261,7 +277,7 @@ struct MobileSourceClient: Sendable {
     func resolve(_ episode: MobileSourceEpisode, in catalog: MobileSourceCatalog) async throws -> URL {
         try require(.resolve)
         if configuration.webSelector != nil {
-            return try await MobileCSS1Client(configuration: configuration, fetch: fetch).resolve(episode: episode, catalog: catalog)
+            return try await MobileCSS1Client(configuration: configuration, playerRequest: playerRequest, fetch: fetch).resolve(episode: episode, catalog: catalog)
         }
         if catalog.lines.count > 1 { try require(.lines) }
         if episode.qualityID != nil { try require(.quality) }
@@ -436,6 +452,10 @@ private final class SourceTransport: NSObject, URLSessionTaskDelegate, @unchecke
         completionHandler(request)
     }
     static func fetch(_ url: URL, hosts: Set<String>) async throws -> Data {
+        try await fetch(URLRequest(url: url), hosts: hosts)
+    }
+    static func fetch(_ original: URLRequest, hosts: Set<String>, prefixOnly: Bool = false) async throws -> Data {
+        guard let url = original.url else { throw MobileSourceError.invalidSelection }
         let policy = SourceTransport(hosts: hosts)
         guard policy.allows(url) else { throw MobileSourceError.invalidSelection }
         let configuration = URLSessionConfiguration.ephemeral
@@ -443,19 +463,20 @@ private final class SourceTransport: NSObject, URLSessionTaskDelegate, @unchecke
         configuration.urlCredentialStorage = nil
         let session = URLSession(configuration: configuration, delegate: policy, delegateQueue: nil)
         defer { session.invalidateAndCancel() }
-        var request = URLRequest(url: url)
-        request.timeoutInterval = 20
+        var request = original
+        request.timeoutInterval = PublicPlayerProtocol.requestTimeout(for: original)
         request.httpShouldHandleCookies = false
         request.setValue("IINA-ANI-iOS/0.1", forHTTPHeaderField: "User-Agent")
         let (bytes, response) = try await session.bytes(for: request)
         guard let http = response as? HTTPURLResponse else { throw MobileSourceError.invalidResponse }
         if let failure = MobileSourceClient.responseFailure(statusCode: http.statusCode) { throw failure }
         guard (200..<300).contains(http.statusCode), let final = response.url, policy.allows(final),
-              response.expectedContentLength <= 4 * 1024 * 1024 else { throw MobileSourceError.unavailable }
+              (prefixOnly || response.expectedContentLength <= 4 * 1024 * 1024) else { throw MobileSourceError.unavailable }
         var data = Data()
         for try await byte in bytes {
             guard data.count < 4 * 1024 * 1024 else { throw MobileSourceError.invalidResponse }
             data.append(byte)
+            if prefixOnly && data.count == 64 { break }
         }
         try Task.checkCancellation()
         return data

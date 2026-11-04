@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 import SwiftSoup
 import WebKit

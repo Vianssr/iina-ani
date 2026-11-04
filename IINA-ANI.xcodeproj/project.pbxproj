@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		534F55524345000000000003 /* SourceCore in Frameworks */ = {isa = PBXBuildFile; productRef = 534F55524345000000000002 /* SourceCore */; };
+        A12300000000000000000003 = {isa = PBXBuildFile; fileRef = A12300000000000000000004; };
+        A12300000000000000000001 = {isa = PBXBuildFile; fileRef = A12300000000000000000002; };
 		01010125211DBC27002F0F7F /* StringExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01010124211DBC27002F0F7F /* StringExtension.swift */; };
 		0102924627ACF8AC00CB74B5 /* ControllersVisualEffectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0102924527ACF8AB00CB74B5 /* ControllersVisualEffectView.swift */; };
 		0106179D2AF34EFF005C7877 /* JSPlayerURL.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0106179C2AF34EFF005C7877 /* JSPlayerURL.swift */; };
@@ -123,11 +126,8 @@
 		01FA1F012D8300010000001E /* Wedm.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FA1F012D8300010000001D /* Wedm.swift */; };
 		01FA1F012D83000100000022 /* Fengche.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FA1F012D83000100000021 /* Fengche.swift */; };
 		01FA1F012D83000100000024 /* Rebo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FA1F012D83000100000023 /* Rebo.swift */; };
-		01FA1F012D83000100000101 /* SourceSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FA1F012D83000100000100 /* SourceSelection.swift */; };
 		01FA1F012D83000100000103 /* WorkLibrary.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FA1F012D83000100000102 /* WorkLibrary.swift */; };
 		01FA1F012D83000100000108 /* SiteAccounts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01FA1F012D83000100000107 /* SiteAccounts.swift */; };
-		0A03000100000001 /* SourceCapabilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A03000100000000 /* SourceCapabilities.swift */; };
-		0A03000100000003 /* SourceConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A03000100000002 /* SourceConfiguration.swift */; };
 		0A03000100000005 /* ConfiguredSource.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A03000100000004 /* ConfiguredSource.swift */; };
 		0A03000100000007 /* SourceRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A03000100000006 /* SourceRegistry.swift */; };
 		0A03000100000009 /* Sources in Resources */ = {isa = PBXBuildFile; fileRef = 0A03000100000008 /* Sources */; };
@@ -187,7 +187,6 @@
 		0A1200010000000000000003 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1200010000000000000002 /* AppServices.swift */; };
 		0A1200010000000000000005 /* AppStoragePaths.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1200010000000000000004 /* AppStoragePaths.swift */; };
 		0A1200260000000000000001 /* SourceSubscription.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1200260000000000000000 /* SourceSubscription.swift */; };
-		0A6000010000000000000001 /* SourceSubscriptionRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A6000010000000000000000 /* SourceSubscriptionRules.swift */; };
 		0A1200260000000000000003 /* SourceSubscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1200260000000000000002 /* SourceSubscriptionService.swift */; };
 		0A1310010000000000000001 /* PlaybackHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1310010000000000000000 /* PlaybackHistory.swift */; };
 		0A1310010000000000000003 /* PlayerProgressSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A1310010000000000000002 /* PlayerProgressSession.swift */; };
@@ -254,6 +253,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        A12300000000000000000004 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Mutedm.swift; sourceTree = "<group>"; };
+        A12300000000000000000002 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PublicPlayerProtocol.swift; sourceTree = "<group>"; };
 		01010124211DBC27002F0F7F /* StringExtension.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StringExtension.swift; sourceTree = "<group>"; };
 		0102924527ACF8AB00CB74B5 /* ControllersVisualEffectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControllersVisualEffectView.swift; sourceTree = "<group>"; };
 		0106179C2AF34EFF005C7877 /* JSPlayerURL.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSPlayerURL.swift; sourceTree = "<group>"; };
@@ -361,13 +362,10 @@
 		01FA1F012D8300010000001D /* Wedm.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wedm.swift; sourceTree = "<group>"; };
 		01FA1F012D83000100000021 /* Fengche.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Fengche.swift; sourceTree = "<group>"; };
 		01FA1F012D83000100000023 /* Rebo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Rebo.swift; sourceTree = "<group>"; };
-		01FA1F012D83000100000100 /* SourceSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSelection.swift; sourceTree = "<group>"; };
 		01FA1F012D83000100000102 /* WorkLibrary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkLibrary.swift; sourceTree = "<group>"; };
 		01FA1F012D83000100000104 /* Library v0.4.xcdatamodel */ = {isa = PBXFileReference; lastKnownFileType = wrapper.xcdatamodel; path = "Library v0.4.xcdatamodel"; sourceTree = "<group>"; };
 		01FA1F012D83000100000107 /* SiteAccounts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteAccounts.swift; sourceTree = "<group>"; };
 		052835B82C8F390DBC5D09AD /* SkinZipBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = SkinZipBridge.h; sourceTree = "<group>"; };
-		0A03000100000000 /* SourceCapabilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceCapabilities.swift; sourceTree = "<group>"; };
-		0A03000100000002 /* SourceConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceConfiguration.swift; sourceTree = "<group>"; };
 		0A03000100000004 /* ConfiguredSource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConfiguredSource.swift; sourceTree = "<group>"; };
 		0A03000100000006 /* SourceRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceRegistry.swift; sourceTree = "<group>"; };
 		0A03000100000008 /* Sources */ = {isa = PBXFileReference; lastKnownFileType = folder; path = Sources; sourceTree = "<group>"; };
@@ -428,7 +426,6 @@
 		0A1200010000000000000002 /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppServices.swift; sourceTree = "<group>"; };
 		0A1200010000000000000004 /* AppStoragePaths.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoragePaths.swift; sourceTree = "<group>"; };
 		0A1200260000000000000000 /* SourceSubscription.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSubscription.swift; sourceTree = "<group>"; };
-		0A6000010000000000000000 /* SourceSubscriptionRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSubscriptionRules.swift; sourceTree = "<group>"; };
 		0A1200260000000000000002 /* SourceSubscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SourceSubscriptionService.swift; sourceTree = "<group>"; };
 		0A1310010000000000000000 /* PlaybackHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlaybackHistory.swift; sourceTree = "<group>"; };
 		0A1310010000000000000002 /* PlayerProgressSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerProgressSession.swift; sourceTree = "<group>"; };
@@ -463,6 +460,7 @@
 				01E668D22CEA322F008C51E7 /* NIOFoundationCompat in Frameworks */,
 				01C0809427BC06EC00E87A8C /* SwiftProtobuf in Frameworks */,
 				0117EF04302256CC005E988D /* HuyaKit in Frameworks */,
+				534F55524345000000000003 /* SourceCore in Frameworks */,
 				01C248CD2CE480F30074A76F /* DequeModule in Frameworks */,
 				01E668D62CEA322F008C51E7 /* NIOWebSocket in Frameworks */,
 				01E668D42CEA322F008C51E7 /* NIOHTTP1 in Frameworks */,
@@ -483,13 +481,10 @@
 				C83F33A5C70CCEFC8869BE7A /* Decoders */,
 				0A0600260000000000000000 /* AnimeSourceService.swift */,
 				0A03000100000004 /* ConfiguredSource.swift */,
-				0A03000100000000 /* SourceCapabilities.swift */,
-				0A03000100000002 /* SourceConfiguration.swift */,
 				0A03000100000006 /* SourceRegistry.swift */,
 				0A0700010000000000000004 /* SourceSearch.swift */,
-				01FA1F012D83000100000100 /* SourceSelection.swift */,
+                A12300000000000000000002,
 				0A1200260000000000000000 /* SourceSubscription.swift */,
-				0A6000010000000000000000 /* SourceSubscriptionRules.swift */,
 				0A1200260000000000000002 /* SourceSubscriptionService.swift */,
 				0199489D2742852E00C71708 /* SupportSites.swift */,
 				015C19DB218B0D4F003B2F3A /* VideoGetStructs.swift */,
@@ -915,6 +910,7 @@
 				01683DDA2118905D0016A886 /* BiliVideo.swift */,
 				018F4F692812D95C0045B67C /* CC163.swift */,
 				01FA1F012D83000100000005 /* Didahd.swift */,
+                A12300000000000000000004,
 				01FA1F012D83000100000006 /* DidahdProxy.swift */,
 				01FA1F012D83000100000015 /* Dilidili.swift */,
 				01892C7727C0CDA400494AFD /* DouYin.swift */,
@@ -1054,6 +1050,7 @@
 				01E668D32CEA322F008C51E7 /* NIOHTTP1 */,
 				01E668D52CEA322F008C51E7 /* NIOWebSocket */,
 				0117EF03302256CC005E988D /* HuyaKit */,
+				534F55524345000000000002 /* SourceCore */,
 			);
 			productName = "IINA-ANI";
 			productReference = 01AEC8A720EDFD01001406E8 /* IINA-ANI.app */;
@@ -1110,6 +1107,7 @@
 				01C248CB2CE480F30074A76F /* XCRemoteSwiftPackageReference "swift-collections" */,
 				01E668CE2CEA322F008C51E7 /* XCRemoteSwiftPackageReference "swift-nio" */,
 				0117EF02302256CC005E988D /* XCLocalSwiftPackageReference "HuyaKit" */,
+				534F55524345000000000001 /* XCLocalSwiftPackageReference "SourceCore" */,
 			);
 			productRefGroup = 01AEC8A820EDFD01001406E8 /* Products */;
 			projectDirPath = "";
@@ -1204,11 +1202,9 @@
 			files = (
 				DA2410260000000000000002 /* TraceMoeSearchService.swift in Sources */,
 				DA2410260000000000000004 /* ImageSearchWindowController.swift in Sources */,
-				0A03000100000001 /* SourceCapabilities.swift in Sources */,
-				0A03000100000003 /* SourceConfiguration.swift in Sources */,
 				0A03000100000005 /* ConfiguredSource.swift in Sources */,
 				0A03000100000007 /* SourceRegistry.swift in Sources */,
-				01FA1F012D83000100000101 /* SourceSelection.swift in Sources */,
+                A12300000000000000000001,
 				01FA1F012D83000100000103 /* WorkLibrary.swift in Sources */,
 				0A0500010000000000000001 /* FavoriteLibrary.swift in Sources */,
 				0A0500010000000000000003 /* BookmarkFavoritesMigration.swift in Sources */,
@@ -1309,7 +1305,6 @@
 				0A0700010000000000000005 /* SourceSearch.swift in Sources */,
 				0A1310260000000000000001 /* TorrentSearchService.swift in Sources */,
 				0A1200260000000000000001 /* SourceSubscription.swift in Sources */,
-				0A6000010000000000000001 /* SourceSubscriptionRules.swift in Sources */,
 				0A1200260000000000000003 /* SourceSubscriptionService.swift in Sources */,
 				0A0600010000000000000001 /* DownloadModels.swift in Sources */,
 				0A0600010000000000000003 /* DownloadSourceResolver.swift in Sources */,
@@ -1348,6 +1343,7 @@
 				01FA1F012D83000100000002 /* XiFan.swift in Sources */,
 				01FA1F012D83000100000004 /* Girigiri.swift in Sources */,
 				01FA1F012D83000100000007 /* Didahd.swift in Sources */,
+                A12300000000000000000003,
 				01FA1F012D83000100000008 /* DidahdProxy.swift in Sources */,
 				01FA1F012D8300010000000A /* Jibi.swift in Sources */,
 				01FA1F012D8300010000000C /* EACG.swift in Sources */,
@@ -1638,6 +1634,10 @@
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
+		534F55524345000000000001 /* XCLocalSwiftPackageReference "SourceCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SourceCore;
+		};
 		0117EF02302256CC005E988D /* XCLocalSwiftPackageReference "HuyaKit" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = HuyaKit;
@@ -1728,6 +1728,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		534F55524345000000000002 /* SourceCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 534F55524345000000000001 /* XCLocalSwiftPackageReference "SourceCore" */;
+			productName = SourceCore;
+		};
 		0117EF03302256CC005E988D /* HuyaKit */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = HuyaKit;

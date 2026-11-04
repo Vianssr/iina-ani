@@ -5,6 +5,7 @@
 //  Copyright © 2026 IINA-ANI contributors.
 //
 
+import SourceCore
 import Foundation
 import Alamofire
 import SwiftSoup
@@ -76,6 +77,7 @@ actor XiFan: SupportSiteProtocol {
     }
 
     func episodeList(_ url: String) async throws -> (nodes: [VideoTreeNode], current: Int) {
+        if let c = URLComponents(string: url), SupportSites.xiFanNextPage(c) != nil { return try await Self.nextEpisodes(url) }
         let address = try page(url)
         let data = try await catalog(address.id)
         var current = 0
@@ -100,6 +102,10 @@ actor XiFan: SupportSiteProtocol {
     }
 
     func liveInfo(_ url: String) async throws -> any LiveInfo {
+        if let c = URLComponents(string: url), let page = SupportSites.xiFanNextPage(c) {
+            let data = try await Self.nextCatalog(id: page.id)
+            return XiFanInfo(title: data.title, name: data.title, cover: data.cover, isLiving: true)
+        }
         let address = try page(url)
         let data = try await catalog(address.id)
         let available = address.episode == nil || data.lines.contains { line in
@@ -109,6 +115,7 @@ actor XiFan: SupportSiteProtocol {
     }
 
     func decodeUrl(_ url: String) async throws -> YouGetJSON {
+        if let c = URLComponents(string: url), SupportSites.xiFanNextPage(c) != nil { return try await Self.nextDecode(url) }
         let address = try page(url)
         let data = try await catalog(address.id)
         guard let selectedLine = address.line == nil ? data.lines.first : data.lines.first(where: { $0.number == address.line }),
@@ -184,6 +191,12 @@ actor XiFan: SupportSiteProtocol {
               ["mp4", "m3u8", "flv"].contains(media.pathExtension.lowercased()) else {
             throw VideoGetError.notFountData
         }
+        // The legacy 8088 listener closes TLS handshakes. The same public MP4
+        // exists on this host's standard HTTPS endpoint; verify bytes before use.
+        if let migrated = legacyHTTPSMedia(media) {
+            try await validateMedia(migrated, requireMP4: true)
+            return migrated.absoluteString
+        }
         if parser.isEmpty { return media.absoluteString }
         guard var endpoint = URLComponents(string: parser),
               endpoint.scheme == "https", endpoint.host == "player.moedot.net",
@@ -198,15 +211,67 @@ actor XiFan: SupportSiteProtocol {
         guard let address = endpoint.url else { throw VideoGetError.notFountData }
         let response = try await AccountHTTP.request(address).validate().serializingString().value
         try Task.checkCancellation()
-        return try resolvedMedia(response)
+        let resolved = try resolvedMedia(response)
+        try await validateMedia(URL(string: resolved)!)
+        return resolved
+    }
+
+    static func legacyHTTPSMedia(_ url: URL) -> URL? {
+        guard var parts = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              parts.scheme == "https", parts.host == "play.xfvod.pro", parts.port == 8088,
+              parts.user == nil, parts.password == nil, parts.fragment == nil,
+              url.pathExtension.lowercased() == "mp4", !parts.path.isEmpty else { return nil }
+        parts.port = nil
+        return parts.url
+    }
+
+    /// Read only a bounded prefix; never download the movie to validate a source URL.
+    private static func validateMedia(_ url: URL, requireMP4: Bool = false, referer: String? = "https://player.moedot.net/") async throws {
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        var request = URLRequest(url: url, timeoutInterval: 15)
+        request.setValue(referer == nil ? "bytes=0-" : "bytes=0-63", forHTTPHeaderField: "Range")
+        request.setValue(referer, forHTTPHeaderField: "Referer")
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse else { throw PlaybackFailure.invalidResponseBody }
+        var prefix = Data()
+        let success = (200..<300).contains(http.statusCode)
+        if !success || requireMP4 {
+            for try await byte in bytes {
+                prefix.append(byte)
+                if prefix.count >= (success ? 64 : 1024) { break }
+            }
+        }
+        try validateMediaResponse(status: http.statusCode, prefix: prefix)
+        if requireMP4 {
+            // A redirect, an HTML page, or a filename alone cannot confirm migration.
+            guard response.url == url, prefix.count >= 12,
+                  prefix[4..<8] == Data("ftyp".utf8) else { throw PlaybackFailure.invalidPlayerData }
+        }
+    }
+
+    static func validateMediaResponse(status: Int, prefix: Data) throws {
+        if status == 401 {
+            if String(decoding: prefix, as: UTF8.self).contains("expire missing") {
+                throw PlaybackFailure.mediaSignatureMissing
+            }
+            throw PlaybackFailure.authenticationRequired
+        }
+        if status == 403 { throw PlaybackFailure.httpForbidden }
+        if status == 404 || status == 410 { throw PlaybackFailure.mediaNotFound }
+        guard (200..<300).contains(status) else { throw PlaybackFailure.playerServiceUnavailable }
     }
 
     static func resolvedMedia(_ html: String) throws -> String {
         guard let match = mediaExpression.firstMatch(in: html, range: NSRange(html.startIndex..., in: html)),
               let range = Range(match.range(at: 1), in: html),
               let data = html[range].data(using: .utf8),
-              let config = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              config["code"] as? Int == 200, let type = config["type"] as? String, (type == "0" || type == "auto"),
+              let config = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw PlaybackFailure.invalidPlayerData
+        }
+        // EcPlayer1.js treats 103 as a passthrough URL, not a parser error.
+        guard let code = config["code"] as? Int, [200, 103].contains(code) else { throw PlaybackFailure.playerServiceUnavailable }
+        guard let type = config["type"] as? String, (type == "0" || type == "auto"),
               let settings = config["config"] as? [String: Any],
               let uid = settings["uid"] as? String, uid.utf8.count == 6,
               let encoded = config["url"] as? String,
@@ -234,4 +299,142 @@ struct XiFanInfo: LiveInfo {
     let cover: String
     let isLiving: Bool
     let site: SupportSites = .xiFan
+}
+
+extension XiFan {
+    struct NextEpisode: Sendable { let id: Int; let title: String }
+    struct NextLine: Sendable { let id: Int; let code: String; let title: String; let episodes: [NextEpisode] }
+    struct NextCatalog: Sendable { let id: Int; let title: String; let cover: String; let lines: [NextLine] }
+
+    // Public anonymous key shipped in the official site's client bundle, not an account credential.
+    private static let nextPublicKey = "sb_publishable_OBIVAWACIX6lPXrO98_z24_HcsmalkA"
+
+    private static func nextRequest(_ url: URL, body: Data? = nil) async throws -> Data {
+        guard url.scheme == "https", ["next.xifanacg.com", "api.xifanacg.com"].contains(url.host ?? ""),
+              url.user == nil, url.password == nil, url.port == nil else { throw PlaybackFailure.unsafeMediaAddress }
+        let session = URLSession(configuration: .ephemeral)
+        defer { session.invalidateAndCancel() }
+        var request = URLRequest(url: url, timeoutInterval: 20)
+        request.setValue("https://next.xifanacg.com/", forHTTPHeaderField: "Referer")
+        if url.host == "api.xifanacg.com" {
+            request.setValue(nextPublicKey, forHTTPHeaderField: "apikey")
+            request.setValue("https://next.xifanacg.com", forHTTPHeaderField: "Origin")
+        }
+        if let body {
+            request.httpMethod = "POST"; request.httpBody = body
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        }
+        let (bytes, response) = try await session.bytes(for: request)
+        guard let http = response as? HTTPURLResponse, response.url == url else { throw PlaybackFailure.sourceRedirect }
+        if http.statusCode == 401 { throw PlaybackFailure.authenticationRequired }
+        if http.statusCode == 403 { throw PlaybackFailure.httpForbidden }
+        guard (200..<300).contains(http.statusCode) else { throw PlaybackFailure.playerServiceUnavailable }
+        var result = Data()
+        for try await byte in bytes {
+            result.append(byte)
+            if result.count > 4 * 1024 * 1024 { throw PlaybackFailure.invalidResponseBody }
+        }
+        try Task.checkCancellation()
+        return result
+    }
+
+    static func nextCatalog(_ html: String, id: Int) throws -> NextCatalog {
+        let regex = try NSRegularExpression(pattern: #"self\.__next_f\.push\((\[.*?\])\)</script>"#, options: .dotMatchesLineSeparators)
+        var stream = ""
+        for match in regex.matches(in: html, range: NSRange(html.startIndex..., in: html)) {
+            guard let range = Range(match.range(at: 1), in: html),
+                  let chunk = try? JSONSerialization.jsonObject(with: Data(html[range].utf8)) as? [Any],
+                  chunk.count == 2, chunk[0] as? Int == 1, let text = chunk[1] as? String else { continue }
+            stream += text
+        }
+        var matches: [[String: Any]] = []
+        func visit(_ value: Any, depth: Int) {
+            guard depth < 32 else { return }
+            if let object = value as? [String: Any] {
+                if let anime = object["anime"] as? [String: Any], anime["id"] as? Int == id, object["sources"] is [[String: Any]] {
+                    matches.append(object); return
+                }
+                for child in object.values { visit(child, depth: depth + 1) }
+            } else if let array = value as? [Any] { for child in array { visit(child, depth: depth + 1) } }
+        }
+        for row in stream.split(separator: "\n") {
+            guard let colon = row.firstIndex(of: ":"),
+                  let value = try? JSONSerialization.jsonObject(with: Data(row[row.index(after: colon)...].utf8)) else { continue }
+            visit(value, depth: 0)
+        }
+        guard matches.count == 1, let object = matches.first,
+              let anime = object["anime"] as? [String: Any], let title = anime["title"] as? String, !title.isEmpty,
+              let sources = object["sources"] as? [[String: Any]] else { throw PlaybackFailure.catalogStructure }
+        var lines: [NextLine] = [], ids = Set<Int>(), codes = Set<String>()
+        for source in sources {
+            guard let sid = source["id"] as? Int, sid > 0, ids.insert(sid).inserted,
+                  let code = source["code"] as? String, validNextCode(code), codes.insert(code).inserted,
+                  let entries = source["episodes"] as? [[String: Any]] else { throw PlaybackFailure.catalogStructure }
+            var episodes: [NextEpisode] = [], seen = Set<Int>()
+            for entry in entries {
+                guard let eid = entry["id"] as? Int, eid > 0, seen.insert(eid).inserted,
+                      let name = entry["title"] as? String, !name.isEmpty else { throw PlaybackFailure.catalogStructure }
+                episodes.append(NextEpisode(id: eid, title: name))
+            }
+            if !episodes.isEmpty { lines.append(NextLine(id: sid, code: code, title: source["name"] as? String ?? code, episodes: episodes)) }
+        }
+        guard !lines.isEmpty else { throw PlaybackFailure.missingEpisode }
+        return NextCatalog(id: id, title: title, cover: anime["cover_url"] as? String ?? "", lines: lines)
+    }
+    private static func validNextCode(_ code: String) -> Bool {
+        !code.isEmpty && code.utf8.count <= 32 && code.utf8.allSatisfy { (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 95 }
+    }
+    private static func nextCatalog(id: Int) async throws -> NextCatalog {
+        try nextCatalog(String(decoding: await nextRequest(URL(string: "https://next.xifanacg.com/anime/\(id)")!), as: UTF8.self), id: id)
+    }
+    private static func nextURL(id: Int, episode: Int, code: String) -> String {
+        "https://next.xifanacg.com/anime/\(id)/play/\(episode)?source=\(code)"
+    }
+    private static func nextEpisodes(_ raw: String) async throws -> (nodes: [VideoTreeNode], current: Int) {
+        guard let page = SupportSites.xiFanNextPage(URLComponents(string: raw)!) else { throw PlaybackFailure.missingEpisode }
+        let catalog = try await nextCatalog(id: page.id)
+        var position = 0, current: Int?
+        let nodes = catalog.lines.map { line in
+            let children = line.episodes.map { episode in
+                if episode.id == page.episode && (page.source == nil || page.source == line.code), current == nil { current = position }
+                position += 1
+                return VideoTreeNode(site: .xiFan, index: episode.id, title: episode.title, id: "next:\(catalog.id)",
+                                     url: nextURL(id: catalog.id, episode: episode.id, code: line.code))
+            }
+            return VideoTreeNode(title: line.title, children: children)
+        }
+        if page.episode != nil && current == nil { throw PlaybackFailure.missingEpisode }
+        return (nodes, current ?? 0)
+    }
+    static func nextMedia(_ data: Data, anime: Int, episode: Int, source: Int) throws -> URL {
+        guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { throw PlaybackFailure.invalidPlayerData }
+        guard object["ok"] as? Bool == true else { throw PlaybackFailure.playerServiceUnavailable }
+        guard object["anime_id"] as? Int == anime, object["episode_id"] as? Int == episode,
+              let raw = object["url"] as? String, let url = URL(string: raw),
+              url.scheme == "https", url.user == nil, url.password == nil, url.fragment == nil,
+              url.host != nil, ["mp4", "m3u8"].contains(url.pathExtension.lowercased()),
+              let candidates = object["candidates"] as? [[String: Any]],
+              candidates.contains(where: { $0["source_id"] as? Int == source && $0["url"] as? String == raw }) else {
+            throw PlaybackFailure.missingEpisode
+        }
+        return url
+    }
+    private static func nextDecode(_ raw: String) async throws -> YouGetJSON {
+        guard let page = SupportSites.xiFanNextPage(URLComponents(string: raw)!) else { throw PlaybackFailure.missingEpisode }
+        let catalog = try await nextCatalog(id: page.id)
+        guard let line = page.source == nil ? catalog.lines.first : catalog.lines.first(where: { $0.code == page.source }),
+              let episode = page.episode == nil ? line.episodes.first : line.episodes.first(where: { $0.id == page.episode }) else {
+            throw PlaybackFailure.missingEpisode
+        }
+        let body = try JSONSerialization.data(withJSONObject: ["action": "fallback", "episode_id": episode.id, "source_id": line.id])
+        let data = try await nextRequest(URL(string: "https://api.xifanacg.com/functions/v1/issue-web-playback")!, body: body)
+        let media = try nextMedia(data, anime: catalog.id, episode: episode.id, source: line.id)
+        // The cloud redirect rejects the legacy player Referer. Match the
+        // direct media handoff, without forwarding legacy/plugin headers.
+        try await validateMedia(media, referer: nil)
+        var result = YouGetJSON(rawUrl: raw)
+        result.title = "\(catalog.title) - \(episode.title)"
+        result.streams[line.title] = Stream(url: media.absoluteString)
+        return result
+    }
 }

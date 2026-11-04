@@ -5,10 +5,10 @@
 //  Copyright © 2026 IINA-ANI contributors.
 //
 
+import SourceCore
 import Foundation
 import Alamofire
 import SwiftSoup
-import WebKit
 
 actor Rebo: SupportSiteProtocol {
     private struct Episode: Sendable {
@@ -95,7 +95,7 @@ actor Rebo: SupportSiteProtocol {
         return playerToken(html, id: id, line: line, episode: episode) != nil
     }
 
-    private static func playerToken(_ html: String, id: Int, line: Int, episode: Int) -> String? {
+    private static func playerToken(_ html: String, id: Int, line: Int, episode: Int) -> [String: Any]? {
         guard let start = html.range(of: "var player_aaaa=")?.upperBound,
               let end = html.range(of: "</script>", range: start..<html.endIndex)?.lowerBound,
               let data = html[start..<end].trimmingCharacters(in: .whitespacesAndNewlines)
@@ -104,11 +104,11 @@ actor Rebo: SupportSiteProtocol {
               player["id"] as? String == "\(id)", player["sid"] as? Int == line,
               player["nid"] as? Int == episode, player["points"] as? Int == 0,
               player["trysee"] as? Int == 0, player["encrypt"] as? Int == 3,
-              let from = player["from"] as? String, from == "BBA" || from == "NBY",
+              let from = player["from"] as? String, ["BBA", "NBY", "rrmj"].contains(from),
               let token = player["url"] as? String, !token.isEmpty, token.count.isMultiple(of: 2),
               token.utf8.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) })
         else { return nil }
-        return token
+        return player
     }
 
     func episodeList(_ url: String) async throws -> (nodes: [VideoTreeNode], current: Int) {
@@ -163,7 +163,7 @@ actor Rebo: SupportSiteProtocol {
         guard let token = playerToken(html, id: id, line: line, episode: episode) else {
             throw VideoGetError.notFountData
         }
-        return try await ReboTokenResolver.resolve(token).absoluteString
+        return try await PublicPlayerProtocol.resolveDesktop(token, page: URL(string: raw)!).absoluteString
     }
 }
 
@@ -174,96 +174,4 @@ struct ReboInfo: LiveInfo {
     let cover: String
     let isLiving: Bool
     let site: SupportSites = .rebo
-}
-
-@MainActor private final class ReboTokenResolver: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
-    private var webView: WKWebView?
-    private var continuation: CheckedContinuation<URL, any Error>?
-    private var timeout: Task<Void, Never>?
-
-    static func resolve(_ token: String) async throws -> URL {
-        let resolver = ReboTokenResolver()
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                resolver.start(token, continuation: continuation)
-            }
-        } onCancel: {
-            Task { @MainActor in resolver.finish(.failure(CancellationError())) }
-        }
-    }
-
-    private func start(_ token: String, continuation: CheckedContinuation<URL, any Error>) {
-        self.continuation = continuation
-        let configuration = WKWebViewConfiguration()
-        configuration.websiteDataStore = .nonPersistent()
-        configuration.mediaTypesRequiringUserActionForPlayback = []
-        configuration.userContentController.add(self, name: "reboMedia")
-        configuration.userContentController.addUserScript(WKUserScript(source: """
-            (() => {
-              let sent = false;
-              const capture = () => {
-                if (sent) return;
-                const video = document.querySelector('video');
-                if (!video) return;
-                const source = video.currentSrc || video.getAttribute('src');
-                if (!source) return;
-                try {
-                  const url = new URL(source, location.href);
-                  const host = url.hostname.toLowerCase();
-                  const allowed = ['365yg.com', 'samtory.cn'].some(domain => host === domain || host.endsWith('.' + domain));
-                  if (url.protocol !== 'https:' || url.username || url.password || !allowed) return;
-                  sent = true;
-                  window.webkit.messageHandlers.reboMedia.postMessage(url.href);
-                } catch (_) {}
-              };
-              new MutationObserver(capture).observe(document, {childList:true,subtree:true,attributes:true,attributeFilter:['src']});
-              document.addEventListener('DOMContentLoaded', capture);
-              document.addEventListener('loadstart', capture, true);
-            })();
-            """, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        let view = WKWebView(frame: CGRect(x: 0, y: 0, width: 800, height: 600), configuration: configuration)
-        webView = view
-        view.navigationDelegate = self
-        var address = URLComponents(string: "https://www.rebozj.cc/static/player/artplayer/")!
-        address.queryItems = [URLQueryItem(name: "url", value: token)]
-        view.load(URLRequest(url: address.url!))
-        timeout = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(30))
-            self?.finish(.failure(VideoGetError.notFountData))
-        }
-    }
-
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.frameInfo.isMainFrame,
-              message.frameInfo.securityOrigin.host == "www.rebozj.cc",
-              message.frameInfo.securityOrigin.protocol == "https",
-              message.frameInfo.request.url?.path == "/static/player/artplayer",
-              let text = message.body as? String, let url = URL(string: text),
-              url.scheme == "https", let host = url.host?.lowercased(), url.port == nil,
-              url.user == nil, url.password == nil,
-              ["365yg.com", "samtory.cn"].contains(where: { host == $0 || host.hasSuffix("." + $0) }) else { return }
-        finish(.success(url))
-    }
-    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction) async -> WKNavigationActionPolicy {
-        guard let url = navigationAction.request.url, url.scheme == "https",
-              url.host == "www.rebozj.cc", url.port == nil, url.user == nil, url.password == nil,
-              url.path == "/static/player/artplayer" else { return .cancel }
-        return .allow
-    }
-
-    func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
-        finish(.failure(error))
-    }
-
-    private func finish(_ result: Result<URL, any Error>) {
-        guard let continuation else { return }
-        self.continuation = nil
-        timeout?.cancel()
-        timeout = nil
-        webView?.stopLoading()
-        webView?.navigationDelegate = nil
-        webView?.configuration.userContentController.removeScriptMessageHandler(forName: "reboMedia")
-        webView = nil
-        continuation.resume(with: result)
-    }
 }

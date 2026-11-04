@@ -261,7 +261,7 @@ M6 的 Bangumi 同步採先存本機、再提交遠端。以本機修改修訂�
 ## 實作依據
 
 - 產品範圍：[macOS 功能](../../README.md)、[iOS 使用指南](../IOS_GUIDE.md)、[架構與儲存](../architecture/PROJECT.md)、[實際驗證記錄](../history/WORK_LOG.md)。
-- 共用來源契約：[SourceSelection.swift](../../IINA-ANI/Features/Sources/SourceSelection.swift)、[SourceConfiguration.swift](../../IINA-ANI/Features/Sources/SourceConfiguration.swift)。
+- 共用來源契約：[SourceCore](../../SourceCore/README.md) 中的 [SourceSelection.swift](../../SourceCore/Sources/SourceCore/SourceSelection.swift)、[SourceConfiguration.swift](../../SourceCore/Sources/SourceCore/SourceConfiguration.swift)。
 - 桌面分類、映射與歷史：[WorkLibrary.swift](../../IINA-ANI/Infrastructure/Persistence/WorkLibrary.swift)、[FavoriteLibrary.swift](../../IINA-ANI/Infrastructure/Persistence/FavoriteLibrary.swift)、[PlaybackHistory.swift](../../IINA-ANI/Features/Playback/PlaybackHistory.swift)、[BangumiWorkSync.swift](../../IINA-ANI/Features/Bangumi/BangumiWorkSync.swift)。
 - 行動端目前的資料與交接：[Library.swift](../../iOS/ANI/Library.swift)、[EpisodeBrowser.swift](../../iOS/ANI/EpisodeBrowser.swift)、[SourceFlow.swift](../../iOS/ANI/SourceFlow.swift)、[PlayerModels.swift](../../iOS/ANI/PlayerModels.swift)、[MPVEngine.swift](../../iOS/ANI/MPVEngine.swift)。
 - 行動端歷史與本地引用：[MobilePlaybackHistory.swift](../../iOS/ANI/MobilePlaybackHistory.swift)、[MobileLocalMedia.swift](../../iOS/ANI/MobileLocalMedia.swift)、[ContinueWatchingView.swift](../../iOS/ANI/ContinueWatchingView.swift)。

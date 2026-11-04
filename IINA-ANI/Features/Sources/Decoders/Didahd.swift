@@ -5,6 +5,7 @@
 //  Copyright © 2026 IINA-ANI contributors.
 //
 
+import SourceCore
 import Alamofire
 import Foundation
 import SwiftSoup
@@ -35,6 +36,11 @@ actor Didahd: SupportSiteProtocol {
         let lines: [Line]
     }
 
+    // Browsing and resolving adjacent episodes share the same verified catalog.
+    // Do not re-probe every unrelated line on every episode selection. Never cache
+    // playback tokens or media URLs; those are fetched for the exact episode below.
+    private var cachedCatalog: (id: Int, date: Date, value: Catalog)?
+
     private func page(_ url: String) throws -> (id: Int, line: Int?, episode: Int?) {
         guard let components = URLComponents(string: url),
               let page = SupportSites.didahdPage(components) else { throw VideoGetError.invalidLink }
@@ -42,6 +48,9 @@ actor Didahd: SupportSiteProtocol {
     }
 
     private func catalog(_ id: Int) async throws -> Catalog {
+        try Task.checkCancellation()
+        if let cachedCatalog, cachedCatalog.id == id,
+           Date().timeIntervalSince(cachedCatalog.date) < 60 { return cachedCatalog.value }
         let base = URL(string: "https://www.didahd.xyz/detail/\(id).html")!
         let html = try await AccountHTTP.request(base).validate().serializingString().value
         let document = try SwiftSoup.parse(html)
@@ -86,7 +95,9 @@ actor Didahd: SupportSiteProtocol {
         }
         try Task.checkCancellation()
         guard !lines.isEmpty else { throw VideoGetError.notFountData }
-        return Catalog(title: title, cover: cover, lines: lines)
+        let result = Catalog(title: title, cover: cover, lines: lines)
+        cachedCatalog = (id, Date(), result)
+        return result
     }
 
     func episodeList(_ url: String) async throws -> (nodes: [VideoTreeNode], current: Int) {
@@ -125,17 +136,22 @@ actor Didahd: SupportSiteProtocol {
               let episode = address.episode == nil ? line.episodes.first : line.episodes.first(where: { $0.number == address.episode }) else {
             throw VideoGetError.notFountData
         }
-        let token = try await Self.player(episode.url, id: address.id, line: line.number, episode: episode.number)
-        let playlist = try await DidahdTokenResolver.resolve(token)
-        let endpoint = try await localEndpoint()
-        let streamURL = try await DidahdProxy.shared.register(playlist, endpoint: endpoint)
+        let payload = try await Self.player(episode.url, id: address.id, line: line.number, episode: episode.number)
+        let streamURL: String
+        if payload["from"] as? String == "4kvm" {
+            let playlist = try await DidahdTokenResolver.resolve(payload["url"] as! String)
+            let endpoint = try await localEndpoint()
+            streamURL = try await DidahdProxy.shared.register(playlist, endpoint: endpoint)
+        } else {
+            streamURL = try await PublicPlayerProtocol.resolveDesktop(payload, page: URL(string: episode.url)!).absoluteString
+        }
         var result = YouGetJSON(rawUrl: url)
         result.title = "\(data.title) - \(episode.title)"
         result.streams["\(line.title) (\(line.number))"] = Stream(url: streamURL)
         return result
     }
 
-    private static func player(_ url: String, id: Int, line: Int, episode: Int) async throws -> String {
+    private static func player(_ url: String, id: Int, line: Int, episode: Int) async throws -> [String: Any] {
         let html = try await AccountHTTP.request(url).validate().serializingString().value
         guard let start = html.range(of: "var player_aaaa=")?.upperBound,
               let end = html.range(of: "</script>", range: start..<html.endIndex)?.lowerBound,
@@ -144,7 +160,8 @@ actor Didahd: SupportSiteProtocol {
               let player = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               player["id"] as? String == "\(id)", player["sid"] as? Int == line,
               player["nid"] as? Int == episode, player["trysee"] as? Int == 0,
-              player["points"] as? Int == 0, player["from"] as? String == "4kvm",
+              player["points"] as? Int == 0, let from = player["from"] as? String,
+              ["4kvm", "BBA", "NBY", "rrmj"].contains(from),
               player["encrypt"] as? Int == 3,
               let token = player["url"] as? String, !token.isEmpty,
               token.count.isMultiple(of: 2), token.utf8.allSatisfy({
@@ -152,7 +169,7 @@ actor Didahd: SupportSiteProtocol {
               }) else {
             throw VideoGetError.notFountData
         }
-        return token
+        return player
     }
 }
 

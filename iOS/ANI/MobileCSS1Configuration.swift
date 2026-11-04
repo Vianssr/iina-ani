@@ -141,6 +141,11 @@ enum MobileCSS1Configuration {
             "searchNames": searchNames, "searchLinks": searchLinks,
             "channelFormat": channelFormat, "episodeNames": episodeNames
         ]
+        if let resolution = input["defaultResolution"] as? String {
+            let value = resolution.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            let digits = value.hasSuffix("p") ? String(value.dropLast()) : value
+            if let height = Int(digits), (1...4320).contains(height) { webSelector["preferredVideoHeight"] = height }
+        }
         webSelector["linkTemplate"] = linkTemplate
         webSelector["channelNames"] = channelNames
         webSelector["episodeLists"] = episodeLists

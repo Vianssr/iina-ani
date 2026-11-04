@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 /// Compiled from these same shared sources for macOS and the iOS simulator.

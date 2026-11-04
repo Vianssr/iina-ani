@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 @MainActor enum CSS1IdentityRegression {

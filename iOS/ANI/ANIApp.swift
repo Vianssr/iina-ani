@@ -5,13 +5,16 @@ struct ANIApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var library: MobileLibrary
     @State private var account: MobileBangumiAccount
-    @State private var history = MobilePlaybackHistory()
+    @State private var history: MobilePlaybackHistory
     @State private var links = MobileLinkLibrary()
     @State private var sources = MobileSourceLibrary.forApp()
 
     init() {
         let library = MobileLibrary()
         _library = State(initialValue: library)
+        _history = State(initialValue: MobilePlaybackHistory(confirmedWorkTitle: {
+            library.confirmedHistoryWorkTitle(for: $0)
+        }))
         _account = State(initialValue: MobileBangumiAccount(library: library))
     }
     var body: some Scene {

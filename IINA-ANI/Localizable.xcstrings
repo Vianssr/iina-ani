@@ -1,6 +1,75 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "This line is restricted to the source's own app. Select the website line." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This line is restricted to the source's own app. Select the website line."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此线路仅供来源官方 APP 内播放，请选择网页专线。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此線路僅供來源官方 APP 內播放，請選擇網頁專線。"
+          }
+        }
+      }
+    },
+    "The source returned a legacy URL without an expiry signature (HTTP 401). Open the new XiFan site and reselect the work and episode; old IDs cannot be reused." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source returned a legacy URL without an expiry signature (HTTP 401). Open the new XiFan site and reselect the work and episode; old IDs cannot be reused."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源返回了缺少有效期签名的旧地址（HTTP 401）。请到稀饭新站重新选择作品和集数，不能沿用旧编号。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源返回了缺少有效期簽名的舊地址（HTTP 401）。請到稀飯新站重新選擇作品和集數，不能沿用舊編號。"
+          }
+        }
+      }
+    },
+    "The media file is unavailable on the source server (HTTP 404 or 410). Select another line." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The media file is unavailable on the source server (HTTP 404 or 410). Select another line."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源服务器上的视频文件不存在或已移除（HTTP 404 或 410），请选择其他线路。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源伺服器上的影片檔案不存在或已移除（HTTP 404 或 410），請選擇其他線路。"
+          }
+        }
+      }
+    },
     "\n%lld 個目錄項目缺少有效同來源身份，未列入下載。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -6670,9 +6739,7 @@
         }
       }
     },
-    "OK" : {
-
-    },
+    "OK" : {},
     "Only YouTube cookies from the selected profile will be imported." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -38282,6 +38349,654 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "點選組件以編輯；拖曳分隔線調整比例。預覽不執行業務命令。"
+          }
+        }
+      }
+    },
+    "The source refused the request (HTTP 403). This does not identify a video format or prove that sign-in will help." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source refused the request (HTTP 403). This does not identify a video format or prove that sign-in will help."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源拒絕請求（HTTP 403）。這不是影片格式資訊，也不代表登入即可解決。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源拒绝请求（HTTP 403）。这不是视频格式信息，也不代表登录即可解决。"
+          }
+        }
+      }
+    },
+    "The player data is malformed, incomplete, or could not be decoded." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The player data is malformed, incomplete, or could not be decoded."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器資料格式錯誤、欄位缺漏或編碼解碼失敗。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器数据格式错误、字段缺失或编码解码失败。"
+          }
+        }
+      }
+    },
+    "The player declares an unsupported URL encryption method for this site or line." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The player declares an unsupported URL encryption method for this site or line."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此網站或線路的播放器加密協議尚未支援。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此网站或线路的播放器加密协议尚未支持。"
+          }
+        }
+      }
+    },
+    "The page provides a player identifier, embedded player, or URL without a supported media extension. Further resolution is required." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The page provides a player identifier, embedded player, or URL without a supported media extension. Further resolution is required."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頁面提供播放識別碼、內嵌播放器，或沒有支援副檔名的網址；仍需進一步解析。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页面提供播放标识码、内嵌播放器，或没有支持扩展名的网址；仍需进一步解析。"
+          }
+        }
+      }
+    },
+    "The media URL extension is not supported by this source configuration." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The media URL extension is not supported by this source configuration."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒體網址的副檔名不在此來源配置的支援清單內。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体网址的扩展名不在此来源配置的支持列表内。"
+          }
+        }
+      }
+    },
+    "The media address violates the source URL rules (HTTPS, host, credentials, port or fragment)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The media address violates the source URL rules (HTTPS, host, credentials, port or fragment)."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒體地址不符合來源網址規則（HTTPS、網域、憑證、連接埠或片段）。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体地址不符合来源网址规则（HTTPS、域名、凭据、端口或片段）。"
+          }
+        }
+      }
+    },
+    "The page contains multiple different media addresses; the selected episode cannot be resolved unambiguously." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The page contains multiple different media addresses; the selected episode cannot be resolved unambiguously."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頁面包含多個不同媒體地址，無法唯一確認所選集數的串流。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页面包含多个不同媒体地址，无法唯一确认所选集数的流。"
+          }
+        }
+      }
+    },
+    "The source returned an empty response or exceeded the response size limit." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source returned an empty response or exceeded the response size limit."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源回應為空或超過大小限制。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源响应为空或超过大小限制。"
+          }
+        }
+      }
+    },
+    "The website player service could not resolve this stream. Retry later or select another line." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The website player service could not resolve this stream. Retry later or select another line."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網站的播放解析服務未能取得此串流；請稍後重試或選擇其他線路。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网站的播放解析服务未能取得此流；请稍后重试或选择其他线路。"
+          }
+        }
+      }
+    },
+    "The media URL specifies a port that this source configuration does not support." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The media URL specifies a port that this source configuration does not support."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒體網址指定了此來源配置尚未支援的連接埠。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体网址指定了此来源配置尚未支持的端口。"
+          }
+        }
+      }
+    },
+    "SupportSites.Mutedm" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2k Anime"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2k 动漫"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2k 動漫"
+          }
+        }
+      }
+    },
+    "搜尋只查詢 RSS；雙擊集數匯入，或選取後按 Return。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search uses RSS only. Double-click an episode to import, or select it and press Return."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索仅查询 RSS；双击集数导入，或选中后按 Return。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜尋只查詢 RSS；雙擊集數匯入，或選取後按 Return。"
+          }
+        }
+      }
+    },
+    "漢化組／集數 · 雙擊匯入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Release group / Episodes · Double-click to import"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汉化组／集数 · 双击导入"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "漢化組／集數 · 雙擊匯入"
+          }
+        }
+      }
+    },
+    "匯入" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Import"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "导入"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "匯入"
+          }
+        }
+      }
+    },
+    "P2P 上傳說明" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "P2P upload information"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "P2P 上传说明"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "P2P 上傳說明"
+          }
+        }
+      }
+    },
+    "找到 %lld 個結果；雙擊集數匯入。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Found %lld results. Double-click an episode to import."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到 %lld 个结果；双击集数导入。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "找到 %lld 個結果；雙擊集數匯入。"
+          }
+        }
+      }
+    },
+    "第 %@ 集" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Episode %@"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %@ 集"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "第 %@ 集"
+          }
+        }
+      }
+    },
+    "合集／其他" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Batch / Other"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合集／其他"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "合集／其他"
+          }
+        }
+      }
+    },
+    "未識別漢化組" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unidentified release group"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未识别汉化组"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未識別漢化組"
+          }
+        }
+      }
+    },
+    "集數與版本" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Episodes and releases"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "集数与版本"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "集數與版本"
+          }
+        }
+      }
+    },
+    "漢化組" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Release groups"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汉化组"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "漢化組"
+          }
+        }
+      }
+    },
+    "漢化組篩選" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filter release groups"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "汉化组筛选"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "漢化組篩選"
+          }
+        }
+      }
+    },
+    "全部漢化組" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All groups"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部汉化组"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "全部漢化組"
+          }
+        }
+      }
+    },
+    "複製磁力連結" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Copy magnet link"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制磁力链接"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "複製磁力連結"
+          }
+        }
+      }
+    },
+    "選擇下載檔案" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose files to download"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择下载文件"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇下載檔案"
+          }
+        }
+      }
+    },
+    "選擇播放檔案" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose a file to play"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选择播放文件"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選擇播放檔案"
+          }
+        }
+      }
+    },
+    "請選取影片檔案，再按「邊下邊播」。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Select a video file, then choose Play While Downloading."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "请选择视频文件，再按“边下边播”。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "請選取影片檔案，再按「邊下邊播」。"
+          }
+        }
+      }
+    },
+    "發布日期／大小" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Published / Size"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "发布日期／大小"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "發布日期／大小"
+          }
+        }
+      }
+    },
+    "來源重複回傳同一頁；已保留結果，搜尋尚未完整。" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source repeated a page. Results were kept, but the search is incomplete."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源重复返回同一页；已保留结果，搜索尚未完整。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源重複回傳同一頁；已保留結果，搜尋尚未完整。"
           }
         }
       }

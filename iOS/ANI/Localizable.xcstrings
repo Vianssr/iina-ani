@@ -1,6 +1,443 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "This line is restricted to the source's own app. Select the website line.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This line is restricted to the source's own app. Select the website line."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此线路仅供来源官方 APP 内播放，请选择网页专线。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此線路僅供來源官方 APP 內播放，請選擇網頁專線。"
+          }
+        }
+      }
+    },
+    "The source returned a legacy URL without an expiry signature (HTTP 401). Open the new XiFan site and reselect the work and episode; old IDs cannot be reused.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source returned a legacy URL without an expiry signature (HTTP 401). Open the new XiFan site and reselect the work and episode; old IDs cannot be reused."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源返回了缺少有效期签名的旧地址（HTTP 401）。请到稀饭新站重新选择作品和集数，不能沿用旧编号。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源返回了缺少有效期簽名的舊地址（HTTP 401）。請到稀飯新站重新選擇作品和集數，不能沿用舊編號。"
+          }
+        }
+      }
+    },
+    "The media file is unavailable on the source server (HTTP 404 or 410). Select another line.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The media file is unavailable on the source server (HTTP 404 or 410). Select another line."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源服务器上的视频文件不存在或已移除（HTTP 404 或 410），请选择其他线路。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源伺服器上的影片檔案不存在或已移除（HTTP 404 或 410），請選擇其他線路。"
+          }
+        }
+      }
+    },
+    "The website player service could not resolve this stream. Retry later or select another line." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The website player service could not resolve this stream. Retry later or select another line."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "網站的播放解析服務未能取得此串流；請稍後重試或選擇其他線路。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网站的播放解析服务未能取得此流；请稍后重试或选择其他线路。"
+          }
+        }
+      }
+    },
+    "The page does not offer the resolution specified by this source configuration. No other resolution was selected." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The page does not offer the resolution specified by this source configuration. No other resolution was selected."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頁面未提供此來源配置指定的畫質；未自動選取其他畫質。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页面未提供此来源配置指定的画质；未自动选择其他画质。"
+          }
+        }
+      }
+    },
+    "The media URL specifies a port that this source configuration does not support." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The media URL specifies a port that this source configuration does not support."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒體網址指定了此來源配置尚未支援的連接埠。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体网址指定了此来源配置尚未支持的端口。"
+          }
+        }
+      }
+    },
+    "The source refused the request (HTTP 403). This does not identify a video format or prove that sign-in will help." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source refused the request (HTTP 403). This does not identify a video format or prove that sign-in will help."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源拒絕請求（HTTP 403）。這不是影片格式資訊，也不代表登入即可解決。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源拒绝请求（HTTP 403）。这不是视频格式信息，也不代表登录即可解决。"
+          }
+        }
+      }
+    },
+    "The source returned a website verification or blocking page instead of source data." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source returned a website verification or blocking page instead of source data."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源回傳網站驗證或封鎖頁，未取得來源資料。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源返回网站验证或封锁页，未取得来源数据。"
+          }
+        }
+      }
+    },
+    "The source redirected to an address outside its configured hosts. Check the source domain configuration." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source redirected to an address outside its configured hosts. Check the source domain configuration."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源轉址至配置以外的網域；請檢查來源網域設定。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源重定向至配置以外的域名；请检查来源域名设置。"
+          }
+        }
+      }
+    },
+    "The search response does not match the configured selectors or JSON fields. Update the search rules." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The search response does not match the configured selectors or JSON fields. Update the search rules."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜尋回應與配置的選擇器或 JSON 欄位不符；需更新搜尋規則。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "搜索响应与配置的选择器或 JSON 字段不符；需更新搜索规则。"
+          }
+        }
+      }
+    },
+    "The episode page does not match the configured episode rules, or contains no usable episode links." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The episode page does not match the configured episode rules, or contains no usable episode links."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "選集頁與配置的目錄規則不符，或沒有可用的集數連結。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选集页与配置的目录规则不符，或没有可用的集数链接。"
+          }
+        }
+      }
+    },
+    "The player data is malformed, incomplete, or could not be decoded." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The player data is malformed, incomplete, or could not be decoded."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器資料格式錯誤、欄位缺漏或編碼解碼失敗。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "播放器数据格式错误、字段缺失或编码解码失败。"
+          }
+        }
+      }
+    },
+    "The player declares an unsupported URL encryption method for this site or line." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The player declares an unsupported URL encryption method for this site or line."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此網站或線路的播放器加密協議尚未支援。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "此网站或线路的播放器加密协议尚未支持。"
+          }
+        }
+      }
+    },
+    "The page provides a player identifier, embedded player, or URL without a supported media extension. Further resolution is required." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The page provides a player identifier, embedded player, or URL without a supported media extension. Further resolution is required."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頁面提供播放識別碼、內嵌播放器，或沒有支援副檔名的網址；仍需進一步解析。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页面提供播放标识码、内嵌播放器，或没有支持扩展名的网址；仍需进一步解析。"
+          }
+        }
+      }
+    },
+    "The media URL extension is not supported by this source configuration." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The media URL extension is not supported by this source configuration."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒體網址的副檔名不在此來源配置的支援清單內。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体网址的扩展名不在此来源配置的支持列表内。"
+          }
+        }
+      }
+    },
+    "The media address violates the source URL rules (HTTPS, host, credentials, port or fragment)." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The media address violates the source URL rules (HTTPS, host, credentials, port or fragment)."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒體地址不符合來源網址規則（HTTPS、網域、憑證、連接埠或片段）。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "媒体地址不符合来源网址规则（HTTPS、域名、凭据、端口或片段）。"
+          }
+        }
+      }
+    },
+    "The page contains multiple different media addresses; the selected episode cannot be resolved unambiguously." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The page contains multiple different media addresses; the selected episode cannot be resolved unambiguously."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頁面包含多個不同媒體地址，無法唯一確認所選集數的串流。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页面包含多个不同媒体地址，无法唯一确认所选集数的流。"
+          }
+        }
+      }
+    },
+    "No supported media address was found in the page. The site may require a separate API or dynamic player." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No supported media address was found in the page. The site may require a separate API or dynamic player."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "頁面未找到支援的媒體地址；網站可能需要額外 API 或動態播放器。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "页面未找到支持的媒体地址；网站可能需要额外 API 或动态播放器。"
+          }
+        }
+      }
+    },
+    "The source returned an empty response or exceeded the response size limit." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The source returned an empty response or exceeded the response size limit."
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "來源回應為空或超過大小限制。"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "来源响应为空或超过大小限制。"
+          }
+        }
+      }
+    },
     "CSS1 samples passed search, episode listing and media URL resolution. Playback is not guaranteed. Failed checks are skipped for this import; existing sources are kept.": {
       "extractionState": "manual",
       "localizations": {

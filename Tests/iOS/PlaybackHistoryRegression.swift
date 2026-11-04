@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 @main struct MobilePlaybackHistoryRegression {
@@ -45,6 +46,7 @@ import Foundation
         _ = send(loaded, loadedID, .progress(.init(position: 23.5, duration: 100)))
         precondition(history.entries.count == 1 && history.entries[0].position == 23.5 && !history.entries[0].completed)
         let saved = history.entries[0]
+        try repairTitles(saved, in: temporary)
         let bytes = try Data(contentsOf: file)
         let text = String(decoding: bytes, as: UTF8.self)
         precondition(!text.contains("discard-work") && !text.contains("discard-episode") && !text.contains("accountID"))
@@ -218,6 +220,58 @@ import Foundation
         precondition(history.continuing[0].context?.episode == nextContext.episode && !history.continuing[0].completed)
         next.receive(PlaybackEvent(identity: nextID, sequence: 5, kind: .naturalEOF), now: later)
         precondition(history.continuing.count == 1 && history.continuing[0].completed)
+    }
+
+    @MainActor static func repairTitles(_ saved: MobilePlaybackHistoryEntry, in directory: URL) throws {
+        struct Archive: Encodable { let version: Int; let entries: [MobilePlaybackHistoryEntry] }
+        let file = directory.appendingPathComponent("repair.json")
+        func entry(_ title: String, work: PlaybackWorkIdentity? = nil) -> MobilePlaybackHistoryEntry {
+            let original = saved.context!
+            let context = PlaybackContext(work: work ?? original.work, episode: original.episode,
+                selection: original.selection, configurationRevision: original.configurationRevision)
+            return .init(id: MobilePlaybackHistoryEntry.sourceID(context), context: context, localReference: nil,
+                title: title, position: saved.position, duration: saved.duration,
+                completed: saved.completed, updatedAt: saved.updatedAt)
+        }
+        let legacy = entry(" · 第03集")
+        let unknown = entry(" · 第03集", work: .bangumi(99))
+        let intact = entry("Existing · Episode 2", work: .bangumi(100))
+        let originals = [legacy, unknown, intact]
+        let bytes = try JSONEncoder().encode(Archive(version: 1, entries: originals))
+        try bytes.write(to: file)
+        let history = MobilePlaybackHistory(file: file, confirmedWorkTitle: { $0 == 42 ? "葬送的芙莉蓮" : nil })
+        precondition(history.isReadable && !history.storageError)
+        let fixed = history.entries.first { $0.id == legacy.id }!
+        precondition(fixed.title == "葬送的芙莉蓮 · 第03集")
+        precondition(fixed.id == legacy.id && fixed.context == legacy.context && fixed.localReference == legacy.localReference)
+        precondition(fixed.position == legacy.position && fixed.duration == legacy.duration)
+        precondition(fixed.completed == legacy.completed && fixed.updatedAt == legacy.updatedAt)
+        precondition(history.entries.contains(unknown) && history.entries.contains(intact))
+        let committed = try Data(contentsOf: file)
+        let restarted = MobilePlaybackHistory(file: file, confirmedWorkTitle: { $0 == 42 ? "Different name" : nil })
+        precondition(Set(restarted.entries) == Set(history.entries))
+        precondition((try? Data(contentsOf: file)) == committed) // Already repaired: no rewrite.
+        for untrusted in ["", "   ", "https://example.test/name", " · Episode 2"] {
+            try bytes.write(to: file)
+            let unchanged = MobilePlaybackHistory(file: file, confirmedWorkTitle: { _ in untrusted })
+            precondition(Set(unchanged.entries) == Set(originals) && (try? Data(contentsOf: file)) == bytes)
+        }
+        // A staged-write failure must leave both disk and in-memory entries unchanged.
+        try bytes.write(to: file)
+        let staged = file.appendingPathExtension("staged")
+        try FileManager.default.createDirectory(at: staged, withIntermediateDirectories: false)
+        try Data([1]).write(to: staged.appendingPathComponent("block"))
+        let failed = MobilePlaybackHistory(file: file, confirmedWorkTitle: { _ in "Confirmed" })
+        precondition(failed.isReadable && failed.storageError)
+        precondition(Set(failed.entries) == Set(originals) && (try? Data(contentsOf: file)) == bytes)
+        failed.retryLoad()
+        precondition(!failed.storageError && failed.entries.contains { $0.title == "Confirmed · 第03集" })
+        for invalid in [Data("broken".utf8), try JSONEncoder().encode(Archive(version: 999, entries: originals))] {
+            try invalid.write(to: file)
+            let unreadable = MobilePlaybackHistory(file: file, confirmedWorkTitle: { _ in "Confirmed" })
+            precondition(!unreadable.isReadable && unreadable.storageError && (try? Data(contentsOf: file)) == invalid)
+        }
+        print("PASS: legacy title repair, exact work identity, preserved playback facts, restart/idempotence, atomic failure/retry and corrupt/future protection")
     }
 
     @MainActor static func localFiles(in temporary: URL, history: MobilePlaybackHistory, file: URL) async throws {

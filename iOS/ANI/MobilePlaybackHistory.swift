@@ -1,3 +1,4 @@
+import SourceCore
 import CryptoKit
 import Foundation
 import Observation
@@ -44,11 +45,14 @@ final class MobilePlaybackHistory {
         }
     }
     private let file: URL
+    private let confirmedWorkTitle: (Int) -> String?
     private var leases: [String: MobilePlaybackHistoryLease] = [:]
     private var revision = UUID()
 
-    init(file: URL = URL.applicationSupportDirectory.appendingPathComponent("ANI/playback-history.json")) {
+    init(file: URL = URL.applicationSupportDirectory.appendingPathComponent("ANI/playback-history.json"),
+         confirmedWorkTitle: @escaping (Int) -> String? = { _ in nil }) {
         self.file = file
+        self.confirmedWorkTitle = confirmedWorkTitle
         retryLoad()
     }
 
@@ -63,11 +67,37 @@ final class MobilePlaybackHistory {
             revision = UUID()
             isReadable = true
             storageError = false
+            repairMissingWorkTitles()
         } catch {
             // A corrupt/future authority is never replaced by an empty history.
             isReadable = false
             storageError = true
         }
+    }
+
+    /// Repair only the legacy empty-work-name format, using an exact Bangumi identity.
+    /// Called after loading, before any player obtains a recorder lease.
+    private func repairMissingWorkTitles() {
+        let repaired = entries.map { entry -> MobilePlaybackHistoryEntry in
+            let title = entry.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard entry.localReference == nil, let context = entry.context,
+                  let subjectID = context.work.bangumiID, context.work == .bangumi(subjectID),
+                  title.hasPrefix("· "),
+                  !title.dropFirst(2).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                  let confirmed = confirmedWorkTitle(subjectID) else { return entry }
+            let name = confirmed.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !name.contains("://"), !name.hasPrefix("·") else { return entry }
+            return MobilePlaybackHistoryEntry(id: entry.id, context: entry.context,
+                localReference: entry.localReference, title: name + " " + title,
+                position: entry.position, duration: entry.duration,
+                completed: entry.completed, updatedAt: entry.updatedAt)
+        }
+        guard repaired != entries else { return }
+        do {
+            // commit validates and atomically replaces the archive before publishing.
+            try commit(repaired)
+            revision = UUID()
+        } catch { storageError = true }
     }
 
     func remove(_ entry: MobilePlaybackHistoryEntry) {

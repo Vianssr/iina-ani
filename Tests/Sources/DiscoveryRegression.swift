@@ -1,3 +1,4 @@
+import SourceCore
 import CoreData
 import Foundation
 @testable import IINA_ANI

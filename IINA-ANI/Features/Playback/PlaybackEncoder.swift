@@ -52,6 +52,24 @@ struct PlaybackEncodingContext: Sendable {
 struct PlaybackEncoder {
     let media: YouGetJSON
     let context: PlaybackEncodingContext
+    /// Resolved DASH tracks must not depend on a plugin redirecting a dummy file.
+    /// Keep the plugin protocol when danmaku was explicitly requested.
+    var usesNativeIINAProcess: Bool {
+        !context.enableDanmaku && (media.site == .bilibili || media.site == .bangumi || media.site == .didahd ||
+            (media.site == .xiFan && URL(string: media.rawUrl)?.host == "next.xifanacg.com"))
+    }
+    var nativeIINAOptions: [String] {
+        // IINA sets libmpv options directly, so CLI aliases/list-operation
+        // suffixes are not accepted. audio-files is a Unix path list.
+        mpvOptions.map { option in
+            guard option.hasPrefix("audio-file=") else { return option }
+            let path = String(option.dropFirst("audio-file=".count))
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: ":", with: "\\:")
+            return "audio-files=" + path
+        }
+    }
+
 	var mpvDashOptions: [String] {
 		var args = mpvOptions
 		switch media.site {
@@ -102,11 +120,18 @@ struct PlaybackEncoder {
         return args
     }
     func iinaURLScheme(_ key: String, type: IINAUrlType) -> String? {
+        let signedXiFan = !context.enableDanmaku && media.site == .xiFan && URL(string: media.rawUrl)?.host == "next.xifanacg.com"
         switch type {
 		case .plugin:
-			return iinaPluginUrl(key)
+            // These adapters already return a playable URL and expose no danmaku.
+            // Avoid a silent placeholder load when the installed plugin cannot
+            // consume the handoff; retain plugin handoff whenever danmaku is used.
+            if !context.enableDanmaku, media.site == .didahd || media.site == .rebo || media.site == .mutedm || media.site == .xiFan {
+                return iinaDefaultUrl(key, includePluginMetadata: !signedXiFan)
+            }
+            return iinaPluginUrl(key)
 		case .normal:
-			return iinaDefaultUrl(key)
+            return iinaDefaultUrl(key, includePluginMetadata: !signedXiFan)
         case .danmaku:
             return danmakuUrl(key)
 		case .none:
@@ -172,9 +197,8 @@ struct PlaybackEncoder {
 		return u + args.joined(separator: "&")
 	}
 	
-    func iinaDefaultUrl(_ key: String) -> String? {
-        guard let url = videoUrl(key, forDash: true),
-			  let argsStr = iinaPlusArgsString(key) else {
+    func iinaDefaultUrl(_ key: String, includePluginMetadata: Bool = true) -> String? {
+        guard let url = videoUrl(key, forDash: true) else {
             return nil
         }
         
@@ -185,7 +209,10 @@ struct PlaybackEncoder {
         }
         args.insert("url=\(url)", at: 0)
         args.append("new_window=1")
-		args.append("mpv_\(MPVOption.Network.referrer)=\(argsStr)")
+        if includePluginMetadata {
+            guard let argsStr = iinaPlusArgsString(key) else { return nil }
+            args.append("mpv_\(MPVOption.Network.referrer)=\(argsStr)")
+        }
 		
         args = args.compactMap { kvs -> String? in
             let kv = kvs.split(separator: "=", maxSplits: 1).map(String.init)
@@ -210,7 +237,7 @@ struct PlaybackEncoder {
         switch media.site {
 		case .bilibili where forDash, .bangumi where forDash:
             return media.streams[key]?.dashUrl ?? media.streams[key]?.url
-        case .configured(_), .bilibili, .bangumi, .biliLive, .xiFan, .girigiri, .didahd, .jibi, .eacg, .senfun, .kanba, .haixing, .yinghua, .dilidili, .youknow, .hanime1, .wedm, .fengche, .rebo:
+        case .configured(_), .bilibili, .bangumi, .biliLive, .xiFan, .girigiri, .didahd, .jibi, .eacg, .senfun, .kanba, .haixing, .yinghua, .dilidili, .youknow, .hanime1, .wedm, .fengche, .rebo, .mutedm:
             return media.streams[key]?.url
         case .huya:
             return media.streams[key]?.url
@@ -348,7 +375,7 @@ enum PlaybackPreparation {
         let danmakuFile = path.flatMap { FileManager.default.fileExists(atPath: $0) ? $0 : nil }
         var context = PlaybackEncodingContext(endpoint: endpoint, enableDanmaku: enableDanmaku, danmakuFile: danmakuFile)
         switch media.site {
-        case .configured, .bilibili, .bangumi, .biliLive, .xiFan, .girigiri, .didahd, .jibi, .eacg, .senfun, .kanba, .haixing, .yinghua, .dilidili, .youknow, .hanime1, .wedm, .fengche, .rebo, .huya, .local:
+        case .configured, .bilibili, .bangumi, .biliLive, .xiFan, .girigiri, .didahd, .jibi, .eacg, .senfun, .kanba, .haixing, .yinghua, .dilidili, .youknow, .hanime1, .wedm, .fengche, .rebo, .mutedm, .huya, .local:
             return context
         default:
             let encoder = PlaybackEncoder(media: media, context: context)

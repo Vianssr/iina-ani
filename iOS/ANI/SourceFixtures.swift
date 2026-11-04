@@ -1,4 +1,5 @@
 #if DEBUG
+import SourceCore
 import Foundation
 
 /// Source rules exist only in explicit Debug fixtures, never in the release app.
@@ -105,6 +106,10 @@ actor SourceFixtureTransport {
         if url.path.contains("detail") {
             return Data("<div class='module-info-heading'><h1>Source Flow Fixture</h1></div><div class='module-tab-item tab-item'><span>Fixture line</span></div><div class='module-play-list'><a class='module-play-list-link' href='/index.php/vod/play/id/42/sid/1/nid/2.html'>Episode 2</a><a class='module-play-list-link' href='/index.php/vod/play/id/42/sid/1/nid/3.html'>Episode 3</a><a class='module-play-list-link' href='/index.php/vod/play/id/42/sid/1/nid/4.html'>Episode 4</a></div>".utf8)
         }
+        let arguments = ProcessInfo.processInfo.arguments
+        if let index = arguments.firstIndex(of: "-source-ui-diagnostic"), arguments.indices.contains(index + 1),
+           let failure = PlaybackFailure(rawValue: arguments[index + 1]),
+           [PlaybackFailure.unsupportedEncryption, .httpForbidden, .playerServiceUnavailable].contains(failure) { throw failure }
         resolutions += 1
         let wrong = ProcessInfo.processInfo.arguments.contains("-source-ui-failure") && resolutions == 1
         let components = url.pathComponents

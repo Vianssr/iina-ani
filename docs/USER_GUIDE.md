@@ -76,6 +76,7 @@ bash Tests/run-workspace-layout-script.sh
 | `IINA-ANI.xcodeproj/` | App 工程；target／scheme 為 `IINA-ANI` |
 | `Design/Icons/` | 40 個功能圖標的 SVG／透明 PNG、明暗預覽與素材對照；主要導航與功能按鈕已接入既有 Asset Catalog 的 `FunctionIcons/` |
 | `HuyaKit/` | 虎牙協議與串流代理套件，包含 `huyaproxy` CLI |
+| `SourceCore/` | macOS 與 iOS 共用的來源契約、配置驗證及公開播放器協議 |
 | `InstallDeps.sh` | 下載外部 IINA 彈幕外掛並安裝網頁依賴 |
 | `docs/architecture/PROJECT.md` | 工程分層、服務組裝、資料流與持久化 |
 | `Examples/Skins/README.md` | Skin 格式、打包與分享契約 |
@@ -218,10 +219,11 @@ IINA 彈幕外掛啟播使用每份解析結果的獨立會話網址，並明確
 
 ## 驗證與回報
 
+- `swift test --package-path SourceCore --scratch-path .build/source-core` 獨立驗證共用模組的公開 API、舊資料相容、平台能力與播放器協議；兩端 App 仍須分別建置。套件及回歸入口見 [SourceCore](../SourceCore/README.md)。
 - 改動站點或播放流程時，實際完成「輸入網址 → 選品質／集數 → 播放器載入」；開啟 URL scheme 不代表已播放。
 - 改動彈幕時，檢查連線、訊息、設定同步及視窗關閉後的資源釋放。
 - 改動 UI 時，建置並啟動此專案的 `IINA-ANI.app`，提供真實視窗證據；不要啟動 Animeko 或使用已刪除的舊工程產物。
-- 沒有配置 XCTest target；`bash Tests/run-work-library.sh` 運行真實 Core Data 模型／持久化／關聯回歸。完成 Debug 建置後，`bash Tests/run-w2-services.sh` 驗證偏好、Keychain／Bili／Douyu 帳號池及 Bangumi 單帳號生命週期、lease、guest pinning、重新授權／取消提交及 owned-cache；`bash Tests/run-w4-bangumi.sh` 驗證 Bangumi 分頁／快取／離線、關聯競態、OAuth 回調／state、續期與單帳號遷移；`bash Tests/run-w5-favorites.sh` 另驗證統一持久化初始化、退出前保存、新庫重開、最早期書籤的即時遷移讀取、損壞資料及無效路徑保護，並驗證收藏身份／分 P／離線修復、兩類收藏獨立操作、刪除隔離、真實舊 SQLite 的 WAL 備份／遷移／重啟／失敗回滾與還原。各 runner 使用隔離資料，不使用真實有效帳號。`WebFiles/Danmaku/test.htm` 是輔助頁，不是自動化套件。
+- macOS App 未配置 XCTest target；`bash Tests/run-work-library.sh` 運行真實 Core Data 模型／持久化／關聯回歸。完成 Debug 建置後，`bash Tests/run-w2-services.sh` 驗證偏好、Keychain／Bili／Douyu 帳號池及 Bangumi 單帳號生命週期、lease、guest pinning、重新授權／取消提交及 owned-cache；`bash Tests/run-w4-bangumi.sh` 驗證 Bangumi 分頁／快取／離線、關聯競態、OAuth 回調／state、續期與單帳號遷移；`bash Tests/run-w5-favorites.sh` 另驗證統一持久化初始化、退出前保存、新庫重開、最早期書籤的即時遷移讀取、損壞資料及無效路徑保護，並驗證收藏身份／分 P／離線修復、兩類收藏獨立操作、刪除隔離、真實舊 SQLite 的 WAL 備份／遷移／重啟／失敗回滾與還原。各 runner 使用隔離資料，不使用真實有效帳號。`WebFiles/Danmaku/test.htm` 是輔助頁，不是自動化套件。
 - `bash Tests/run-w6-downloads.sh` 連結生產下載服務，使用隔離 loopback HTTP 與 FFmpeg 生成的實際媒體驗證 Range／ETag 身份、取消、未知總量、跨 host Cookie 邊界、帳號 lease、暫停恢復、授權失效重解析、真實程序中斷恢復，以及 AES-128／fMP4／BYTERANGE／主清單音視訊。需要 `ffmpeg`／`ffprobe`。
 - `bash Tests/run-w7-usecases.sh` 驗證搜尋替換／底層取消、URL 與 Bangumi 隔離、獨立來源分頁、固定日期排期／跨日、持久新增集比較、Bangumi 趨勢排序及分區／過期快取故障隔離；真實站點、播放器與程序重開另見[工作記錄](history/WORK_LOG.md)的歷史煙霧證據，不以 fixture 代替有效登入。
 - 問題回報請使用 [ISSUE_TEMPLATE.md](../.github/ISSUE_TEMPLATE.md)，先移除 Cookie、token、私人路徑及帶簽名的串流網址。
@@ -331,7 +333,7 @@ Skin 可在 `manifest.json` 的 `entryPaths` 新增 `"pageMotion": "motions/page
 
 **設定 → 來源與帳號 → 來源訂閱… → 檢查訂閱更新**：在獨立子窗口從 `https://sub.creamycake.org/v1/css1.json` 取得 web-selector v2 訂閱，預覽每項的欄位差異／保留原因，再明確套用或捨棄。關閉子窗口、Esc 或取消會停止檢查並清除未套用預覽；不在背景自動套用。原始訂閱不能直接放入 sources 目錄。更新僅替換支援的公開搜尋欄位，沿用既有播放／目錄解析器，不新增來源能力。
 
-目前清單為 18 項／17 站：Hanime 兩檔共用來源，Forest 保持排除，可接受 16 個既有來源的搜尋配置。映射只接受核准的 host 與既有路徑／查詢欄位；未知站、未知格式、相互衝突的重複來源保留舊版並顯示原因，不根據名稱猜測新域名。搜尋請求使用 css1 的 searchUrl（只轉換關鍵詞／頁碼佔位符），不再把櫻花／熱播換成基線網址；核准網域間重新導向後，以實際回應網址解析作品、封面及相對連結，交給既有作品／集數匹配流程。索引配對採已核對的本地轉換，保留風車／海星選擇器修正。原生基線在 `Sources/native-search.json`，Fqdm 基線在 `Sources/fqdm.json`；海星仍用零起始 `pageindex`，服務頁碼由 1 起。既有訂閱快照須重新「檢查訂閱更新 → 套用此預覽」才會更新先前保存的搜尋網址。
+本機現可接受 17 個來源的搜尋配置（包含新增的 2k）；實際訂閱項目數依上游內容而變，Hanime 兩檔共用來源，Forest 保持排除。映射只接受核准的 host 與既有路徑／查詢欄位；未知站、未知格式、相互衝突的重複來源保留舊版並顯示原因，不根據名稱猜測新域名。搜尋請求使用 css1 的 searchUrl（只轉換關鍵詞／頁碼佔位符），不再把櫻花／熱播換成基線網址；核准網域間重新導向後，以實際回應網址解析作品、封面及相對連結，交給既有作品／集數匹配流程。索引配對採已核對的本地轉換，保留風車／海星選擇器修正。原生基線在 `Sources/native-search.json`，Fqdm 基線在 `Sources/fqdm.json`；海星仍用零起始 `pageindex`，服務頁碼由 1 起。既有訂閱快照須重新「檢查訂閱更新 → 套用此預覽」才會更新先前保存的搜尋網址。
 
 變更過的搜尋規則會以公開關鍵詞「海贼王」執行搜尋，必須取得可辨識的同來源作品；失敗、驗證頁或沒有結果時，僅保留該來源先前已套用的訂閱配置（尚未套用者不啟用），不阻止其他有效項目。與轉換基線相同的規則不重複探測，但仍須明確套用訂閱才能啟用。這是更新安全檢查，不代表站點永久可用或播放／下載通過。
 
@@ -407,3 +409,14 @@ M6 另核對重新授權前後的 Bangumi 使用者身份：同一帳號紀錄�
 保留 IINA+ 的作者與版權聲明，程式授權見 [LICENSE](../LICENSE)（GPL v3），圖示授權見 [LicenseForIcons.pdf](../LicenseForIcons.pdf)。第三方依賴及外部彈幕外掛依各自授權處理。
 
 本專案與 IINA、IINA+ 及 Animeko 無官方隸屬關係。上游文件及分析中的上游連結不是本 fork 的發佈或問題回報地址。
+
+
+### macOS 2k 解析相容性（2026-10-30）
+
+macOS 已新增 2k 原生來源，接受 `www.2kdm.com` 與 `www.mutedm.com` 的作品／集數網址，支援網頁專線 m2 的播放器解析。可直接使用「開啟網址」；要在番劇尋源中使用 2k 搜尋，請重新檢查並套用 CSS1 訂閱，舊快照不會自動新增來源搜尋規則。只接受經核對的 `list.name`／`list.id` 搜尋資料及本地作品連結模板，不匯入遠端 JavaScript。
+
+目前真網樣本已通過 macOS 的 2k 網頁專線、嘀嗒／熱播 B/G 解析與 MP4 解碼。這不是所有作品／線路的保證；2k APP 專線協議仍不支援，稀飯二級服務仍失敗。逐次驗證與上游波動見[來源排查記錄](development/source-diagnostics.md)。
+
+### 稀飯新站（macOS）
+
+macOS 可直接開啟 `https://next.xifanacg.com/anime/<作品ID>` 或新站的 `/anime/<作品ID>/play/<劇集ID>?source=<線路代碼>` 網址，選集後按正式站點 API 取得限時簽名播放地址。新舊站作品／劇集編號不同，舊書籤及來源映射不會自動換成新編號；請在新站確認作品，再將新網址貼到「開啟」。既有訂閱搜尋仍可能返回舊站網址，此次尚未改為新站搜尋。需要帳號或權限的回應會保留錯誤。

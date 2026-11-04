@@ -1,11 +1,11 @@
 import Foundation
 
 /// Declared independently: resolving a URL does not imply a downloader or web player.
-enum SourceCapability: String, Codable, CaseIterable, Sendable {
+public enum SourceCapability: String, Codable, CaseIterable, Sendable {
     case information, resolve, episodes, lines, quality, search, browse
     case iina, mpv, jsPlayer, danmaku, download
 
-    var displayTitle: String {
+    public var displayTitle: String {
         switch self {
         case .information: return String(localized: "Information")
         case .resolve: return String(localized: "URL Resolution")
@@ -23,11 +23,11 @@ enum SourceCapability: String, Codable, CaseIterable, Sendable {
     }
 }
 
-enum SourcePlatform: String, CaseIterable, Sendable {
+public enum SourcePlatform: String, CaseIterable, Sendable {
     case macOS, iOS
 
     /// Backends supported by the platform, not permissions granted by a configuration.
-    var capabilities: Set<SourceCapability> {
+    public var capabilities: Set<SourceCapability> {
         switch self {
         case .macOS: return Self.desktopCapabilities
         case .iOS: return Self.mobileCapabilities
@@ -40,13 +40,20 @@ enum SourcePlatform: String, CaseIterable, Sendable {
     ]
 }
 
-struct SourceDescriptor: Sendable {
-    let id: String
-    let name: String
-    let version: Int
-    let capabilities: Set<SourceCapability>
+public struct SourceDescriptor: Sendable {
+    public let id: String
+    public let name: String
+    public let version: Int
+    public let capabilities: Set<SourceCapability>
 
-    func unavailableReason(for capability: SourceCapability) -> String? {
+    public init(id: String, name: String, version: Int, capabilities: Set<SourceCapability>) {
+        self.id = id
+        self.name = name
+        self.version = version
+        self.capabilities = capabilities
+    }
+
+    public func unavailableReason(for capability: SourceCapability) -> String? {
         guard !capabilities.contains(capability) else { return nil }
         switch capability {
         case .download: return String(localized: "This source has no supported direct-file or non-DRM HLS VOD download path.")
@@ -57,13 +64,13 @@ struct SourceDescriptor: Sendable {
     }
 }
 
-struct SourceSearchResult: Sendable {
-    let item: SourceItemRef
-    let title: String
-    let cover: String
-    let classification: MediaClassification
+public struct SourceSearchResult: Sendable {
+    public let item: SourceItemRef
+    public let title: String
+    public let cover: String
+    public let classification: MediaClassification
 
-    init(item: SourceItemRef, title: String, cover: String, classification: MediaClassification = .unknown) {
+    public init(item: SourceItemRef, title: String, cover: String, classification: MediaClassification = .unknown) {
         self.item = item
         self.title = title
         self.cover = cover
@@ -71,8 +78,13 @@ struct SourceSearchResult: Sendable {
     }
 }
 
-struct SourceSearchPage: Sendable {
-    let results: [SourceSearchResult]
+public struct SourceSearchPage: Sendable {
+    public let results: [SourceSearchResult]
     /// nil means the source has no further page, not an invented total count.
-    let nextPage: Int?
+    public let nextPage: Int?
+
+    public init(results: [SourceSearchResult], nextPage: Int?) {
+        self.results = results
+        self.nextPage = nextPage
+    }
 }

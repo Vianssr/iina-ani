@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 /// The collection endpoint embeds SlimSubject; it is not complete episode metadata.

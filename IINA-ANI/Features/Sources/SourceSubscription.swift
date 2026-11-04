@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 import CryptoKit
 import SwiftSoup
@@ -147,6 +148,7 @@ enum SourceSubscriptionConverter {
         var signature: [String: String] = ["url": url, "format": format ?? ""]
         switch format {
         case "a":
+            guard baseline.search.format == "html" else { throw Rejection.unsupportedParser }
             guard let spec = config["selectorSubjectFormatA"] as? [String: Any],
                   let selector = spec["selectLists"] as? String else { throw Rejection.invalidSelector }
             try validateSelector(selector)
@@ -172,6 +174,14 @@ enum SourceSubscriptionConverter {
             signature["names"] = normalizedSelector(names)
             signature["links"] = normalizedSelector(links)
             // Indexed lists are not independently zipped: vetted local row selectors retain correct identities.
+        case "json-path-indexed":
+            guard id == "mutedm", baseline.search.format == "json",
+                  let spec = config["selectorSubjectFormatJsonPathIndexed"] as? [String: Any],
+                  spec["selectNames"] as? String == "$.list[*]['name']",
+                  spec["selectLinks"] as? String == "$.list[*]['id']",
+                  spec["linkTemplate"] as? String == "/voddetail/{value}.html" else { throw Rejection.unsupportedParser }
+            // Keep the locally reviewed JSON paths and URL template; no general JSONPath evaluator.
+            signature["names"] = "list.name"; signature["links"] = "list.id"
         default: throw Rejection.unsupportedParser
         }
         search["url"] = url

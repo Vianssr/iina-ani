@@ -1,9 +1,34 @@
+import SourceCore
 import AppKit
 import UniformTypeIdentifiers
 
 @MainActor
 private final class WorkspaceTorrentDocumentStack: NSStackView {
     override var isFlipped: Bool { true }
+}
+
+@MainActor
+private final class WorkspaceTorrentResultsTable: NSTableView {
+    var importSelection: (() -> Void)?
+    override func keyDown(with event: NSEvent) {
+        if event.keyCode == 36 || event.keyCode == 76 {
+            if isEnabled, selectedRow >= 0 { importSelection?() }
+        } else { super.keyDown(with: event) }
+    }
+}
+
+@MainActor
+private final class WorkspaceTorrentResultsScroll: NSScrollView {
+    override func layout() {
+        super.layout()
+        guard let table = documentView as? NSTableView, let titleColumn = table.tableColumns.first else { return }
+        let fixedWidth = table.tableColumns.dropFirst().reduce(CGFloat.zero) { $0 + $1.width }
+        let titleWidth = max(titleColumn.minWidth, contentSize.width - fixedWidth - table.intercellSpacing.width * CGFloat(table.numberOfColumns))
+        if abs(titleColumn.width - titleWidth) > 0.5 { titleColumn.width = titleWidth }
+        if abs(table.frame.width - contentSize.width) > 0.5 {
+            table.setFrameSize(NSSize(width: contentSize.width, height: table.frame.height))
+        }
+    }
 }
 
 /// Presentation owns search and metadata cancellation. DownloadService and Processes retain transfers/playback.
@@ -32,9 +57,14 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
     private let keywordField = WorkspaceSkinSearchField()
     private let searchButton = WorkspaceSkinButton()
     private let cancelSearchButton = WorkspaceSkinButton()
-    private let searchResultsPopup = NSPopUpButton()
-    private let readSearchResultButton = WorkspaceSkinButton()
-    private let searchStatus = WorkspaceSkinStatusLabel(wrappingLabelWithString: String(localized: "搜尋只查詢 RSS；請選取結果後再明確讀取 metadata。"))
+    private let resultsTable = WorkspaceTorrentResultsTable()
+    private let groupsTable = NSTableView()
+    private var releaseGroups: [String] = []
+    private var selectedGroup: String?
+    private var resultRows: [Int] = []
+    private var fileDetailViews: [NSView] = []
+    private var resultIntentIsPlayback = false
+    private let searchStatus = WorkspaceSkinStatusLabel(wrappingLabelWithString: String(localized: "搜尋只查詢 RSS；雙擊集數匯入，或選取後按 Return。"))
     private let searchService = TorrentSearchService()
     private var searchResults: [TorrentSearchResult] = []
     private var searchTask: Task<Void, Never>?
@@ -112,16 +142,67 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
         panel.addArrangedSubview(keywordField)
         configure(searchButton, title: String(localized: "搜尋 BT"), action: #selector(searchKeywordAction), icon: .search)
         configure(cancelSearchButton, title: String(localized: "取消搜尋"), action: #selector(cancelSearchAction), icon: .close)
-        configure(readSearchResultButton, title: String(localized: "讀取所選結果 metadata"), action: #selector(readSelectedSearchResult), icon: .torrent)
-        let searchActions = NSStackView(views: [searchButton, cancelSearchButton, readSearchResultButton])
+        let searchActions = NSStackView(views: [searchButton, cancelSearchButton])
         searchActions.orientation = .horizontal
         panel.addArrangedSubview(searchActions)
-        searchResultsPopup.target = self
-        searchResultsPopup.action = #selector(searchResultChanged)
-        searchResultsPopup.setAccessibilityLabel(String(localized: "BT 搜尋結果，不預選首項"))
-        searchResultsPopup.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-        resetSearchResults()
-        panel.addArrangedSubview(searchResultsPopup)
+        let resultColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("result"))
+        resultColumn.title = String(localized: "集數與版本")
+        resultColumn.minWidth = 160
+        resultColumn.width = 340
+        let actionColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("resultActions"))
+        actionColumn.title = ""
+        actionColumn.width = 74
+        actionColumn.minWidth = 74
+        actionColumn.maxWidth = 74
+        resultsTable.addTableColumn(actionColumn)
+        resultsTable.addTableColumn(resultColumn)
+        resultsTable.moveColumn(1, toColumn: 0)
+        let detailsColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("releaseDetails"))
+        detailsColumn.title = String(localized: "發布日期／大小")
+        detailsColumn.width = 96
+        detailsColumn.minWidth = 96
+        detailsColumn.maxWidth = 96
+        resultsTable.addTableColumn(detailsColumn)
+        resultsTable.moveColumn(2, toColumn: 1)
+        resultsTable.dataSource = self
+        resultsTable.delegate = self
+        resultsTable.target = self
+        resultsTable.doubleAction = #selector(importClickedResult)
+        resultsTable.importSelection = { [weak self] in self?.readSelectedSearchResult() }
+        resultsTable.rowHeight = 52
+        resultsTable.gridStyleMask = .solidHorizontalGridLineMask
+        resultsTable.intercellSpacing = NSSize(width: 8, height: 2)
+        resultsTable.columnAutoresizingStyle = .noColumnAutoresizing
+        resultsTable.setAccessibilityLabel(String(localized: "漢化組／集數 · 雙擊匯入"))
+        let resultsScroll = WorkspaceTorrentResultsScroll()
+        resultsScroll.documentView = resultsTable
+        resultsScroll.hasVerticalScroller = true
+        resultsScroll.autohidesScrollers = true
+        let groupColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("group"))
+        groupColumn.title = String(localized: "漢化組")
+        groupsTable.addTableColumn(groupColumn)
+        groupsTable.dataSource = self
+        groupsTable.delegate = self
+        groupsTable.rowHeight = 40
+        groupsTable.columnAutoresizingStyle = .lastColumnOnlyAutoresizingStyle
+        groupsTable.setAccessibilityLabel(String(localized: "漢化組篩選"))
+        let groupScroll = NSScrollView()
+        groupScroll.documentView = groupsTable
+        groupScroll.hasVerticalScroller = true
+        groupScroll.autohidesScrollers = true
+        let resultsBrowser = NSStackView(views: [groupScroll, resultsScroll])
+        resultsBrowser.orientation = .horizontal
+        resultsBrowser.alignment = .top
+        resultsBrowser.spacing = 12
+        panel.addArrangedSubview(resultsBrowser)
+        groupScroll.translatesAutoresizingMaskIntoConstraints = false
+        resultsScroll.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            resultsBrowser.heightAnchor.constraint(equalToConstant: 310),
+            groupScroll.widthAnchor.constraint(equalTo: resultsBrowser.widthAnchor, multiplier: 0.24),
+            groupScroll.heightAnchor.constraint(equalTo: resultsBrowser.heightAnchor),
+            resultsScroll.heightAnchor.constraint(equalTo: resultsBrowser.heightAnchor),
+        ])
         panel.addArrangedSubview(searchStatus)
         address.placeholderString = String(localized: "magnet: 或本機 .torrent 路徑")
         address.target = self
@@ -130,17 +211,20 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
         panel.addArrangedSubview(address)
         let importActions = NSStackView(views: [importButton, fileButton, cancelButton])
         importActions.orientation = .horizontal
-        configure(importButton, title: String(localized: "讀取 metadata"), action: #selector(importAddress), icon: .magnet)
+        configure(importButton, title: String(localized: "匯入"), action: #selector(importAddress), icon: .magnet)
         configure(fileButton, title: String(localized: "選擇 .torrent…"), action: #selector(chooseFileAction), icon: .folder)
         configure(cancelButton, title: String(localized: "取消匯入"), action: #selector(cancelImportAction), icon: .close)
         panel.addArrangedSubview(importActions)
         uploadLimit.stringValue = String(delegate.services.preferences.torrentUploadLimitBytesPerSecond)
         uploadLimit.setAccessibilityLabel(String(localized: "P2P 上傳上限，每秒位元組"))
-        let policyRow = NSStackView(views: [NSTextField(labelWithString: String(localized: "上傳上限（bytes/s）")), uploadLimit])
+        let policyHelp = NSButton(title: "", target: self, action: #selector(showUploadHelp(_:)))
+        policyHelp.image = NSImage(systemSymbolName: "exclamationmark.circle", accessibilityDescription: String(localized: "P2P 上傳說明"))
+        policyHelp.isBordered = false
+        policyHelp.toolTip = uploadExplanation
+        policyHelp.setAccessibilityLabel(String(localized: "P2P 上傳說明"))
+        let policyRow = NSStackView(views: [NSTextField(labelWithString: String(localized: "上傳上限（bytes/s）")), uploadLimit, policyHelp])
         policyRow.orientation = .horizontal
         panel.addArrangedSubview(policyRow)
-        let explanation = NSTextField(wrappingLabelWithString: String(localized: "讀取 metadata 也會連接 P2P 網路，首次須同意可能上傳。上限為 1–10485760 bytes/s；設定頁可調整活動傳輸上限或停止全部 P2P。快取清理不移除 Torrent 暫存與完成檔。"))
-        panel.addArrangedSubview(explanation)
         panel.addArrangedSubview(metadataLabel)
         let checkColumn = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("checked"))
         checkColumn.title = String(localized: "Download")
@@ -180,19 +264,21 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
         panel.addArrangedSubview(actions)
         panel.addArrangedSubview(status)
         panel.addArrangedSubview(playbackStatus)
-        for item in [heading, keywordField, searchActions, searchResultsPopup, searchStatus, address, importActions, policyRow, explanation, metadataLabel, scroll, selectionActions, actions, status, playbackStatus] {
+        for item in [heading, keywordField, searchActions, resultsBrowser, searchStatus, address, importActions, policyRow, metadataLabel, scroll, selectionActions, actions, status, playbackStatus] {
             item.translatesAutoresizingMaskIntoConstraints = false
             item.widthAnchor.constraint(equalTo: panel.widthAnchor, constant: -28).isActive = true
         }
+        fileDetailViews = [metadataLabel, scroll, selectionActions, actions]
         scroll.heightAnchor.constraint(equalToConstant: 180).isActive = true
         uploadLimit.widthAnchor.constraint(equalToConstant: 130).isActive = true
         root.bindSkin(appearance, slot: "panel", componentID: "torrent.import")
         panel.bindSkin(appearance, slot: "list", componentID: "torrent.import")
         table.bindSkin(appearance, slot: "list", componentID: "torrent.import")
-        for label in [explanation, metadataLabel, selectionCount] { label.bindSkin(appearance, slot: "list", componentID: "torrent.import") }
+        for label in [metadataLabel, selectionCount] { label.bindSkin(appearance, slot: "list", componentID: "torrent.import") }
         address.bindSkin(appearance, slot: "search", componentID: "torrent.import")
         keywordField.bindSkin(appearance, slot: "search", componentID: "torrent.import")
-        searchResultsPopup.bindSkin(appearance, slot: "list", componentID: "torrent.import")
+        groupsTable.bindSkin(appearance, slot: "list", componentID: "torrent.import")
+        resultsTable.bindSkin(appearance, slot: "list", componentID: "torrent.import")
         searchStatus.bindSkin(appearance, slot: "emptyState", componentID: "torrent.import")
         uploadLimit.bindSkin(appearance, slot: "search", componentID: "torrent.import")
         status.bindSkin(appearance, slot: "emptyState", componentID: "torrent.import")
@@ -252,13 +338,8 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
                 try Task.checkCancellation()
                 guard let self, attached, searchGeneration == token else { return }
                 searchResults = report.results
-                for result in searchResults {
-                    let item = NSMenuItem(title: "\(result.sourceName) — \(result.title)", action: nil, keyEquivalent: "")
-                    item.toolTip = item.title
-                    searchResultsPopup.menu?.addItem(item)
-                }
-                searchResultsPopup.selectItem(at: 0)
-                let summary = searchResults.isEmpty ? String(localized: "沒有找到 BT 結果。") : String(localized: "找到 \(searchResults.count) 個結果；請先選取，再按「讀取所選結果 metadata」。")
+                rebuildResultRows()
+                let summary = searchResults.isEmpty ? String(localized: "沒有找到 BT 結果。") : String(localized: "找到 \(searchResults.count) 個結果；雙擊集數匯入。")
                 searchStatus.stringValue = ([summary] + report.failures).joined(separator: "\n")
                 searchStatus.workspaceSkinBinding?.state = report.failures.isEmpty ? .normal : .error
             } catch {
@@ -275,17 +356,54 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
 
     private func resetSearchResults() {
         searchResults = []
-        searchResultsPopup.removeAllItems()
-        searchResultsPopup.addItem(withTitle: String(localized: "請明確選取 BT 搜尋結果（不預選首項）"))
-        searchResultsPopup.menu?.autoenablesItems = false
-        searchResultsPopup.item(at: 0)?.isEnabled = false
-        searchResultsPopup.selectItem(at: 0)
-        searchResultsPopup.toolTip = nil
+        resultRows = []
+        releaseGroups = []
+        selectedGroup = nil
+        groupsTable.reloadData()
+        groupsTable.deselectAll(nil)
+        resultsTable.reloadData()
+        resultsTable.deselectAll(nil)
+    }
+
+    private func rebuildResultRows() {
+        releaseGroups = Set(searchResults.map(\.releaseGroup)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+        selectedGroup = releaseGroups.first
+        groupsTable.reloadData()
+        if !releaseGroups.isEmpty { groupsTable.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false) }
+        filterResultRows()
+    }
+
+    private func filterResultRows() {
+        resultRows = searchResults.indices.filter { selectedGroup == nil || searchResults[$0].releaseGroup == selectedGroup }.sorted {
+            let left = searchResults[$0], right = searchResults[$1]
+            let order = (left.episode ?? "").localizedStandardCompare(right.episode ?? "")
+            return order == .orderedSame ? left.title.localizedStandardCompare(right.title) == .orderedAscending : order == .orderedDescending
+        }
+        resultsTable.reloadData()
+        resultsTable.deselectAll(nil)
+        if !resultRows.isEmpty { resultsTable.scrollRowToVisible(0) }
     }
 
     private var selectedSearchResult: TorrentSearchResult? {
-        let index = searchResultsPopup.indexOfSelectedItem - 1
-        return searchResults.indices.contains(index) ? searchResults[index] : nil
+        let row = resultsTable.selectedRow
+        guard resultRows.indices.contains(row) else { return nil }
+        return searchResults[resultRows[row]]
+    }
+
+    private var uploadExplanation: String {
+        String(localized: "讀取 metadata 也會連接 P2P 網路，首次須同意可能上傳。上限為 1–10485760 bytes/s；設定頁可調整活動傳輸上限或停止全部 P2P。快取清理不移除 Torrent 暫存與完成檔。")
+    }
+
+    @objc private func showUploadHelp(_ sender: NSButton) {
+        let content = NSViewController()
+        let label = NSTextField(wrappingLabelWithString: uploadExplanation)
+        label.frame = NSRect(x: 14, y: 14, width: 320, height: 110)
+        content.view = NSView(frame: NSRect(x: 0, y: 0, width: 348, height: 138))
+        content.view.addSubview(label)
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = content
+        popover.show(relativeTo: sender.bounds, of: sender, preferredEdge: .maxY)
     }
 
     @objc private func searchKeywordAction() { search(keyword: keywordField.stringValue) }
@@ -299,13 +417,32 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
         updateControls()
     }
 
-    @objc private func searchResultChanged() {
-        searchResultsPopup.toolTip = selectedSearchResult.map { "\($0.sourceName) — \($0.title)" }
-        updateControls()
+    @objc private func importClickedResult() {
+        let row = resultsTable.clickedRow
+        guard resultRows.indices.contains(row) else { return }
+        readSelectedSearchResult()
+    }
+
+    @objc private func resultAction(_ sender: NSButton) {
+        guard !previewOnly, attached, operation == nil, searchTask == nil,
+              searchResults.indices.contains(sender.tag) else { return }
+        resultIntentIsPlayback = sender.identifier?.rawValue == "playResult"
+        importResult(searchResults[sender.tag])
+    }
+
+    @objc private func copyResultMagnet(_ sender: NSButton) {
+        guard searchResults.indices.contains(sender.tag), let magnet = searchResults[sender.tag].magnetURL else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(magnet, forType: .string)
     }
 
     @objc private func readSelectedSearchResult() {
         guard !previewOnly, attached, operation == nil, let result = selectedSearchResult else { return }
+        resultIntentIsPlayback = false
+        importResult(result)
+    }
+
+    private func importResult(_ result: TorrentSearchResult) {
         if let magnet = result.magnetURL {
             openAddress(magnet)
         } else if let url = result.torrentURL {
@@ -420,7 +557,10 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
                     pendingImportID = imported.id
                     metadataLabel.stringValue = String(localized: "\(imported.isPrivate ? String(localized: "Private：不公開發現") : String(localized: "Public")) · \(imported.files.count) 個檔案 · \(Self.size(imported.totalBytes))\nInfo hash：\(imported.infoHashes.sorted().joined(separator: " / "))")
                     table.reloadData()
+                    updateControls()
+                    if let fileScroll = table.enclosingScrollView { fileScroll.scrollToVisible(fileScroll.bounds) }
                     if imported.files.isEmpty { status.stringValue = String(localized: "metadata 沒有可選檔案。") }
+                    else if resultIntentIsPlayback { status.stringValue = String(localized: "請選取影片檔案，再按「邊下邊播」。") }
                     else if downloadOnly { status.stringValue = String(localized: "勾選影片後可一次下載多檔；非影片不支援下載，不預選任何檔案。") }
                     else { status.stringValue = String(localized: "勾選影片後可一次下載多檔；點選單一列可邊下邊播。非影片不支援下載／播放，不預選任何檔案。") }
                 } catch {
@@ -705,8 +845,17 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
         keywordField.isEnabled = available
         searchButton.isEnabled = available
         cancelSearchButton.isEnabled = available && searchTask != nil
-        searchResultsPopup.isEnabled = available && searchTask == nil && !searchResults.isEmpty
-        readSearchResultButton.isEnabled = available && operation == nil && searchTask == nil && selectedSearchResult != nil
+        resultsTable.isEnabled = available && operation == nil && searchTask == nil
+        groupsTable.isEnabled = available && searchTask == nil
+        for detailView in fileDetailViews { detailView.isHidden = metadata == nil }
+        for row in 0..<resultsTable.numberOfRows {
+            guard let actions = resultsTable.view(atColumn: 2, row: row, makeIfNecessary: false) as? NSStackView else { continue }
+            for case let button as NSButton in actions.arrangedSubviews {
+                button.isEnabled = available && operation == nil && searchTask == nil &&
+                    (button.identifier?.rawValue != "copyMagnet" || searchResults[button.tag].magnetURL != nil)
+                if button.identifier?.rawValue == "playResult" { button.isHidden = downloadOnly }
+            }
+        }
         importButton.isEnabled = available && operation == nil
         fileButton.isEnabled = available && operation == nil
         address.isEnabled = available && operation == nil
@@ -726,12 +875,92 @@ final class WorkspaceTorrentController: NSViewController, NSTableViewDataSource,
         }
     }
 
-    func numberOfRows(in tableView: NSTableView) -> Int { metadata?.files.count ?? 0 }
+    func tableView(_ tableView: NSTableView, heightOfRow row: Int) -> CGFloat {
+        if tableView === resultsTable { return 52 }
+        if tableView === groupsTable { return 40 }
+        return tableView.rowHeight
+    }
+
+    func numberOfRows(in tableView: NSTableView) -> Int {
+        if tableView === groupsTable { return releaseGroups.isEmpty ? 0 : releaseGroups.count + 1 }
+        return tableView === resultsTable ? resultRows.count : metadata?.files.count ?? 0
+    }
     func tableViewSelectionDidChange(_ notification: Notification) {
+        if notification.object as? NSTableView === groupsTable {
+            let row = groupsTable.selectedRow
+            selectedGroup = row > 0 && releaseGroups.indices.contains(row - 1) ? releaseGroups[row - 1] : nil
+            filterResultRows()
+            return
+        }
+        guard notification.object as? NSTableView !== resultsTable else { return }
         if let file = selectedFile { status.stringValue = file.isPlayableMedia ? String(localized: "所選索引 \(file.index)：\(file.path)") : String(localized: "所選檔案不是支援的影片格式；請選取影片。") }
         updateControls()
     }
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
+        if tableView === groupsTable {
+            let name = row == 0 ? String(localized: "全部漢化組") : releaseGroups[row - 1]
+            let count = row == 0 ? searchResults.count : searchResults.filter { $0.releaseGroup == name }.count
+            let label = NSTextField(labelWithString: "\(name)  ·  \(count)")
+            label.lineBreakMode = .byTruncatingTail
+            label.toolTip = name
+            label.bindSkin(appearance, slot: "list", componentID: "torrent.import")
+            return label
+        }
+        if tableView === resultsTable {
+            let index = resultRows[row]
+            let result = searchResults[index]
+            if tableColumn?.identifier.rawValue == "releaseDetails" {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy/MM/dd"
+                let date = result.publishedAt.map { formatter.string(from: $0) } ?? "—"
+                let size = result.sizeBytes.map(Self.size) ?? "—"
+                let label = NSTextField(wrappingLabelWithString: "\(date)\n\(size)")
+                label.font = .systemFont(ofSize: 11)
+                label.textColor = .secondaryLabelColor
+                label.toolTip = String(localized: "發布日期／大小") + "：\(date) · \(size)"
+                return label
+            }
+            if tableColumn?.identifier.rawValue == "resultActions" {
+                let actions = NSStackView()
+                actions.orientation = .horizontal
+                actions.spacing = 6
+                for (identifier, symbol, help, selector) in [
+                    ("copyMagnet", "link", String(localized: "複製磁力連結"), #selector(copyResultMagnet(_:))),
+                    ("playResult", "play.fill", String(localized: "選擇播放檔案"), #selector(resultAction(_:)))
+                ] {
+                    let button = NSButton(title: "", target: self, action: selector)
+                    button.image = NSImage(systemSymbolName: symbol, accessibilityDescription: help)
+                    button.bezelStyle = .texturedRounded
+                    button.identifier = NSUserInterfaceItemIdentifier(identifier)
+                    button.tag = index
+                    button.toolTip = help
+                    button.setAccessibilityLabel(help + " · " + result.title)
+                    button.isEnabled = attached && !previewOnly && operation == nil && searchTask == nil &&
+                        (identifier != "copyMagnet" || result.magnetURL != nil)
+                    button.isHidden = identifier == "playResult" && downloadOnly
+                    actions.addArrangedSubview(button)
+                    button.widthAnchor.constraint(equalToConstant: 30).isActive = true
+                }
+                return actions
+            }
+            let label = NSTextField(wrappingLabelWithString: result.title)
+            label.maximumNumberOfLines = 2
+            label.lineBreakMode = .byWordWrapping
+            label.toolTip = "\(result.title)\n\(result.sourceName)"
+            label.bindSkin(appearance, slot: "list", componentID: "torrent.import")
+            let cell = NSTableCellView()
+            cell.addSubview(label)
+            label.translatesAutoresizingMaskIntoConstraints = false
+            NSLayoutConstraint.activate([
+                label.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 4),
+                label.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -4),
+                label.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                label.topAnchor.constraint(greaterThanOrEqualTo: cell.topAnchor, constant: 6),
+                label.bottomAnchor.constraint(lessThanOrEqualTo: cell.bottomAnchor, constant: -6),
+            ])
+            cell.textField = label
+            return cell
+        }
         guard let files = metadata?.files, files.indices.contains(row) else { return nil }
         let file = files[row]
         if tableColumn?.identifier.rawValue == "checked" {

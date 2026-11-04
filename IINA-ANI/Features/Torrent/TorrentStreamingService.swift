@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 struct TorrentPlaybackGrant: Sendable {

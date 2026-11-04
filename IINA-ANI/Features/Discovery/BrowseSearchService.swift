@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 enum BrowseContentFilter: String, CaseIterable, Sendable {
@@ -79,7 +80,10 @@ actor BrowseSearchService {
             try await bangumi.search(keyword: query, limit: limit, offset: offset)
         }
         searchSource = { sourceID, query, page in
-            try await decoder.searchSource(sourceID: sourceID, query: query, page: page, classifyWithBangumi: false)
+            // CMS catalogs start with unknown content kind. Classify their titles
+            // before applying the video/live partition; otherwise valid hits are
+            // silently discarded as if the source returned no matches.
+            try await decoder.searchSource(sourceID: sourceID, query: query, page: page, classifyWithBangumi: true)
         }
         resolveURL = { url in try await decoder.selection(for: url) }
     }

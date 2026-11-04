@@ -38,7 +38,7 @@ struct TrendingView: View {
                     ContentUnavailableView("No trending anime yet", systemImage: "flame",
                         description: Text("Try another period or refresh later."))
                 }
-                if loading { ProgressView("Loading anime…").frame(maxWidth: .infinity).padding() }
+                if loading { ProgressView().accessibilityLabel(Text("Loading anime…")).frame(maxWidth: .infinity).padding() }
                 if !loading && !failed && offset < total {
                     Button { revision += 1 } label: {
                         Label("Load more", systemImage: "plus")
@@ -132,7 +132,7 @@ struct CalendarView: View {
             VStack(alignment: .leading, spacing: 16) {
                 weekdayPicker
                 if failed { CatalogLoadFailure(hasContent: !days.isEmpty) { revision += 1 } }
-                if loading { ProgressView("Loading schedule…").frame(maxWidth: .infinity).padding() }
+                if loading { ProgressView().accessibilityLabel(Text("Loading schedule…")).frame(maxWidth: .infinity).padding() }
                 if !loading && !failed && items.isEmpty {
                     ContentUnavailableView("Nothing scheduled", systemImage: "calendar.badge.minus",
                         description: Text("Choose another day to see its anime."))

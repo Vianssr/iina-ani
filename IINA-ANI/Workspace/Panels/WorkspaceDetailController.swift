@@ -1,3 +1,4 @@
+import SourceCore
 import AppKit
 import SDWebImage
 import HuyaKit
@@ -484,7 +485,6 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     private var torrentSourceHost: NSView!
     private var torrentSourceController: WorkspaceTorrentController?
     private let candidatePopup = NSPopUpButton()
-    private let candidateEvidence = NSTextField(wrappingLabelWithString: String(localized: "開啟來源窗口後自動尋找已選集數。"))
     private var candidateControls: NSStackView!
     private var sourcePanelButton: WorkspaceSkinButton!
     private var exactPlayButton: WorkspaceSkinButton!
@@ -2165,10 +2165,19 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         exactPlayButton.toolTip = playReason ?? (playbackSubmitted ? String(localized: "此選擇已提交播放；重選來源或集數後可再次播放。") : nil)
         exactPlayButton.isHidden = hasPinnedAnimeEpisode && media == nil
         mapButton.isHidden = !anime || hasPinnedAnimeEpisode
-        panelStatus.stringValue = status.stringValue + (reasons.stringValue.isEmpty ? "" : "\n" + reasons.stringValue)
+        panelStatus.stringValue = [showsRoutineStatus ? "" : status.stringValue, reasons.stringValue]
+            .filter { !$0.isEmpty }.joined(separator: "\n")
+        panelStatus.isHidden = panelStatus.stringValue.isEmpty
         candidateChanged()
         updatePresentation()
     }
+    // Routine completion messages remain available in source diagnostics.
+    private var showsRoutineStatus: Bool {
+        [String(localized: "尚未選擇來源。"),
+         String(localized: "作品資訊已載入；選集與播放來源獨立。"),
+         String(localized: "所選來源已就緒；播放與下載共用此選擇。")].contains(status.stringValue)
+    }
+
     private func syncManagementStatus() {
         managementStatus.stringValue = status.stringValue
         managementStatus.workspaceSkinBinding?.state = status.workspaceSkinBinding?.state ?? .normal
@@ -2204,7 +2213,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         episodeCaption.stringValue = anime ? String(localized: "選集") : live ? String(localized: "直播") : String(localized: "影片")
         let episodeCount = bangumiEpisodes.count + localOnlyEpisodes.count
         updateInformationSections()
-        status.isHidden = !loading && [String(localized: "尚未選擇來源。"), String(localized: "作品資訊已載入；選集與播放來源獨立。")].contains(status.stringValue)
+        status.isHidden = status.stringValue.isEmpty || (!loading && showsRoutineStatus)
         episodeGroups.isHidden = !anime || episodeCount == 0
         episodeEmpty.isHidden = !anime || episodeCount > 0
         episodeEmpty.stringValue = work?.bangumiMetadata == nil ? String(localized: "集數資料尚未載入；可刷新資訊，或選擇來源後查看來源選集。") : String(localized: "資訊來源未提供集數；請從來源窗口選擇精確集數。")
@@ -2315,7 +2324,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
             playbackSubmitted = true
             try await services.player.openWithPlayer(prepared, key, title: work?.title, coverURL: work?.coverURL ?? sourceCoverURL, episodeTitle: prepared.title)
         }
-        if accepts(token) { status.stringValue = String(localized: "已提交所選番劇集數、品質與線路（訪客）；不會自動改播其他來源。") }
+        if accepts(token) { status.stringValue = "" }
     }
     private func playExactAnime() {
         guard let choice = selection, media != nil, choice.qualityID != nil else {
@@ -2360,14 +2369,6 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
     }
     private func candidateChanged() {
         candidatePopup.isEnabled = !previewOnly && !loading && !commanding && hasPinnedAnimeEpisode && candidatePopup.numberOfItems > 1
-        guard let id = candidatePopup.selectedItem?.representedObject as? String,
-              let candidate = animeReport?.candidates.first(where: { $0.id == id && $0.selection != nil && $0.failure == nil }) else {
-            if animeReport == nil { candidateEvidence.stringValue = String(localized: "自動尋找已選作品與集數；保存映射優先。") }
-            else if candidatePopup.numberOfItems > 1 { candidateEvidence.stringValue = String(localized: "已找到所選集數；核對候選名稱後選擇來源，即解析並播放。") }
-            else { candidateEvidence.stringValue = String(localized: "沒有可播放的匹配來源；請重新尋源或展開來源診斷。") }
-            return
-        }
-        candidateEvidence.stringValue = String(localized: "匹配證據：\(candidate.evidence)\n來源已對應一級頁面所選集數；\(candidate.trusted ? String(localized: "已有明確映射或唯一作品／集數證據") : String(localized: "有多個候選或作品證據不足，請核對名稱及年份後選擇來源"))。")
     }
     @objc private func confirmCandidate() {
         guard !previewOnly, !loading, !commanding,
@@ -2484,7 +2485,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         panel.isReleasedWhenClosed = false
         panel.minSize = NSSize(width: 460, height: 360)
         panel.delegate = self
-        for field in [panelSelection, panelStatus, candidateEvidence, sourceDiagnostics] { field.isSelectable = true }
+        for field in [panelSelection, panelStatus, sourceDiagnostics] { field.isSelectable = true }
         let root = NSView()
         root.bindSkin(appearance, slot: "panel", componentID: "detail.media")
         panel.contentView = root
@@ -2522,7 +2523,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         candidatePopup.identifier = NSUserInterfaceItemIdentifier("desktop.source.candidates")
         candidateControls = NSStackView()
         candidateControls.orientation = .vertical; candidateControls.alignment = .leading; candidateControls.spacing = 10
-        for item in [row([findSourceButton, candidatePopup]), candidateEvidence] as [NSView] { appendInfo(item, to: candidateControls) }
+        appendInfo(row([findSourceButton, candidatePopup]), to: candidateControls)
         sourceSelectionSection = card(title: String(localized: "匹配來源"), items: [sourceRow, candidateControls])
         catalogCaption = label(String(localized: "來源集數／分 P"))
         catalogSection = card(title: nil, items: [catalogCaption, catalogGrid, catalogEmpty])
@@ -2811,6 +2812,13 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         collectionOperation = Task { [weak self] in
             guard let self else { return }
             do {
+                let account = try await self.services.decoder.accounts.currentAccount(sourceID: "bangumi")
+                guard self.acceptsCollection(token, workID: value.id) else { return }
+                guard account?.enabled == true, account?.status == .valid else {
+                    self.updateCollectionSelection()
+                    self.updateCommands()
+                    return
+                }
                 let result = try await self.sync.refreshCollectionStatus(workID: value.id)
                 guard self.acceptsCollection(token, workID: value.id) else { return }
                 // Do not replace unrelated metadata.

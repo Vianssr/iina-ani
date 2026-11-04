@@ -1,3 +1,4 @@
+import SourceCore
 import Cocoa
 import Foundation
 import Darwin

@@ -6,6 +6,7 @@
 //  Copyright © 2022 xjbeta. All rights reserved.
 //
 
+import SourceCore
 import Cocoa
 import WebKit
 

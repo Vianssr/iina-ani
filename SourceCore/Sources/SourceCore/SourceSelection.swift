@@ -1,9 +1,9 @@
 import Foundation
 
-enum MediaContentKind: String, Codable, CaseIterable, Sendable {
+public enum MediaContentKind: String, Codable, CaseIterable, Sendable {
     case anime, video, live, unknown
 
-    var title: String {
+    public var title: String {
         switch self {
         case .anime: return String(localized: "番劇")
         case .video: return String(localized: "一般影片")
@@ -14,11 +14,16 @@ enum MediaContentKind: String, Codable, CaseIterable, Sendable {
 }
 
 /// Evidence is independent of the immutable source identity and presentation.
-struct MediaClassification: Codable, Hashable, Sendable {
-    var kind: MediaContentKind
-    var provenance: String
-    static let unknown = MediaClassification(kind: .unknown, provenance: "unknown")
-    static func requiresBangumiLookup(for item: SourceItemRef) -> Bool {
+public struct MediaClassification: Codable, Hashable, Sendable {
+    public var kind: MediaContentKind
+    public var provenance: String
+    public init(kind: MediaContentKind, provenance: String) {
+        self.kind = kind
+        self.provenance = provenance
+    }
+
+    public static let unknown = MediaClassification(kind: .unknown, provenance: "unknown")
+    public static func requiresBangumiLookup(for item: SourceItemRef) -> Bool {
         switch item.sourceID {
         case "didahd", "kanba", "youknow", "rebo": return true
         case "bilibili":
@@ -31,25 +36,31 @@ struct MediaClassification: Codable, Hashable, Sendable {
 }
 
 /// A durable page identity. Resolved media URLs never belong in this value.
-struct SourceItemRef: Codable, Hashable, Sendable {
-    enum Kind: String, Codable, Sendable {
+public struct SourceItemRef: Codable, Hashable, Sendable {
+    public enum Kind: String, Codable, Sendable {
         case work, episode, video, live, local
     }
-    let sourceID: String
-    let pageURL: String
-    let kind: Kind
+    public let sourceID: String
+    public let pageURL: String
+    public let kind: Kind
+
+    public init(sourceID: String, pageURL: String, kind: Kind) {
+        self.sourceID = sourceID
+        self.pageURL = pageURL
+        self.kind = kind
+    }
 }
 
 /// Exact native torrent file identity. Hashes are tagged `v1:`/`v2:` and never include trackers.
-struct TorrentSelection: Codable, Hashable, Sendable {
-    let infoHashes: Set<String>
-    let fileIndex: Int
-    let path: String
-    let size: UInt64
+public struct TorrentSelection: Codable, Hashable, Sendable {
+    public let infoHashes: Set<String>
+    public let fileIndex: Int
+    public let path: String
+    public let size: UInt64
 
     private enum CodingKeys: String, CodingKey { case infoHashes, fileIndex, path, size }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let values = try decoder.container(keyedBy: CodingKeys.self)
         let hashes = try values.decode(Set<String>.self, forKey: .infoHashes)
         let index = try values.decode(Int.self, forKey: .fileIndex)
@@ -61,7 +72,7 @@ struct TorrentSelection: Codable, Hashable, Sendable {
         self = validated
     }
 
-    init?(identityURL: URL) {
+    public init?(identityURL: URL) {
         guard let components = URLComponents(url: identityURL, resolvingAgainstBaseURL: false),
               components.scheme == "iina-torrent", components.host == "file",
               components.user == nil, components.password == nil, components.port == nil,
@@ -81,7 +92,7 @@ struct TorrentSelection: Codable, Hashable, Sendable {
         self = selection
     }
 
-    init?(infoHashes: Set<String>, fileIndex: Int, path: String, size: UInt64) {
+    public init?(infoHashes: Set<String>, fileIndex: Int, path: String, size: UInt64) {
         guard !infoHashes.isEmpty, infoHashes.allSatisfy(Self.validHash),
               Set(infoHashes.compactMap { $0.split(separator: ":", omittingEmptySubsequences: false).first }).count == infoHashes.count,
               fileIndex >= 0, Self.safeRelativePath(path) else { return nil }
@@ -92,18 +103,18 @@ struct TorrentSelection: Codable, Hashable, Sendable {
     }
 
     /// Synthesized decoding cannot be used for this identity; this also supports checking in-memory values.
-    var isValid: Bool {
+    public var isValid: Bool {
         !infoHashes.isEmpty && infoHashes.allSatisfy(Self.validHash) &&
         Set(infoHashes.compactMap { $0.split(separator: ":", omittingEmptySubsequences: false).first }).count == infoHashes.count &&
         fileIndex >= 0 && Self.safeRelativePath(path)
     }
-    var isPlayableMedia: Bool { Self.isPlayablePath(path) }
+    public var isPlayableMedia: Bool { Self.isPlayablePath(path) }
 
-    static func isPlayablePath(_ path: String) -> Bool {
+    public static func isPlayablePath(_ path: String) -> Bool {
         ["mp4", "m4v", "mov", "mkv", "webm", "flv"].contains(URL(fileURLWithPath: path).pathExtension.lowercased())
     }
 
-    var identityURL: URL {
+    public var identityURL: URL {
         var components = URLComponents()
         components.scheme = "iina-torrent"
         components.host = "file"
@@ -132,16 +143,16 @@ struct TorrentSelection: Codable, Hashable, Sendable {
 }
 
 /// The original choice, retained independently of an expiring stream URL.
-struct PlayableSelection: Codable, Hashable, Sendable {
-    var item: SourceItemRef
-    var episode: SourceItemRef?
-    var lineID: String?
-    var qualityID: String?
-    var accountID: UUID?
-    var torrent: TorrentSelection?
-    var classification: MediaClassification
+public struct PlayableSelection: Codable, Hashable, Sendable {
+    public var item: SourceItemRef
+    public var episode: SourceItemRef?
+    public var lineID: String?
+    public var qualityID: String?
+    public var accountID: UUID?
+    public var torrent: TorrentSelection?
+    public var classification: MediaClassification
 
-    init(item: SourceItemRef, episode: SourceItemRef? = nil,
+    public init(item: SourceItemRef, episode: SourceItemRef? = nil,
          lineID: String? = nil, qualityID: String? = nil, accountID: UUID? = nil,
          torrent: TorrentSelection? = nil, classification: MediaClassification = .unknown) {
         self.item = item
@@ -157,7 +168,7 @@ struct PlayableSelection: Codable, Hashable, Sendable {
         case item, episode, lineID, qualityID, accountID, torrent, classification
     }
 
-    init(from decoder: Decoder) throws {
+    public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         item = try c.decode(SourceItemRef.self, forKey: .item)
         episode = try c.decodeIfPresent(SourceItemRef.self, forKey: .episode)
@@ -170,44 +181,56 @@ struct PlayableSelection: Codable, Hashable, Sendable {
 }
 
 /// Stable domain identity; neither a display title nor a resolved media URL is an ID.
-struct PlaybackWorkIdentity: Codable, Hashable, Sendable {
-    let localID: String
-    let bangumiID: Int?
+public struct PlaybackWorkIdentity: Codable, Hashable, Sendable {
+    public let localID: String
+    public let bangumiID: Int?
 
-    static func bangumi(_ id: Int) -> Self {
+    public init(localID: String, bangumiID: Int?) {
+        self.localID = localID
+        self.bangumiID = bangumiID
+    }
+
+    public static func bangumi(_ id: Int) -> Self {
         Self(localID: playbackIdentity("bangumi-work", [String(id)]), bangumiID: id)
     }
 
     /// `workID` is the source's work/season key, not the work's title.
-    static func source(sourceID: String, workID: String) -> Self {
+    public static func source(sourceID: String, workID: String) -> Self {
         Self(localID: playbackIdentity("source-work", [sourceID, workID]), bangumiID: nil)
     }
 
     /// For native adapters with an already-canonical, credential-free page reference.
-    static func source(_ item: SourceItemRef) -> Self {
+    public static func source(_ item: SourceItemRef) -> Self {
         source(sourceID: item.sourceID, workID: item.pageURL)
     }
 }
 
-struct PlaybackEpisodeIdentity: Codable, Hashable, Sendable {
-    let localID: String
-    let bangumiID: Int?
-    let type: Int?
+public struct PlaybackEpisodeIdentity: Codable, Hashable, Sendable {
+    public let localID: String
+    public let bangumiID: Int?
+    public let type: Int?
     /// The raw Bangumi sort, including fractional values; never a displayed integer.
-    let sort: Double?
+    public let sort: Double?
 
-    static func bangumi(_ id: Int, type: Int?, sort: Double?) -> Self {
+    public init(localID: String, bangumiID: Int?, type: Int?, sort: Double?) {
+        self.localID = localID
+        self.bangumiID = bangumiID
+        self.type = type
+        self.sort = sort
+    }
+
+    public static func bangumi(_ id: Int, type: Int?, sort: Double?) -> Self {
         Self(localID: playbackIdentity("bangumi-episode", [String(id)]),
              bangumiID: id, type: type, sort: sort)
     }
 
     /// Work/season scope is required because episode keys are commonly reused.
-    static func source(sourceID: String, workID: String, episodeID: String) -> Self {
+    public static func source(sourceID: String, workID: String, episodeID: String) -> Self {
         Self(localID: playbackIdentity("source-episode", [sourceID, workID, episodeID]),
              bangumiID: nil, type: nil, sort: nil)
     }
 
-    static func source(work: SourceItemRef, episode: SourceItemRef) -> Self {
+    public static func source(work: SourceItemRef, episode: SourceItemRef) -> Self {
         Self(localID: playbackIdentity("source-episode-page",
              [work.sourceID, work.pageURL, episode.sourceID, episode.pageURL]),
              bangumiID: nil, type: nil, sort: nil)
@@ -215,26 +238,34 @@ struct PlaybackEpisodeIdentity: Codable, Hashable, Sendable {
 }
 
 /// Durable selection and requested domain identities, independent of expiring playback input.
-struct PlaybackContext: Codable, Hashable, Sendable {
-    let work: PlaybackWorkIdentity
-    let episode: PlaybackEpisodeIdentity
-    let selection: PlayableSelection
-    let configurationRevision: String?
+public struct PlaybackContext: Codable, Hashable, Sendable {
+    public let work: PlaybackWorkIdentity
+    public let episode: PlaybackEpisodeIdentity
+    public let selection: PlayableSelection
+    public let configurationRevision: String?
+
+    public init(work: PlaybackWorkIdentity, episode: PlaybackEpisodeIdentity,
+                selection: PlayableSelection, configurationRevision: String?) {
+        self.work = work
+        self.episode = episode
+        self.selection = selection
+        self.configurationRevision = configurationRevision
+    }
 }
 
 /// A manually confirmed, successfully resolved choice, never the resolved stream itself.
-struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
-    let context: PlaybackContext
-    let sourceTitle: String
-    let confirmedAt: Date
+public struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
+    public let context: PlaybackContext
+    public let sourceTitle: String
+    public let confirmedAt: Date
 
-    init(context: PlaybackContext, sourceTitle: String, confirmedAt: Date = .now) {
+    public init(context: PlaybackContext, sourceTitle: String, confirmedAt: Date = .now) {
         self.context = context
         self.sourceTitle = sourceTitle
         self.confirmedAt = confirmedAt
     }
 
-    func matches(work: PlaybackWorkIdentity, episode: PlaybackEpisodeIdentity) -> Bool {
+    public func matches(work: PlaybackWorkIdentity, episode: PlaybackEpisodeIdentity) -> Bool {
         context.work == work && context.episode == episode
     }
 
@@ -242,7 +273,7 @@ struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
     /// canonicalization. Native desktop adapters retain their own identity validation.
     /// Current configuration authority is deliberately not checked here: invalidated records
     /// remain durable until the user explicitly reconfirms or removes them.
-    func validateForPersistence() throws {
+    public func validateForPersistence() throws {
         let selection = context.selection
         guard confirmedAt.timeIntervalSinceReferenceDate.isFinite,
               !sourceTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
@@ -264,7 +295,7 @@ struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
         }
     }
 
-    static func safeIdentityParameter(_ name: String) -> Bool {
+    public static func safeIdentityParameter(_ name: String) -> Bool {
         let lower = name.lowercased()
         let compact = lower.filter { $0.isLetter || $0.isNumber }
         return !name.isEmpty && name.utf8.count <= 64 &&
@@ -273,7 +304,7 @@ struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
             !lower.hasPrefix("utm_") && !trackingIdentityNames.contains(lower)
     }
 
-    static func isCanonicalPublicPage(_ raw: String) -> Bool {
+    public static func isCanonicalPublicPage(_ raw: String) -> Bool {
         guard var components = URLComponents(string: raw),
               let scheme = components.scheme, scheme == "https" || scheme == "http",
               let host = components.host, !host.isEmpty, host == host.lowercased(),
@@ -289,7 +320,7 @@ struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
         return components.string == raw
     }
 
-    static func safeLabel(_ value: String) -> Bool {
+    public static func safeLabel(_ value: String) -> Bool {
         !value.isEmpty && value.utf8.count <= 256 && !value.contains("://") &&
             !value.contains(where: { "?&=#@".contains($0) }) &&
             !value.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
@@ -348,9 +379,13 @@ struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
 }
 
 /// Cross-platform failure categories intentionally contain no raw response, URL or credentials.
-enum PlaybackFailure: String, Error, Codable, CaseIterable, Sendable {
+public enum PlaybackFailure: String, Error, Codable, CaseIterable, Sendable {
+    case appOnlyPlayback, mediaSignatureMissing, mediaNotFound
     case noCandidates, missingEpisode, sourceDisabled, configurationChanged
     case network, unsupportedResponse, authenticationRequired, mediaPlayback, cancelled
+    case httpForbidden, websiteVerification, sourceRedirect, searchStructure, catalogStructure
+    case invalidPlayerData, unsupportedEncryption, indirectMedia, unsupportedMediaFormat
+    case unsafeMediaAddress, ambiguousMedia, missingMedia, invalidResponseBody, missingMediaQuality, mediaPortUnsupported, playerServiceUnavailable
 }
 
 /// UTF-8 byte-length framing makes arbitrary delimiters and Unicode components unambiguous.

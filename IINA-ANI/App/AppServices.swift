@@ -1,3 +1,4 @@
+import SourceCore
 import Cocoa
 
 /// Only application/UI entry points resolve this root. Services receive their dependencies directly.

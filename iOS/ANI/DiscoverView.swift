@@ -402,12 +402,14 @@ struct CatalogCacheNotice: View {
     let cached: Bool
     let stale: Bool
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label(LocalizedStringKey(stale ? "Update failed. Showing saved information."
-                : cached ? "Showing saved information while refreshing." : "Last updated"),
-                systemImage: stale ? "clock.badge.exclamationmark" : "clock")
-            Text(fetchedAt, format: .dateTime.year().month().day().hour().minute())
-        }.font(.footnote).foregroundStyle(.secondary)
-        .accessibilityElement(children: .combine)
+        if cached || stale {
+            VStack(alignment: .leading, spacing: 4) {
+                Label(LocalizedStringKey(stale ? "Update failed. Showing saved information."
+                    : "Showing saved information while refreshing."),
+                    systemImage: stale ? "clock.badge.exclamationmark" : "clock")
+                Text(fetchedAt, format: .dateTime.year().month().day().hour().minute())
+            }.font(.footnote).foregroundStyle(.secondary)
+            .accessibilityElement(children: .combine)
+        }
     }
 }

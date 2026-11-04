@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 /// A player session can replace its media many times; neither identifier is a media URL.

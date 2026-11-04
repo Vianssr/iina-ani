@@ -127,10 +127,17 @@ import Foundation
             source("新优酷", "https://www.youknow.tv/search/-------------/?wd={keyword}", selector: ".module-card-item-title > a"),
             source("wedm", "https://www.vdm5.com/search_-------------.html?wd={keyword}", selector: "div.detail > h3 > a")
         ]
-        let transformedFixtures: [Any] = [xifan, girigiri, hanime, hanime720, fengche, haixing, yinghua, rebo, fqdm, changed]
+        let mutedm: [String: Any] = ["factoryId":"web-selector", "version":2, "arguments":["name":"2k", "searchConfig":[
+            "searchUrl":"https://www.2kdm.com/index.php/ajax/suggest?mid=1&wd={keyword}", "subjectFormatId":"json-path-indexed",
+            "selectorSubjectFormatJsonPathIndexed":["selectNames":"$.list[*]['name']", "selectLinks":"$.list[*]['id']", "linkTemplate":"/voddetail/{value}.html"]]]]
+        let transformedFixtures: [Any] = [xifan, girigiri, hanime, hanime720, fengche, haixing, yinghua, rebo, fqdm, changed, mutedm]
         let completeFeed = try feed(transformedFixtures + remaining)
         let complete = try SourceSubscriptionConverter.convert(data: completeFeed, registry: registry)
-        try require(Set(complete.overrides.keys) == SourceSubscriptionConverter.managedSourceIDs, "one of the 16 supported search identities was lost")
+        try require(Set(complete.overrides.keys) == SourceSubscriptionConverter.managedSourceIDs, "a supported search identity was lost")
+        let mutedmSearch = try decoded(complete, "mutedm")
+        try require(mutedmSearch.search.format == "json" && mutedmSearch.resultURLTemplate == "https://www.mutedm.com/voddetail/{id}.html", "2k must retain its audited JSON and canonical detail template")
+        try registry.applySubscription(complete, expectedRevision: registry.revision)
+        try require(registry.nativeSearch(for: "mutedm")?.search.jsonIdentifierPath == "id", "2k JSON override must survive application")
         let malformedSelector = source("invalid CSS", "https://www.jibi.cc/index.php/vod/search.html?wd={keyword}", selector: "a[")
         let partial = try SourceSubscriptionConverter.convert(data: feed([malformedSelector, fqdm, NSNull()]), registry: registry)
         try require(partial.overrides["jibi"] == nil && partial.overrides["fqdm"] != nil, "invalid individual selector must not invalidate unrelated entries")

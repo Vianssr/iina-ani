@@ -5,6 +5,26 @@ struct TorrentSearchResult: Sendable {
     let sourceName: String
     let magnetURL: String?
     let torrentURL: URL?
+    var publishedAt: Date? = nil
+    var sizeBytes: UInt64? = nil
+}
+
+// Display hints only: the original title and download identity remain untouched.
+extension TorrentSearchResult {
+    var releaseGroup: String {
+        capture(#"^\s*[\[【]([^\]】]+)[\]】]"#) ?? String(localized: "未識別漢化組")
+    }
+
+    var episode: String? {
+        capture(#"(?i)(?:\[|【|第|\s-\s|\bS\d{1,2}E)(\d{1,3}(?:\.\d+)?(?:v\d+)?(?:[-~]\d{1,3})?)(?:\]|】|[集話话]|\s|$)"#)
+    }
+
+    private func capture(_ pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern),
+              let match = regex.firstMatch(in: title, range: NSRange(title.startIndex..., in: title)),
+              let range = Range(match.range(at: 1), in: title) else { return nil }
+        return String(title[range])
+    }
 }
 
 struct TorrentSearchReport: Sendable {
@@ -48,7 +68,7 @@ actor TorrentSearchService {
         try Task.checkCancellation()
         let keyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !keyword.isEmpty else { throw TorrentSearchError.emptyKeyword }
-        // Fetch on every search: no stale subscription or alternative search URL fallback.
+        // Fetch current subscriptions; adapt the legacy AnimeGarden mirror to its paginated public RSS API.
         let (data, _) = try await fetch(Self.endpoint, Self.subscriptionLimit)
         try Task.checkCancellation()
         guard data.count <= Self.subscriptionLimit,
@@ -73,11 +93,41 @@ actor TorrentSearchService {
                       source.factoryId == "rss", source.version == 1 else {
                     throw TorrentSearchError.unsupportedSource
                 }
-                let url = try Self.requestURL(template: source.arguments.searchConfig.searchUrl, keyword: keyword)
-                let (feed, responseURL) = try await fetch(url, Self.feedLimit)
-                try Task.checkCancellation()
-                results += try Self.parseRSS(data: feed, sourceName: displayName, responseURL: responseURL)
-                succeeded += 1
+                let configuredURL = try Self.requestURL(template: source.arguments.searchConfig.searchUrl, keyword: keyword)
+                guard !Self.isExcludedSource(name: displayName, url: configuredURL) else { continue }
+                let url: URL
+                if configuredURL.host?.lowercased() == "garden.breadio.wiki", configuredURL.path == "/feed.xml" {
+                    url = try Self.requestURL(template: "https://api.animes.garden/feed.xml?type=动画&search={keyword}", keyword: keyword)
+                } else { url = configuredURL }
+                let paginated = Self.supportsPagination(url)
+                var page = 1
+                var seen = Set<String>()
+                var previousFeed: Data?
+                while true {
+                    try Task.checkCancellation()
+                    let request = paginated ? Self.pageURL(url, page: page) : url
+                    let (feed, responseURL) = try await fetch(request, Self.feedLimit)
+                    try Task.checkCancellation()
+                    let parsed = try Self.parseRSSPage(data: feed, sourceName: displayName, responseURL: responseURL)
+                    succeeded += 1
+                    if parsed.itemCount == 0 { break }
+                    guard previousFeed != feed else {
+                        failures.append(String(localized: "來源重複回傳同一頁；已保留結果，搜尋尚未完整。"))
+                        break
+                    }
+                    previousFeed = feed
+                    var added = 0
+                    for result in parsed.results {
+                        let key = result.magnetURL ?? result.torrentURL!.absoluteString
+                        if seen.insert(key).inserted { results.append(result); added += 1 }
+                    }
+                    guard paginated else { break }
+                    if !parsed.results.isEmpty && added == 0 {
+                        failures.append(String(localized: "來源重複回傳同一頁；已保留結果，搜尋尚未完整。"))
+                        break
+                    }
+                    page += 1
+                }
             } catch {
                 try Task.checkCancellation()
                 if error is CancellationError || (error as? URLError)?.code == .cancelled {
@@ -91,6 +141,24 @@ actor TorrentSearchService {
             throw TorrentSearchError.allSourcesFailed(failures.isEmpty ? ["訂閱沒有可搜尋的 RSS 來源。"] : failures)
         }
         return TorrentSearchReport(results: results, failures: failures)
+    }
+
+    static func isExcludedSource(name: String, url: URL) -> Bool {
+        name.lowercased().contains("nyaa") || (url.host ?? "").lowercased().contains("nyaa")
+    }
+
+    private static func supportsPagination(_ url: URL) -> Bool {
+        ["garden.breadio.wiki", "animes.garden", "api.animes.garden"].contains(url.host?.lowercased() ?? "") && url.path == "/feed.xml"
+    }
+
+    private static func pageURL(_ url: URL, page: Int) -> URL {
+        var parts = URLComponents(url: url, resolvingAgainstBaseURL: false)!
+        let query = (parts.percentEncodedQuery ?? "").split(separator: "&").filter {
+            let name = $0.split(separator: "=", maxSplits: 1).first.map(String.init) ?? ""
+            return !["page", "pagesize"].contains((name.removingPercentEncoding ?? name).lowercased())
+        }
+        parts.percentEncodedQuery = (query.map(String.init) + ["page=\(page)", "pageSize=100"]).joined(separator: "&")
+        return parts.url!
     }
 
     private struct RSSSource: Decodable {
@@ -147,6 +215,10 @@ actor TorrentSearchService {
     }
 
     static func parseRSS(data: Data, sourceName: String, responseURL: URL) throws -> [TorrentSearchResult] {
+        try parseRSSPage(data: data, sourceName: sourceName, responseURL: responseURL).results
+    }
+
+    private static func parseRSSPage(data: Data, sourceName: String, responseURL: URL) throws -> (results: [TorrentSearchResult], itemCount: Int) {
         try Task.checkCancellation()
         guard data.count <= feedLimit else { throw TorrentSearchError.oversizedResponse }
         guard safeHTTPURL(responseURL), !data.isEmpty else { throw TorrentSearchError.invalidRSS }
@@ -167,7 +239,7 @@ actor TorrentSearchService {
         try Task.checkCancellation()
         if let error = delegate.failure { throw error }
         guard parsed, delegate.isRSS else { throw TorrentSearchError.invalidRSS }
-        return delegate.results
+        return (delegate.results, delegate.itemCount)
     }
 
     fileprivate static func safeHTTPURL(_ url: URL) -> Bool {
@@ -177,7 +249,7 @@ actor TorrentSearchService {
 
     static func download(_ url: URL, limit: Int) async throws -> (Data, URL) {
         try Task.checkCancellation()
-        guard safeHTTPURL(url) else { throw TorrentSearchError.invalidSearchURL }
+        guard safeHTTPURL(url), !isExcludedSource(name: "", url: url) else { throw TorrentSearchError.invalidSearchURL }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.httpCookieStorage = nil
         configuration.httpShouldSetCookies = false
@@ -218,6 +290,7 @@ private final class TorrentSearchRedirectPolicy: NSObject, URLSessionTaskDelegat
                     willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
                     completionHandler: @escaping (URLRequest?) -> Void) {
         guard let url = request.url, TorrentSearchService.safeHTTPURL(url),
+              !TorrentSearchService.isExcludedSource(name: "", url: url),
               !subscription || (url.scheme == "https" && url.host == TorrentSearchService.endpoint.host) else {
             completionHandler(nil)
             return
@@ -237,6 +310,9 @@ private final class TorrentRSSParser: NSObject, XMLParserDelegate {
     var results: [TorrentSearchResult] = []
     var failure: Error?
     var isRSS = false
+    var itemCount = 0
+    private var publishedAt: Date?
+    private var sizeBytes: UInt64?
     private var depth = 0
     private var itemDepth: Int?
     private var field: (name: String, depth: Int, text: String)?
@@ -259,6 +335,9 @@ private final class TorrentRSSParser: NSObject, XMLParserDelegate {
         guard isRSS else { return }
         if name == "item", itemDepth == nil {
             itemDepth = depth
+            itemCount += 1
+            publishedAt = nil
+            sizeBytes = nil
             title = ""
             magnet = nil
             torrent = nil
@@ -267,11 +346,12 @@ private final class TorrentRSSParser: NSObject, XMLParserDelegate {
         guard let itemDepth, depth == itemDepth + 1 else { return }
         if name == "enclosure", let raw = attributes["url"] {
             acceptLink(raw, enclosure: true, type: attributes["type"])
+            sizeBytes = attributes["length"].flatMap(UInt64.init).flatMap { $0 > 0 ? $0 : nil }
         }
         if name == "link", let href = attributes["href"] {
             acceptLink(href, enclosure: attributes["rel"]?.lowercased() == "enclosure", type: attributes["type"])
         }
-        if ["title", "link", "magnet", "magneturi", "magneturl"].contains(name) ||
+        if ["title", "pubdate", "link", "magnet", "magneturi", "magneturl"].contains(name) ||
             (name == "infohash" && ((namespaceURI ?? "").lowercased().contains("nyaa") || (qName ?? "").lowercased().hasPrefix("nyaa:"))) {
             field = (name, depth, "")
         }
@@ -286,6 +366,14 @@ private final class TorrentRSSParser: NSObject, XMLParserDelegate {
             let value = field.text.trimmingCharacters(in: .whitespacesAndNewlines)
             switch field.name {
             case "title": title = value
+            case "pubdate":
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "en_US_POSIX")
+                for format in ["EEE, dd MMM yyyy HH:mm:ss Z", "dd MMM yyyy HH:mm:ss Z"] {
+                    formatter.dateFormat = format
+                    if let date = formatter.date(from: value) { publishedAt = date; break }
+                }
+                if publishedAt == nil { publishedAt = ISO8601DateFormatter().date(from: value) }
             case "infohash":
                 let hex = CharacterSet(charactersIn: "0123456789abcdefABCDEF")
                 if value.count == 40, value.unicodeScalars.allSatisfy({ hex.contains($0) }), magnet == nil {
@@ -299,7 +387,7 @@ private final class TorrentRSSParser: NSObject, XMLParserDelegate {
             if !title.isEmpty, magnet != nil || torrent != nil {
                 let key = magnet ?? torrent!.absoluteString
                 if seen.insert(key).inserted {
-                    results.append(TorrentSearchResult(title: title, sourceName: sourceName, magnetURL: magnet, torrentURL: torrent))
+                    results.append(TorrentSearchResult(title: title, sourceName: sourceName, magnetURL: magnet, torrentURL: torrent, publishedAt: publishedAt, sizeBytes: sizeBytes))
                 }
             }
             itemDepth = nil

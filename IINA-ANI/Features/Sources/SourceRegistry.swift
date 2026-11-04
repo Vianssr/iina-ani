@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 
 /// Immutable snapshots keep URL classification synchronous for bookmarks and legacy entry points.
@@ -262,10 +263,10 @@ final class SourceRegistry: @unchecked Sendable {
 
         var nativeDescriptors: [String: SourceDescriptor] = [:]
         let liveIDs: Set<String> = ["bilibili-live", "douyu", "huya", "cc163", "douyin", "qie-tv"]
-        let catalogIDs: Set<String> = ["bilibili", "bilibili-live", "douyu", "huya", "cc163", "xifan", "girigiri", "didahd", "jibi", "eacg", "senfun", "kanba", "haixing", "yinghua", "dilidili", "youknow", "wedm", "fengche", "rebo"]
+        let catalogIDs: Set<String> = ["bilibili", "bilibili-live", "douyu", "huya", "cc163", "xifan", "girigiri", "didahd", "jibi", "eacg", "senfun", "kanba", "haixing", "yinghua", "dilidili", "youknow", "wedm", "fengche", "rebo", "mutedm"]
         let qualityIDs: Set<String> = ["bilibili", "bilibili-live", "douyu", "huya", "cc163", "douyin", "hanime1"]
         let danmakuIDs: Set<String> = ["bilibili", "bilibili-live", "douyu", "huya", "douyin", "qie-tv", "local"]
-        let cmsIDs: Set<String> = ["xifan", "girigiri", "didahd", "jibi", "eacg", "senfun", "kanba", "haixing", "yinghua", "dilidili", "youknow", "wedm", "fengche", "rebo"]
+        let cmsIDs: Set<String> = ["xifan", "girigiri", "didahd", "jibi", "eacg", "senfun", "kanba", "haixing", "yinghua", "dilidili", "youknow", "wedm", "fengche", "rebo", "mutedm"]
         let lineIDs = cmsIDs.union(["bilibili", "bilibili-live", "douyu", "cc163"])
         let downloadIDs = cmsIDs.union(["hanime1"])
         for site in nativeSites {
@@ -344,11 +345,19 @@ final class SourceRegistry: @unchecked Sendable {
             let source = try JSONDecoder().decode(NativeSearchSource.self, from: data)
             let allowed = Set(base.configurations[id]?.hosts ?? SupportSites.nativeSites.first(where: { $0.sourceID == id })?.hosts ?? [])
             guard !source.hosts.isEmpty, Set(source.hosts).isSubset(of: allowed),
-                  source.resultURLTemplate == nil, source.search.format == "html",
-                  source.search.rowsPerPage > 0, source.search.rowsPerPage <= 100,
-                  let rows = source.search.resultsSelector, !rows.isEmpty, rows.utf8.count <= 4096,
-                  let title = source.search.titleSelector, !title.isEmpty, title.utf8.count <= 4096,
-                  source.search.hrefAttribute == "href" else { throw SourceSearchError.invalidConfiguration }
+                  source.search.rowsPerPage > 0, source.search.rowsPerPage <= 100 else { throw SourceSearchError.invalidConfiguration }
+            if id == "mutedm" {
+                guard let baseline = base.nativeSearch[id], source.search.format == "json",
+                      source.resultURLTemplate == baseline.resultURLTemplate,
+                      source.search.jsonResultsPath == "list", source.search.jsonTitlePath == "name",
+                      source.search.jsonIdentifierPath == "id", source.search.jsonCoverPath == "pic",
+                      source.search.jsonTotalPath == "total" else { throw SourceSearchError.invalidConfiguration }
+            } else {
+                guard source.resultURLTemplate == nil, source.search.format == "html",
+                      let rows = source.search.resultsSelector, !rows.isEmpty, rows.utf8.count <= 4096,
+                      let title = source.search.titleSelector, !title.isEmpty, title.utf8.count <= 4096,
+                      source.search.hrefAttribute == "href" else { throw SourceSearchError.invalidConfiguration }
+            }
             _ = try SourceSearchExecutor.requestURL(source.search, query: "boundary", page: 1, allowedHosts: Set(source.hosts))
             let sensitive: Set<String> = ["cookie", "token", "access_token", "authorization", "auth", "api_key"]
             guard !(URLComponents(string: source.search.url)?.queryItems ?? []).contains(where: { sensitive.contains($0.name.lowercased()) }) else {
@@ -417,7 +426,7 @@ final class SourceRegistry: @unchecked Sendable {
             // PGC routes include animation and live-action; Bangumi title lookup resolves the scope.
             return MediaClassification(kind: .unknown, provenance: "bilibili.pgc.awaiting-bangumi-lookup")
         case "bilibili-live", "douyu", "huya", "cc163", "douyin", "qie-tv": kind = .live
-        case "xifan", "girigiri", "jibi", "eacg", "senfun", "haixing", "yinghua", "dilidili", "wedm", "fengche": kind = .anime
+        case "xifan", "girigiri", "jibi", "eacg", "senfun", "haixing", "yinghua", "dilidili", "wedm", "fengche", "mutedm": kind = .anime
         default: return .unknown
         }
         return MediaClassification(kind: kind, provenance: "native-adapter:\(item.sourceID):content-scope-v1")
@@ -472,6 +481,7 @@ final class SourceRegistry: @unchecked Sendable {
         }
         let kind: SourceItemRef.Kind
         switch site {
+        case .xiFan where SupportSites.xiFanNextPage(components)?.episode == nil && components.host == "next.xifanacg.com": kind = .work
         case .bilibili, .b23, .hanime1: kind = .video
         case .bangumi: kind = BilibiliUrl(url: canonical)?.id.hasPrefix("ss") == true ? .work : .episode
         case .biliLive, .douyu, .huya, .cc163, .douyin, .qieTV: kind = .live
@@ -490,7 +500,7 @@ final class SourceRegistry: @unchecked Sendable {
         }
         switch leaf.site {
         case .xiFan, .girigiri, .didahd, .jibi, .eacg, .senfun, .kanba, .haixing,
-             .yinghua, .youknow, .wedm, .fengche, .rebo:
+             .yinghua, .youknow, .wedm, .fengche, .rebo, .mutedm:
             return "\(item.sourceID):\(leaf.id):\(leaf.index)"
         default:
             return "\(item.sourceID):\(item.kind.rawValue):\(item.pageURL)"

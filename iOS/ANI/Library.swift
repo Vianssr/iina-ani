@@ -1,3 +1,4 @@
+import SourceCore
 import Foundation
 import Observation
 #if canImport(Darwin)
@@ -444,6 +445,18 @@ final class MobileLibrary {
         let version: Int
         let subjectID: Int
         let value: Value
+    }
+
+    /// Titles are display metadata only; never match by a similar name or episode number.
+    func confirmedHistoryWorkTitle(for subjectID: Int) -> String? {
+        guard subjectID > 0 else { return nil }
+        if let detail = cachedDetail(for: subjectID), !detail.anime.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return detail.anime.title
+        }
+        guard isReadable else { return nil }
+        let titles = Set(favorites.filter { $0.id == subjectID }
+            .map { $0.title.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+        return titles.count == 1 ? titles.first : nil
     }
 
     func cachedDetail(for subjectID: Int) -> CachedCatalogDetail? {

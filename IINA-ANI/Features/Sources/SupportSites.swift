@@ -33,6 +33,7 @@ enum SupportSites: Hashable, Sendable {
     case wedm
     case fengche
     case rebo
+    case mutedm
     case local
     case configured(String)
     case unsupported
@@ -75,7 +76,7 @@ enum SupportSites: Hashable, Sendable {
             "live.qq.com"
         ],
         .xiFan: [
-            "dm1.xfdm.pro"
+            "dm1.xfdm.pro", "next.xifanacg.com"
         ],
         .girigiri: [
             "ani.girigirilove.com"
@@ -108,10 +109,11 @@ enum SupportSites: Hashable, Sendable {
         .hanime1: ["hanime1.me", "www.hanime1.me"],
         .wedm: ["www.vdm5.com", "vdm5.com"],
         .fengche: ["www.dongmandaquan.vip", "dongmandaquan.vip"],
+        .mutedm: ["www.mutedm.com", "mutedm.com", "www.2kdm.com", "2kdm.com"],
         .rebo: ["www.rebozj.cc", "rebozj.cc", "www.rebozj.pro", "rebozj.pro"],
     ]
 
-    static let nativeSites: [SupportSites] = [.bilibili, .b23, .biliLive, .bangumi, .douyu, .huya, .cc163, .douyin, .qieTV, .xiFan, .girigiri, .didahd, .jibi, .eacg, .senfun, .kanba, .haixing, .yinghua, .dilidili, .youknow, .hanime1, .wedm, .fengche, .rebo, .local]
+    static let nativeSites: [SupportSites] = [.bilibili, .b23, .biliLive, .bangumi, .douyu, .huya, .cc163, .douyin, .qieTV, .xiFan, .girigiri, .didahd, .jibi, .eacg, .senfun, .kanba, .haixing, .yinghua, .dilidili, .youknow, .hanime1, .wedm, .fengche, .rebo, .mutedm, .local]
 
     var hosts: [String] {
         if case .configured(let id) = self { return SourceRegistry.shared.source(for: id)?.hosts ?? [] }
@@ -141,6 +143,7 @@ enum SupportSites: Hashable, Sendable {
         case .hanime1: return "hanime1"
         case .wedm: return "wedm"
         case .fengche: return "fengche"
+        case .mutedm: return "mutedm"
         case .rebo: return "rebo"
         case .local: return "local"
         case .configured(let id): return id
@@ -174,6 +177,11 @@ enum SupportSites: Hashable, Sendable {
 
         let normalizedURL = comps.url?.absoluteString ?? url
         let normalizedHost = comps.host ?? host
+
+        if normalizedHost.lowercased() == "next.xifanacg.com" {
+            self = SupportSites.xiFanNextPage(comps) == nil ? .unsupported : .xiFan
+            return
+        }
 
         if normalizedHost.lowercased() == "dm1.xfdm.pro" {
             self = SupportSites.xiFanPage(comps) == nil ? .unsupported : .xiFan
@@ -231,6 +239,10 @@ enum SupportSites: Hashable, Sendable {
         }
         if SupportSites.siteHosts[.fengche]?.contains(normalizedHost.lowercased()) == true {
             self = SupportSites.fengchePage(comps) == nil ? .unsupported : .fengche
+            return
+        }
+        if SupportSites.siteHosts[.mutedm]?.contains(normalizedHost.lowercased()) == true {
+            self = SupportSites.mutedmPage(comps) == nil ? .unsupported : .mutedm
             return
         }
         if SupportSites.siteHosts[.rebo]?.contains(normalizedHost.lowercased()) == true {
@@ -311,6 +323,7 @@ enum SupportSites: Hashable, Sendable {
             return NSLocalizedString("SupportSites.Wedm", comment: "wedm")
         case .fengche:
             return NSLocalizedString("SupportSites.Fengche", comment: "Fengche Anime")
+        case .mutedm: return String(localized: "SupportSites.Mutedm")
         case .rebo:
             return NSLocalizedString("SupportSites.Rebo", comment: "Rebo")
         case .configured(let id):
@@ -405,7 +418,7 @@ enum SupportSites: Hashable, Sendable {
                     ["vodetail_", "dmplay_"].map { "url BEGINSWITH[c] '\(scheme)://\(host)/\($0)'" }
                 }
             }.joined(separator: " || ")
-        case .fengche:
+        case .fengche, .mutedm:
             return hosts.flatMap { host in
                 ["http", "https"].flatMap { scheme in
                     ["voddetail/", "vodplay/"].map { "url BEGINSWITH[c] '\(scheme)://\(host)/\($0)'" }
@@ -430,7 +443,9 @@ enum SupportSites: Hashable, Sendable {
 	}
 
 	static func canonicalHost(_ host: String) -> String {
-		SupportSites.siteHosts.first(where: { $0.value.contains(host) })?.value.first ?? host
+        // The new XiFan site has a separate route/ID namespace, not a legacy alias.
+        if host.lowercased() == "next.xifanacg.com" { return "next.xifanacg.com" }
+        return SupportSites.siteHosts.first(where: { $0.value.contains(host) })?.value.first ?? host
 	}
 
     init?(host: String) {
@@ -439,6 +454,24 @@ enum SupportSites: Hashable, Sendable {
             return nil
         }
         self = site
+    }
+
+    static func xiFanNextPage(_ c: URLComponents) -> (id: Int, episode: Int?, source: String?)? {
+        guard c.scheme == "https", c.host == "next.xifanacg.com", c.port == nil,
+              c.user == nil, c.password == nil, c.fragment == nil else { return nil }
+        let parts = c.path.split(separator: "/", omittingEmptySubsequences: false)
+        guard (parts.count == 3 || parts.count == 5), parts[0].isEmpty, parts[1] == "anime",
+              let id = Int(parts[2]), id > 0, String(id) == parts[2] else { return nil }
+        if parts.count == 3 { return c.query == nil ? (id, nil, nil) : nil }
+        guard parts[3] == "play", let episode = Int(parts[4]), episode > 0, String(episode) == parts[4] else { return nil }
+        let query = c.queryItems ?? []
+        guard query.count <= 1, query.allSatisfy({ $0.name == "source" }) else { return nil }
+        let source = query.first?.value
+        if !query.isEmpty {
+            guard let source, !source.isEmpty, source.utf8.count <= 32,
+                  source.utf8.allSatisfy({ (48...57).contains($0) || (65...90).contains($0) || (97...122).contains($0) || $0 == 95 }) else { return nil }
+        }
+        return (id, episode, source)
     }
 
     static func xiFanPage(_ components: URLComponents) -> (id: Int, line: Int?, episode: Int?)? {
@@ -494,6 +527,22 @@ enum SupportSites: Hashable, Sendable {
         if parts.count == 2, parts[0] == "detail",
            let id = Int(parts[1].dropLast(5)), id > 0 { return (id, nil, nil) }
         if parts.count == 2, parts[0] == "play" {
+            let fields = parts[1].dropLast(5).split(separator: "-", omittingEmptySubsequences: false)
+            if fields.count == 3, let id = Int(fields[0]), id > 0,
+               let line = Int(fields[1]), line > 0,
+               let episode = Int(fields[2]), episode > 0 { return (id, line, episode) }
+        }
+        return nil
+    }
+    static func mutedmPage(_ components: URLComponents) -> (id: Int, line: Int?, episode: Int?)? {
+        guard let host = components.host?.lowercased(), siteHosts[.mutedm]?.contains(host) == true,
+              ["http", "https"].contains(components.scheme?.lowercased() ?? ""),
+              components.port == nil, components.user == nil, components.password == nil,
+              components.path.hasSuffix(".html") else { return nil }
+        let parts = components.path.split(separator: "/")
+        if parts.count == 2, parts[0] == "voddetail",
+           let id = Int(parts[1].dropLast(5)), id > 0 { return (id, nil, nil) }
+        if parts.count == 2, parts[0] == "vodplay" {
             let fields = parts[1].dropLast(5).split(separator: "-", omittingEmptySubsequences: false)
             if fields.count == 3, let id = Int(fields[0]), id > 0,
                let line = Int(fields[1]), line > 0,

@@ -1761,3 +1761,236 @@
 - 整合目前桌面與 iOS App、共用播放／來源邏輯、回歸測試、授權與文件變更，準備提交至 main。
 - 本輪驗證：變更 diff 空白檢查、變更 shell runner 語法及兩份 Xcode 工程 plist 語法通過。
 - 限制：本輪僅提交前檢查，未重新建置或執行 App 驗收；歷次功能驗證及限制見上述各筆記錄。忽略的快取、驗收產物與本機憑證不納入提交。
+
+
+### 2026-10-30 — 解析 403 初步排查
+
+- 追蹤 iOS MobileSourceClient／SourceTransport／CSS1 解析流程及桌面 EACG／Kanba 請求；iOS 將 HTTP 401／403 統一映射為 authenticationRequired，狀態錯誤會在 HTML／媒體解析前拋出，不能由此判定帳號失效。
+- 使用既有 CSS1 搜尋配置及與 iOS 相同的 User-Agent，對 E-ACG、去看吧、新優酷、Hanime1 各執行一次即時匿名搜尋請求。四者均 HTTP 403；前三者回傳 Just a moment... 與 Cloudflare challenge，Hanime1 回傳 Attention Required! 與封鎖提示。確認這四個樣本是上游拒絕搜尋請求，尚未到影片解析階段。
+- 脫敏狀態證據：`.build/403-diagnosis/results.json`；只保存來源 ID、HTTP 狀態、標題及驗證／封鎖標記，不保存 Cookie、完整媒體 URL 或驗證 token。未修改產品程式碼或使用者配置。
+- 限制：使用者尚未提供實際來源、頁面與平台，上述抽樣不能視為其個案根因；未重跑建置、正式 App UI 或媒體播放。等待具體失敗頁面後再定位搜尋／選集／播放請求。
+
+
+### 2026-10-30 — CSS1 逐站診斷、目錄／畫質解析修正及具體錯誤
+
+- 重新下載目前 CSS1 清單，逐一測試 18 個可轉換來源，另記錄 2 個配置階段不支援條目。區分原訂閱搜尋轉址與先前隔離遷移配置；2k／嘀嗒／熱播原網域被轉址政策擋下，新網域樣本則使用 encrypt=3。E-ACG／去看吧／新優酷為 HTTP 403，風車 HTTP 200 但回驗證頁，稀飯 MP4 指定 8088 連接埠，櫻花返回識別碼，海星仍需額外播放器協議。完整逐站結果見 `docs/development/source-diagnostics.md`。
+- 修正嘀哩嘀哩：目錄名稱依 DOM 所屬連結配對，排除分頁與空導覽群組；由所選頁面第一個 play_id 請求同站公開 _get_play，核對回應 ID／格式，不自動切線。真網搜尋取得 35 結果，首個作品目錄 64 集；選定樣本 m3u8 由 FFmpeg 成功解碼第 10 秒 PNG，目視為帶廣告的片頭，未以此確認完整正片。
+- 修正多畫質：CSS1 defaultResolution 保存為可選 preferredVideoHeight，校驗 1–4320；單一 HTML5 video 的 source[size] 依指定畫質選取，缺失報錯。Hanime1 720p／1080p 配置各自真網解析到 MP4；只驗證網址，不解碼／播放。修正後共 8 個來源配置取得樣本媒體網址。舊配置相容，但取得畫質設定需重新匯入並確認配置修訂；不修改既有使用者配置。
+- 錯誤：CSS1 分開回報搜尋／目錄結構、播放器資料、未知加密、間接播放、格式副檔名、網址／連接埠限制、畫質缺失、多地址、空／過大解析內容；HTTP 401／403 與未完成轉址分開，已識別的網站驗證頁不誤報無結果。匯入探測保留選集／解析錯誤，新增 en／zh-Hans／zh-Hant 翻譯。
+- 回歸：`Tests/run-ios-sources.sh`、`Tests/run-multiplatform-contracts.sh` 全部通過；新增 DOM 配對、精確公開 API 身份、逐類錯誤、匯入原因保留及畫質轉換／重載／選取／缺失測試。`git diff --check` 通過。
+- 建置／App：iOS Debug build-and-run 成功；最終來源的 iPhone 18 Pro／iOS 27.0 正式 App 通過 `testSpecificSourceDiagnostics`（403 與加密失敗不開播放器）及 `testConfigurationOnlyURLImport`（匯入、選集、真實 mpv 播放隨包測試影片，時鐘超過一秒），共兩測試零失敗；截圖已匯出檢視。macOS 標準 Debug 建置成功。
+- 證據：忽略目錄 `.build/css1-diagnosis/` 為網路抽樣與媒體解碼；`.build/403-diagnosis/final-ui.xcresult` 及 `final-ui-attachments/` 為正式 UI。初次 UI 測試亦通過，後續因畫質支援變更重新建置並擴大匯入播放回歸。來源測試沿用既有 weak variable 警告。
+- 限制：逐站抽樣不代表全站／全片或作品配對正確；只有嘀哩嘀哩本輪額外驗證網路影片第 10 秒畫面。未執行新協議解密、任意連接埠放行或驗證繞過；未重驗 iPad、實機、最低系統、macOS 正式 UI、完整音訊／彈幕／重連／多視窗。
+
+
+## 2026-10-30 — CSS1 稀飯／2k／嘀嗒／熱播後續修復
+
+- 新增三組經驗證的舊站到新站 HTTPS 請求網域，保留已存作品／集數身分與原生配置限制。稀飯僅允許指定媒體主機 8088，不放寬任意連接埠。
+- 新增 MobileCSS1Player 固定協議：2k m2 index/dp 頁面、嘀嗒／熱播 artplayer 公開 API 與 AES-CBC、稀飯 playerconfig/二級播放器 UID AES。驗證所選集數、線路與 token，不執行下載的 JavaScript。修正巢狀配置抽取；對已知 CDN 的 `.image`／無副檔名 MP4 做有界檔頭檢查。
+- 新增播放器服務失敗三語提示；未知加密、間接解析入口、格式、HTTP 403 等原因保持區分。匯入相容性抽樣擴至前三條線路，實際播放不自動切換使用者所選線路。
+- 原始碼／工程：新增 helper 納入 iOS target 與回歸腳本，git diff --check 通過。離線驗證：run-ios-sources.sh、run-multiplatform-contracts.sh 通過，包含獨立 AES 向量、token 篡改、巢狀配置、移站／連接埠邊界、真假 MP4 檔頭、稀飯 code 101 分類。
+- 真網驗證：未改網域的原訂閱配置成功完成 2k m2、嘀嗒超清 B／G、熱播藍光 B／G 的搜尋、目錄、集數解析與 FFmpeg 單幀解碼。稀飯兩個作品的二級播放器返回 code 101，8088 直連 TLS 失敗；修正了本機拒絕與錯誤分類，不能宣稱修復上游服務。2k r2 外部解析服務抽查 HTTP 404；嘀嗒／熱播首條線路返回另一層 PHP 入口，未支援。
+- 建置／正式 App：macOS Debug 建置通過，啟動本次產物、操作搜尋視窗並截圖；iOS 模擬器正式 App 的配置匯入與錯誤提示 UI 測試通過，追加服務失敗提示後再次通過（HTTP 403／未知加密／播放器服務三類均附圖）。最新 helper 另完成 iOS Debug 建置。
+- 證據及逐站限制見 docs/development/source-diagnostics.md；暫存位於 .build/source-protocol-fix 及 .build/css1-diagnosis，不納入版本控制。未測所有集數、長時間 App 播放／音訊／彈幕／多視窗／最低 OS；不記錄憑證或完整簽名媒體 URL。
+
+
+## 2026-10-30 — 使用者實測回報後更正 macOS 來源修復範圍
+
+- 明確更正：此前來源修復集中在 iOS CSS1，macOS 建置成功不代表 macOS 解碼已修復。macOS 未編譯 SourceFixtures，iOS fixture 需 Debug 與明確啟動參數，未發現測試資料替代 macOS 正式解析。
+- 搬移公開播放器協議至共用 PublicPlayerProtocol.swift，加入兩個 App target；macOS Didahd／Rebo 正式解碼器接入 B/G 的公開 API/AES 與媒體檔頭檢查。保留 Didahd 4kvm 代理；移除 Rebo 不再使用的 WKWebView 解碼器。XiFan 上游失敗改為 playerServiceUnavailable，macOS 新增具體三語診斷。
+- 真網直接連結 macOS App 的回歸工具呼叫原生 episodeList/decodeUrl：嘀嗒／熱播 1164-6-1（G）成功解碼；1164-12-1（B）本次取得地址但媒體解碼失敗，不記為可播。2k 尚無 macOS 原生解碼器，未修復。
+- 正式 App 發現 IINA 外掛交接停留本機佔位媒體；對嘀嗒／熱播無彈幕請求改用原生媒體 URL 交接，保留啟用彈幕時的原協議，新增 PlaybackEncodingRegression 斷言。未改使用者播放器／外掛設定。
+- 驗證：macOS Debug 建置、iOS 模擬器建置、run-ios-sources.sh、run-w3-sources.sh、run-dependency-regression.sh --unit 均通過；本次新增 DesktopPlayerRegression 連結正式 macOS 二進位，以 --live 明確選入真網驗證。證據位於 .build/mac-source-fix，git diff --check 通過。正式播放驗收續記於來源排查記錄。
+
+- 正式播放續驗：最新 macOS App → Open URL → 嘀嗒 1164-6-1／超清 G → IINA，已看到實際影片；暫停時顯示 00:50 / 1:04:25。證據 .build/mac-source-fix/iina-playing.png。未驗熱播正式視窗、音訊聽測、長時間播放／彈幕／全部集數；未將 B 線路、稀飯或 2k macOS 標記完成。
+
+
+## 2026-10-30 — 參考 iOS 協議完成 macOS 2k 原生適配
+
+- 新增 Mutedm 原生解碼器與來源身分／網域／能力／目錄註冊；舊 2kdm 與新 mutedm 網址均可開啟，選集保持作品／線路／集數精確綁定。使用共用公開播放器 m2 協議；APP 專線仍明確回報協議未支援，不暗換線路。
+- 新增 2k 本地 JSON 搜尋基線及限定 CSS1 JSON 轉換，維持訂閱預覽／套用界線；既有快照須重新套用才能啟用新增搜尋。來源名稱三語同步，播放器沿用無彈幕時的 IINA 直接媒體交接。共用協議補齊桌面舊 2k 網域映射。
+- 原始碼／契約驗證：域名冒用／憑證／錯誤集數拒絕、目錄連結配對、訂閱 JSON 轉換與保存、IINA 交接斷言通過。macOS Debug 與 iOS 模擬器建置成功；run-w3-sources.sh、run-ios-sources.sh、run-dependency-regression.sh --unit 通過，git diff --check 通過。
+- 真網 macOS 適配器驗證：2k 搜尋返回作品；2k 網頁專線 1932-3-1、嘀嗒／熱播 1164-6-1（G）及 1164-12-1（B）均收到 HTTP 206 與 MP4 檔頭，FFmpeg 解碼成功。B 線路先前失敗保留作歷史，本次恢復可讀，不推斷不支援格式。首次網路重驗曾失敗，後續成功，不能保證上游穩定。
+- 正式 App 驗收：最新 IINA-ANI.app → 舊 2k 網域集數網址 → 網頁專線 → IINA，實際影片播放至 01:26 / 1:55:05 後暫停；證據 .build/mac-source-next/2k-playing.png。實際呼叫原生正式解碼器，非 fixture。真網及測試證據見同目錄 live-final.log、regression-final.log、playback-tests.log、ios-regression.log、build-final.log、ios-build.log。
+- 限制：稀飯正式解碼仍 playerServiceUnavailable，8088 直連仍 TLS 失敗（curl 35／HTTP 000）；2k APP 專線未支援。未驗整片、全部集數、音訊聽測、彈幕、重連／多視窗及最低 OS。不記錄完整簽名媒體 URL，不清除使用者資料。
+
+## 2026-10-30 — macOS 稀飯狀態碼修正與 2k APP 專線原因確認
+
+- 稀飯依公開 EcPlayer1.js 修正 code103 誤判，按回應 UID 解密原地址；媒體前綴探測最多 1024 bytes、請求限時 15 秒，區分 401 缺有效期簽名、一般授權、403、404／410。稀飯無彈幕播放使用 IINA 原生媒體交接。測試固定向量留在 Tests，正式解碼器沒有硬編碼測試影片或成功回應。
+- 2k r2 真正執行 appzx.html 提示頁（ps=0），殘留 muiplayer parse 地址未被網站使用；改為「僅供來源官方 APP 內播放，請選擇網頁專線」，不誤報格式／encrypt=3。不自動換線、投送 token 至其他接口或改寫使用者訂閱。新增三語錯誤訊息，共用錯誤列舉同步 iOS 文案。
+- 原始碼／建置／測試：macOS Debug build 成功；run-w3-sources.sh、run-dependency-regression.sh --unit、run-ios-sources.sh 均 exit0；包含獨立 AES code200/103、HTTP 錯誤分類、APP 限制、精確集數身份與 IINA 原生交接斷言；git diff --check 通過。
+- 真網：稀飯 3541 第01集備用①解析成功、HTTP206、FFmpeg 解碼成功；主線①回 mediaSignatureMissing；其他新番同類主線抽查同樣缺簽名，主線②解析服務 code101。舊番 1086 的 8088 直連仍 curl35 / HTTP000，未繞過 TLS。
+- 正式 App 實播：新建置 App → 稀飯 3541/3/1 備用① → IINA 實際畫面 00:21 / 23:40；主線①明確顯示 HTTP401 缺有效期簽名。2k 1932-2-1 APP 專線顯示限制提示，手動選網頁專線 1932-3-1 → IINA 實際畫面 00:19 / 1:55:05。兩次實播後均暫停；證據位於 .build/mac-remaining/ 的 xifan-playing.png、xifan-signature-error.png、2k-app-only.png、2k-web-playing.png。
+- 驗收環境：另一份 Xcode App 佔用 19080 導致初次交接 NIOCore.IOError；經正常結束該舊 App、保留新建置 App 後重試成功。沒有清除使用者資料。此埠衝突本輪沒有程式修正。
+- 限制：2k APP 專線仍不提供公開網頁媒體，稀飯主線缺簽名／上游解析失敗／8088 TLS 問題仍存在；沒有將其列為播放修復。未驗整片、全部集數、音訊聽測、彈幕、多視窗／重連、最低 OS；iOS 本輪只跑回歸測試，未做新一輪 App 實播。
+
+## 2026-10-30 — 稀飯 8088 舊番主線實播修復、2k 官方 APP 協議研究
+
+- 稀飯舊媒體主機 play.xfvod.pro:8088 在握手完成前斷線，curl 預設／TLS1.2／HTTP1.1 都 HTTP000、exit35，OpenSSL unexpected EOF；明文HTTP無有效回應。確認同主機標準 HTTPS 原路徑可讀 MP4，並以 curl 正常驗證 TLS、檔頭與 FFmpeg 解碼驗證。
+- macOS XiFan 加入精確主機／HTTPS／8088／MP4 的相容處理，保持原路徑與查詢參數；先讀最多64 bytes，要求同一最終網址和實際 ftyp 檔頭才交接。沒有套用到任意主機／任意連接埠、停用 TLS、另選來源或集數。
+- 原始碼與契約驗證：保留既有修改；新增主機冒用、憑證、HTTP、其他埠、其他格式拒絕及參數保留斷言。macOS Debug build、Tests/run-w3-sources.sh、git diff --check 通過；真網實際連結正式 App 解碼器的 1086/1/1、1086/1/2 都解析成功，3541/1/1 仍 mediaSignatureMissing。證據 .build/mac-protocol-research/build.log、tests.log、focused-two-episodes.log。
+- 正式 App 實播：重新啟動剛建置的 .build/xcode 產物，開啟 https://dm1.xfdm.pro/watch/1086/1/1.html → 明確選舊番主線①第01集 → IINA 實際航海王畫面，00:14 / 24:45 後暫停；截圖 .build/mac-protocol-research/xifan-old-main-playing.png。第02集只驗證正式解碼器與媒體探測，沒有正式 App 實播。
+- 稀飯新番缺簽名：重驗公開 xfdm2 入口仍 code103（未匹配接口，返回原地址），媒體401 expire missing；未找到公開簽名取得請求，未宣稱此分支可播。
+- 2k 官方研究：沿官網下載頁至 lmman.com 的 release-config.json，下載官方新版 APK 1.1.0-3，僅解壓／靜態讀取 Flutter AOT 字串，未安裝／執行 APK。找到 api.lmman.top 的作品搜尋、目錄、POST playback 流程及 source_key／episode_key 欄位。網站1932與 APP987才是同一部2022年的紅髮歌姬，ID不可直接沿用。新版 APP 同作品播放 API 回11520 READ_ACCESS_REQUIRED，要求激勵廣告或會員，沒有返回媒體URL。
+- 2k 限制：舊 r2 密文與新版集數key尚無直接對應，新版樣本的觀看授權也未取得；未導入錯配或無法完成的播放流程，APP專線仍不支援實播。研究摘要 .build/mac-protocol-research/app-research-evidence.json，不含 token 或完整簽名串流 URL。
+- 本輪沒有清除使用者資料；沒有重新執行 iOS、彈幕、多視窗／重連／釋放、最低OS及整片／音訊聽測；未把這些列為通過。
+
+## 2026-10-30 — 稀飯新站限時簽發與正式 mac App 短時實播
+
+- 發現稀飯新站 next.xifanacg.com 的逐集簽發流程；以官方公開頁面／客戶端 bundle／API 回應核對，沒有對舊無簽名地址臆造參數。新增 macOS 新站精確網址、Flight JSON 目錄、獨立劇集 ID、穩定線路 ID、issue-web-playback 簽發。API 回應必須符合所選作品、劇集、候選線路與網址。
+- 修正網域別名錯誤：新站與 dm1.xfdm.pro 的路由與身份分開，新增 next 目錄命名空間；保留舊書籤／訂閱，不把舊 ID 當新 ID。舊缺簽名診斷改為指引至新站重新確認作品與集數，en／zh-Hans／zh-Hant 同步。新站目前靠直接開啟新網址，搜尋訂閱尚未遷移。
+- 媒體探測確認 Referer 差異：帶舊 player.moedot.net Referer 的 URLSession 雲端轉址回400；移除後206且 ftyp 正確。新站探測仍限時／限制讀取前綴，使用無 Referer 的開放 Range。修正新站 IINA URL 編碼入口的外掛 Referer，最終新站無彈幕播放使用既有 IINA CLI 完整參數交接；其他來源保留原交接行為。
+- 驗證過程誠實保留：新域名最初被 canonicalHost 改回舊域，回歸測試抓到並修正；一般 IINA 入口修改曾未寫入，測試失敗後以精確補丁修正。多次 URL scheme 實播未成功，CLI 才在本輪正式 App 成功，尚未把 IINA 內部差異完全獨立歸因。
+- 正式 App：重新建置與啟動 .build/xcode 的產物，開啟新站3441／劇集203869／xfxf1，明確選主線①「警长对曼登·提姆的要求」。IINA 顯示實際 JOJO 影片，時間從10.59秒推進至12.43秒／1516.159秒，然後暫停。畫面與進度證據 .build/mac-signature-research/new-main-playing.png、real-playback-state.json。本次約40KB/s且頻繁緩衝，只能宣稱短時實播與解碼通過。
+- 2k 舊版研究：歷史鏡像 com.zcj.mutefun 3.5.0 的MD5符合多個下載頁，僅靜態分析，官方歷史簽章未獨立核對。Dart2.19.6 AOT 有混淆，找到 /v1/parsing/proxy、/v1/config/get 與解析配置／解密攔截器字串；未還原可信基址、完整請求或r2解密向量，未宣稱已確定呼叫鏈。新版APP11520不套用成舊版結論，APP專線仍不可宣稱實播成功。
+- 沒有清除使用者資料、安裝／執行鏡像 APK、加入測試影片至正式解碼器。未驗最低OS、整集、音訊聽測、多視窗／重連／釋放；iOS僅字串共用回歸，未新增新站功能。完整簽名網址不納入報告。
+- 最終檢查：macOS Debug 建置成功；Tests/run-w3-sources.sh、Tests/run-dependency-regression.sh --unit 均exit0，覆蓋新站分片JSON、精確主機／路由、錯作品／錯集／錯線拒絕及IINA一般／外掛入口的簽名與Referer契約。Tests/run-ios-sources.sh本輪字串修改後exit0；最終mac專屬交接變更不影響iOS原始碼。git diff --check通過。最終證據build-cli.log、tests-final-cli.log、playback-final-cli.log、ios-tests.log位於 .build/mac-signature-research/。
+
+## 2026-10-30 — macOS 與 iOS 解析模組差異審核
+
+- 比對兩端工程共用檔案、解析路由、CSS1轉換用途、稀飯／2k／嘀嗒／熱播／嘀哩嘀哩適配器、錯誤拋出點與測試範圍。整理到docs/development/source-diagnostics.md的「macOS／iOS 解析模組差異檢查」。
+- 確認主要未同步項目：iOS未接稀飯新站Flight／簽發、未接8088標準HTTPS相容；共用XiFan helper仍僅接受code200；2k r2在macOS顯示APP限制，iOS仍為unsupportedEncryption。共用錯誤文字不等於共用故障判斷。另記錄4kvm動態解析、嘀哩多線路與CSS1搜尋／完整配置的設計差異。
+- 本輪只做原始碼與工程靜態核對，沒有修改解析碼、建置、跑測試或重做兩端實播；文件git diff --check通過。保留既有未提交修改，沒有變更使用者資料。
+
+## 2026-11-03 — SourceCore 共用套件與兩端整合
+
+- 建立本機 Swift 6 套件 `SourceCore/`，將現有 `SourceSelection`、`SourceCapabilities`、`SourceConfiguration`、`SourceSubscriptionRules` 與公開播放器協議移入同一個 `SourceCore` product，補齊呼叫端所需的公開存取及初始化方法。macOS 工程以 `SourceCore`、iOS 工程以 `../SourceCore` 引用相同目錄，兩端改用明確的 `import SourceCore`，移除核心檔案的重複 target membership 與 `MOBILE_SOURCES` 分支。
+- 桌面 HTTP transport 保留在 App 的 `PublicPlayerProtocol` extension，`ConfiguredSource` 將套件 `.invalidMedia` 轉回既有 `VideoGetError.notFountData`；桌面保留本地化錯誤協議。非同步公開播放器方法保留呼叫端隔離，避免將非 Sendable JSON 字典轉送到其他 executor。未更換 JSON 欄位、配置 fingerprint、持久化身份、站點能力、平台解析器及使用者資料；保留工作目錄原有未提交修改。
+- 回歸入口改為連結編譯後的共用模組，iOS 來源回歸的臨時套件直接依賴本機 SourceCore，不再複製核心檔案；重建生成 target 以排除舊版本殘留檔案。補充套件 README、架構、兩端使用指南與規劃內的來源檔案連結。
+- 原始碼／工程檢查：兩個 pbxproj 的 `plutil -lint`、腳本語法檢查及 `git diff --check` 通過；確認兩份實際 Xcode 建置圖均解析至 `/Users/lls/Documents/IINA-ANI/SourceCore @ local`，核心不引用 App 類型。
+- 建置：macOS `IINA-ANI` Debug 與 iOS `ANI` Debug Simulator 均成功。iOS 原預設快取缺少 MPVKit XCFramework，改用本機已存在的 `.build/403-diagnosis/xcode/SourcePackages`，未更換套件版本或鎖檔。建置與 SwiftPM 測試需經允許存取沙盒外編譯快取。
+- 自動回歸：SourceCore 獨立 XCTest 4 項通過；`run-w3-sources.sh`、`run-ios-sources.sh`、`run-multiplatform-contracts.sh`、`run-ios.sh`、`run-ios-links.sh`、`run-ios-history.sh`、`run-work-library.sh`、`run-w7-usecases.sh` 及 `run-dependency-regression.sh --unit` 均 exit 0。覆蓋配置／修訂與舊 JSON 相容、來源／集數／線路身份、公開播放器協議、CSS1 匯入／解析／取消、映射、續播、收藏／作品庫及原有下載／播放契約。
+- iOS 執行：經使用者同意啟動 iPhone 18 Pro（iOS 27.2）模擬器，安裝並啟動本次正式 ANI App，操作來源設定頁並截圖。`testConfigurationOnlyURLImport` 與 `testSpecificSourceDiagnostics` 共 2 項 UI 測試通過，驗證明確 Debug transport fixture 的配置匯入、來源選集到實際 mpv 進度，以及未支援加密、HTTP 403、播放器服務失敗提示。相同模擬器上的 `run-multiplatform-contracts.sh --simulator` 與 `run-ios-history.sh --simulator` 亦通過。
+- 限制：macOS Computer Use 回報未獲准操作 IINA-ANI，本輪未完成新產物的正式桌面視窗驗收，不能以二進位連結回歸代替。iOS UI 使用受控來源與本機媒體 fixture，沒有重驗真網站點、實機、最低 OS、音訊聽測、長時間播放、彈幕及完整多視窗生命週期；套件共用不代表兩端所有來源功能一致。
+- 本機證據：`.build/source-core-extraction/` 保存兩端建置、套件與各回歸日誌、`simulator-contracts.log`／`simulator-history.log`、`ios-source-settings.jpg` 及 `ios-ui.xcresult`（2 項 UI 測試與附件）；不納入版本控制，不保存憑證或完整簽名媒體 URL。
+
+## 2026-11-03 — SourceCore 接入後 macOS 視窗驗收重試
+
+- 依使用者要求重試操作本次正式 App 產物 `.build/xcode/Build/Products/Debug/IINA-ANI.app`，Computer Use 仍回覆 `Computer Use was not approved to use IINA-ANI`，無法取得該 App 的視窗或執行操作。
+- 本次來源搜尋、選集及實際播放均未完成視窗驗收，沒有新增通過項目或畫面證據；先前建置／自動回歸結果不代替本次驗收。需先在 Codex 的 Computer Use 存取設定允許 IINA-ANI，才能繼續。未變更程式碼或使用者資料。
+
+## 2026-11-03 — SourceCore 接入後 macOS 正式視窗驗收
+
+- Computer Use 權限本次已生效。操作 `.build/xcode/Build/Products/Debug/IINA-ANI.app` 正式視窗；程序 PID 55148 的執行路徑與該產物相符。沿用本次 SourceCore 整合的成功 Debug 建置（22:05:47 產物），建置日誌確認 `SourceCore @ local`。本輪未改碼或重新建置。
+- 來源搜尋：輸入「海贼王」，切換 Videos／All Enabled Sources，返回 20 筆 bilibili 結果。eacg、kanba、youknow 顯示 HTTP 403；fengche、hanime1 顯示配置格式不符。搜尋可返回結果及分來源錯誤，不代表全部來源可用。
+- 搜尋結果到播放選擇：開啟 bilibili `BV1WvuM69EXa`，正式詳情與選集面板顯示對應標題、p=1、480P、預設伺服器及交接狀態。但 IINA 最後回覆 Cannot open file or stream，取消該失敗載入；此案例實播不通過，原因未獨立定位，不能歸因於 SourceCore 或上游。
+- 嘀嗒選集：透過正式 Open URL 開啟 `https://www.didahd.xyz/play/1164-6-1.html`，載入「海贼王真人版」G／B／K 三條線路共 24 個集數項目；明確選取超清 G 第一集，解析就緒後按 Play Selected Episode。第二集切換後身份正確更新至 1164-6-2，但解析逾時。返回第一集重新解析成功。
+- 播放器能力：暫時選擇 Built-in JSPlayer，App 正確阻止播放並顯示此來源沒有已驗證的內建網頁播放路徑；恢復 Player from Preferences 後重新提交第一集。早期觀察停留在 IINA 首頁／選單，不能據此判定交接失敗；最後從 Window 選單選取新視窗，確認標題「海贼王真人版 - 第1集」、真實影片畫面與變動字幕，暫停時為 00:17 / 1:04:25。此案例正式 App 短時真網實播通過，影片保留暫停。
+- 本機證據位於 `.build/source-core-extraction/`：`macos-source-search.png`、`macos-source-selection.png`、`macos-didahd-selection.png`、`macos-player-capability.png`、`macos-didahd-playing.png`、`macos-didahd-paused.png`、`macos-playback-evidence.txt`。未保存憑證或完整簽名媒體 URL。
+- 限制：來源搜尋與嘀嗒實播為分開案例，嘀嗒使用直接網址，未宣稱同一作品從關鍵字搜尋一路實播通過。未驗整片、音訊聽測、全部線路與集數、彈幕、重連、多視窗／釋放、最低 OS 或本輪 iOS；沒有清除使用者資料，未修改全域播放器偏好。文件 diff 檢查通過。
+
+## 2026-11-03 — bilibili 影音交接、嘀嗒第二集逾時修復與完整搜尋流程驗收
+
+- bilibili：未啟用彈幕時，已解析的 bilibili／bangumi 視訊改用 IINA 程序參數交接，保留所選線路、簽名網址、Referer、音軌與續播參數，避免依賴外掛佔位影片的載入轉向；有彈幕時保留原外掛協議。初版能出畫面但沒有音軌，後續核對實際 mpv 0.41 的 `audio-files` 清單為空，以及 mpv 官方文件／v0.41.0 options.c，確認 `audio-file` 為 CLI 專用別名。IINA 的 libmpv 選項設定也未接受 `audio-files-append`，最終改為 `audio-files`，按 Unix path-list 規則跳脫反斜線與冒號。正式重驗確認外接 AAC 音軌選取與解碼成功，未把初版無聲畫面列為最終通過。
+- 嘀嗒：診斷第二集實際頁面為 BBA／超清 G，動態解析 API 耗時曾達 12.8 秒，後續保留舊 20 秒限制的診斷請求在相同 API 約 21 秒回 NSURLErrorDomain -1001；頁面／播放器腳本／媒體前綴探測分開量測。僅桌面動態解析 API 上限改 45 秒，其他請求維持 20 秒，沒有無限重試或更換集數。成功驗證的目錄快取 60 秒，換集不再重探每條無關線路；逐集 payload、token、簽名媒體仍重新取得且驗證精確作品／線路／集數，不快取媒體。
+- 嘀嗒第二集解析恢復後，URL scheme 路徑仍出現載入失敗，因此無彈幕嘀嗒也改用保留原始參數的 IINA 程序入口。最終同一集成功實播；尚未逐位元定位 URL scheme／外掛內部失敗細節，不將推測當作已證實原因。
+- 建置及回歸：最終 macOS Debug build 成功，正常結束舊 App 後啟動 `.build/xcode/Build/Products/Debug/IINA-ANI.app`，最終程序 PID 57291。`run-w3-sources.sh` exit 0；最終 `run-dependency-regression.sh --unit` exit 0，包含新增的無彈幕直接交接、帶彈幕保留外掛、所選簽名線路與外部音軌／Referer／libmpv 清單編碼斷言。正式二進位解碼器第二集兩次完整解析分別約 3.92／4.37 秒；第一集約 9.75 秒。這些時間受上游影響，不能當作效能保證。
+- 同一作品完整驗收：最終 App 的 Videos／bilibili 搜尋「海贼王」→ 20 筆結果 → 選「巅峰对决一触即发！S17 船长格斗大赛总决赛即将开战」→ 正式詳情與選集確認 `BV1WvuM69EXa?p=1`、480P → IINA 真實影片。唯讀 IPC 確認 H.264 852×480、外接 AAC 48 kHz stereo、兩軌 selected；進度由約 6.1 秒推進至 20 秒／87.83 秒後以視窗操作暫停。此案例從來源搜尋到實播沒有使用直接網址繞過。
+- 嘀嗒第二集驗收：正式 Open URL → 1164-6-2 → 明確選超清 G 第二集；解析中按 Cancel Source Operation，畫面回取消且播放不可用，重新選同一集可正常解析；按播放後 IINA 標題「海贼王真人版 - 第2集」，真實畫面、1080p H.264、AAC 48 kHz stereo，進度由 13.55 秒推進至 18 秒／3327.32 秒後暫停。兩條影音的音軌以解碼狀態驗證，未做人工聽測。bilibili 的本輪測試播放器已正常結束，嘀嗒保留暫停。
+- 範圍與限制：本輪 didahd 的 Videos 關鍵字搜尋顯示無結果，未完成嘀嗒同一作品的搜尋端到端，也未修改其訂閱／分類規則；完整搜尋流程通過的是上述 bilibili 作品。未驗所有來源、彈幕實播、整片、網路重連、完整多視窗／釋放、最低 OS 或 iOS。沒有清除使用者資料或修改全域播放器設定，保留工作樹原有修改。
+- 證據 `.build/source-playback-fix/`：`build-final.log`、`unit-final.log`、`sources.log`、`probe.log`／`probe-after.log`、`bilibili-final-search.png`／`bilibili-final-selection.png`／`bilibili-final-playing.png`、`bilibili-av-state.json`、`didahd-cancelled.png`／`didahd-final-selection.png`／`didahd-final-playing.png`、`didahd-av-state.json`。保存的驗收狀態只含標題、進度與音視訊參數，不含完整簽名網址。`git diff --check` 通過。
+
+## 2026-11-03 — 嘀嗒搜尋空結果修復與切換關鍵字驗收
+
+- 根因：一般搜尋在呼叫 `VideoDecoder.searchSource` 時停用 Bangumi 分類；嘀嗒等 CMS 的原始結果為 unknown，隨後被 Videos 分區排除，造成網站有結果但 App 顯示零筆。`BrowseSearchService` 改為先執行既有公開作品分類再套用分區，保留 unknown 不混入 Videos 的契約，沒有修改訂閱、搜尋選擇器或使用者資料。
+- 真網診斷：沿實際訂閱搜尋規則請求並以正式解析器解析，`海贼王` 2 筆、`海贼王真人版` 1 筆、`黑袍纠察队` 8 筆、`绝命毒师` 6 筆、`海贼` 2 筆；原始分類皆為 unknown。`庆余年` 與 `唐朝诡事录` 為上游本身零筆，未將真正空結果改成假資料。
+- 正式視窗：重新建置並啟動 `.build/xcode/Build/Products/Debug/IINA-ANI.app`，Videos／didahd 搜尋 `黑袍纠察队` 顯示 7 筆分類後視頻；切換為 `海贼` 顯示 2 筆，沒有殘留前一關鍵字結果。從其中《海贼王真人版》搜尋結果開啟詳情，選超清 G 第二集並解析成功，再按播放。此完整流程沒有以直接網址繞過搜尋。
+- 實播：先正常結束上一輪暫停的測試 IINA，再驗本輪新播放器。視窗標題為《海贼王真人版 - 第2集》，顯示真實影片與字幕；唯讀 IPC 確認 1920×1080 H.264、AAC 48 kHz stereo 且影音軌皆 selected，進度由約 18.27 秒推進至約 26 秒／55:27 後透過視窗暫停。未做人耳音訊聽測。
+- 驗證：macOS Debug build 成功；`Tests/run-w7-usecases.sh`、`Tests/run-w3-sources.sh` 均 exit 0，涵蓋搜尋分區、取消／過期結果、來源解析與身份契約；`git diff --check` 通過。保留先前 SourceCore 與播放修復及其他既有未提交修改。
+- 證據保存在 `.build/didahd-search-fix/`：`probe.log`、`alternate-queries.log`、`build.log`、`usecases.log`、`sources.log`、`black-robes-search.png`、`pirate-search.png`、`episode-two-selection.png`、`episode-two-playing.png`、`playback-state.json`，未保存完整簽名媒體 URL 或憑證。
+- 限制：分類仍依賴 Bangumi 公開查詢，失敗或模糊結果維持 unknown；上游無結果不會因本修復變有結果。未驗全部作品／線路、整片、彈幕、重連、多視窗釋放、最低 OS 或本輪 iOS。
+
+## 2026-11-03 — iOS 正式 App 嘀嗒搜尋切換、第二集實播與重播驗收
+
+- 依使用者要求啟動 iPhone 18 Pro（iOS 27.2，794B2FE9-E937-47B9-81A9-491E245A2BDC），以 XcodeBuildMCP 重新建置、安裝並啟動正式 `iOS/ANI.xcodeproj`／ANI Debug App，沒有 fixture 啟動參數或隔離 host。沿用本機 MPVKit 的 `.build/403-diagnosis/xcode/SourcePackages`，未更換鎖定版本。首次模擬器自動化階層擷取逾時，改由 Device Hub 的真實視窗完成操作，之後 runtime snapshot 與捲動恢復可用。
+- 該模擬器起初沒有來源配置，透過正式「播放 → 來源設定 → URL 匯入」下載既有 CSS1 訂閱 `https://sub.creamycake.org/v1/css1.json`，等待各站樣本搜尋／選集／解析檢查後確認保存，只啟用嘀嗒。其他通過檢查的匯入來源保持停用，既有資料沒有清除。
+- 初輪正式 UI 嘀嗒搜尋：`黑袍纠察队` 8 筆 → `海贼` 2 筆 → `葬送的芙莉莲` 2 筆；切換請求清除舊清單，結果沒有混入上一個關鍵字。iOS 片源搜尋列出來源原始候選，與桌面 Videos 分類後的 7 筆黑袍結果口徑不同。黑袍與海贼只搜尋，沒有把它們保存成芙莉蓮的片源。
+- 選擇同一部《葬送的芙莉蓮》第一季的 Bangumi 正篇第二集，從嘀嗒搜尋結果選第一季作品（不選第二季），再選超清 G 第二集。初次解析得到一般網路失敗；原畫面未揭露失敗的具體端點或 URLError，因此不把它直接記為已證實的 API timeout。檢查程式確認 iOS transport 仍強制 20 秒，而桌面動態 API 已採 45 秒，存在兩端策略差異。
+- 修正：將指定動態解析 API POST 的 45 秒等待與其他請求 20 秒等待集中為 `SourceCore.PublicPlayerProtocol.requestTimeout(for:)`，桌面 extension 與 iOS `SourceTransport` 共同呼叫；未擴大允許的端點、主機或方法。新增精確端點／POST、同端點 GET、其他路徑與腳本的邊界回歸。
+- 最終正式 App：再次重新建置並啟動（PID 60298），重新走嘀嗒 `海贼` 2 筆 → `葬送的芙莉莲` 2 筆 → 第一季結果 → 超清 G 第二集。正式內建 mpv 播放器顯示「葬送的芙莉莲 · 第02集」、真實動畫畫面，狀態 Playing，實際進度由 23.2 → 27.7 → 32.1 秒／26:00，透過 Pause 暫停成功；沒有直接貼媒體 URL 繞過搜尋或選集。
+- 關閉播放器後返回保存片源卡片，來源鎖定嘀嗒與原第二集；按「播放已保存片源」開始重新解析後取消，確認回到可播放卡片且未誤開播放器。再次播放保存片源，重查同一目錄／線路／第二集並成功出現同名影片，進度約 18.3 → 24.7 秒後暫停。這是保存片源重新播放，未宣稱已驗證觀看歷史續播位置、網路斷線重連或記憶體釋放。
+- 檢查：最終 iOS Simulator Debug 與 macOS Debug build 均成功；SourceCore 獨立 XCTest 5 項通過；最終 `Tests/run-ios-sources.sh` exit 0，涵蓋來源搜尋／解析、映射保存重用、精確線路／集數、取消與過期回應。`git diff --check` 通過。保留工作樹其他既有修改。
+- 證據 `.build/ios-didahd-acceptance/`：`ios-build-final.log`、`macos-build.log`、`sourcecore-tests.log`、`source-regression-final.log`、`black-robes-search.png`、`final-pirate-search.png`、`final-frieren-search.png`、`frieren-g-selection.png`、`final-frieren-playing.png`、`saved-source-cancelled.png`、`saved-source-replaying.png`、`player-paused-state.txt`、`evidence.json`。只保存公開來源身份、畫面、時間與建置結果，未保存完整簽名媒體 URL 或憑證。
+- 限制：本輪完成的是上述指定作品、線路、第二集的短時真網旅程；沒有做人耳聽測、全片、全部站點／線路、彈幕、斷線重連、記憶體／多視窗釋放、最低 iOS 17、iPad 或實機驗收。Debug 正式產品入口的模擬器驗收不等於 App Store／TestFlight 發佈。
+
+## 2026-11-03 — iOS 芙莉蓮下一集與重啟續播補充驗收
+
+- 重新建置 `iOS/ANI.xcodeproj`／ANI Debug 成功，以 XcodeBuildMCP 安裝並啟動本次正式 App（PID 62836），使用已啟動的 iPhone 18 Pro／iOS 27.2 模擬器。沿用 `.build/403-diagnosis/xcode/SourcePackages` 與既有資料，沒有 fixture 啟動參數、直接媒體 URL 或手動修改歷史檔案。
+- 起始歷史的《葬送的芙莉蓮》第二集已標為播完（25:59），從「繼續觀看」重播；首次操作自動化未觸發導頁，重按後首次來源解析顯示播放器資料格式／解碼錯誤，原頁按 Resume playback 重試成功。未定位該次來源錯誤端點或根因，不把它宣稱為已修復。
+- 第二集正式播放器顯示真實動畫，進度 5.6 秒／26:00；按 Next episode 後第三集成功解析並實播，進度 8.3 秒／24:30，播放佇列由一項變為兩項、選中第三集。唯讀歷史確認同一 Bangumi 作品 400602、嘀嗒 `dida-yingshi`、lineID `4`（上一輪超清 G），公開播放頁由 `/play/1185-9-2.html` 變為 `/play/1185-9-3.html`。第三集採來源集數身份，未捏造 Bangumi 第三集 ID。
+- 使用播放器快進按鈕移至中段，繼續播放後暫停於 156.948 秒（2:36.9）。唯讀保存檔確認第三集、completed=false、duration=1470.032 秒；第二集獨立保留 18.852 秒，沒有把第三集位置寫入第二集。
+- 在播放器暫停狀態終止 App 程序，再以空啟動參數重新啟動（PID 63690）；首頁繼續觀看仍為第三集 2:36。點入後重新在線解析，真實第三集畫面恢復，觀察到 161.6 → 169.5 秒持續前進，最後於 171.880 秒暫停。前後歷史的第三集 ID 與完整 context 相等，位置正常更新，沒有返回第二集或從零重播。首個捕獲的非零位置為 161.6 秒，包含載入後至擷取間的正常播放時間；未量測逐幀 seek 誤差。
+- 發現但未修改的顯示缺陷：下一集及其觀看歷史標題變為「 · 第03集」，遺失作品名，重啟後仍存在；來源及作品身份保持正確。原始碼 `SourceFlow.swift` 的標題組合使用 `catalog.work.title`，本輪未進一步修復或宣稱根因已確認。
+- 本輪結論：指定作品的手動第二集→第三集及終止／重啟後從觀看歷史續播通過；不是啟動即自動打開播放器。未驗自然 EOF 自動下一集、播放中強殺、整片、音訊人工聽測、斷線重連、彈幕、最低 iOS、iPad 或實機。未變更產品程式碼，未重跑單元回歸，保留其他既有未提交修改與使用者資料。
+- 本機證據 `.build/ios-next-resume-acceptance/`：`second-playing.jpg`、`third-before-restart.jpg`、`restart-history.jpg`、`third-resumed.jpg`、`ui-evidence.json`、`history-before.json`、`history-after.json`。只保存 UI、指定作品的公開來源身份及時間，沒有完整簽名媒體 URL 或憑證。建置日誌為 XcodeBuildMCP `build_run_sim_2026-11-03T15-54-00-777Z_pid61899_593e4912.log`。文件 `git diff --check` 通過。
+
+## 2026-11-04 — iOS 下一集作品名保留修復與重啟標題驗收
+
+- 根因：`MobileSourceContinuation` 重新取得目錄時以空字串建立 `MobileSourceWork`；CSS1 目錄沒有作品名 selector，只原樣保留傳入的 work，直接串接後產生「 · 第03集」。
+- 修復：`PlaybackSession` 在接續請求開始時捕獲目前標題，傳給 continuation。優先採用重新取得的非空目錄作品名；CSS1 缺名時，以目錄中精確匹配的當前集數標題移除目前播放標題的完整後綴，再組合下一集名稱。作品名內的「 · 」保留，不拆第一個分隔符；無可用作品名時只顯示集名，不輸出懸空分隔符。來源、集數、線路、品質、配置修訂及取消驗證不變，沒有新增儲存欄位或本地化字串。
+- 回歸：`Tests/run-ios-sources.sh` exit 0；新增真實 CSS1 client 路徑的空目錄標題、中文作品名含分隔符、接續後重新解析及缺名不輸出分隔符斷言，另驗證非空新目錄標題優先。最終 ANI Debug Simulator build 成功、無工具回報警告；`git diff --check` 通過。
+- 正式 App：沿用 iPhone 18 Pro／iOS 27.2 與既有資料，重新建置安裝啟動 PID 65358，無 fixture 啟動參數。從探索搜尋 `sousou` → 芙莉蓮第一季 → Bangumi 第二集 → 播放已保存嘀嗒片源 → Next episode，第三集真實影片與播放佇列均顯示「葬送的芙莉莲 · 第03集」，播放進度 5.3 秒後暫停於 16.9 秒／24:30。
+- 重啟驗收：暫停時終止程序，空參數重新啟動 PID 65887；首頁觀看歷史顯示完整「葬送的芙莉莲 · 第03集, 0:16」，第三集歷史 ID 與上一輪一致。點入在線續播成功，播放器、Now playing 與佇列標題仍完整，進度觀察到 28.7 秒，最後 31.1 秒暫停。此次正常實播寫入亦更新了上一輪同集的缺名歷史；沒有手動修改或清除歷史。
+- 限制：未批次遷移其他既有缺名歷史；若只打開舊缺名記錄而未重新從有完整名稱的播放切集，仍無法憑空恢復名稱。未驗最低 iOS、實機、自然 EOF 自動接續、整片或人工音訊聽測。保留工作樹既有修改，Device Hub 暫時開啟的鍵盤擷取已恢復關閉。
+- 本機證據：`.build/ios-next-title-fix/third-player.jpg`、`restarted-history.jpg`、`resumed-player.jpg`、`ui-evidence.json`；回歸日誌 `.build/ios-title-regression.log`，最終 XcodeBuildMCP 建置日誌 `build_run_sim_2026-11-03T16-02-46-197Z_pid61899_f5f96100.log`（UTC，澳門日期為 11 月 4 日）。未保存憑證或完整簽名媒體 URL。
+
+## 2026-11-04 — iOS 既有缺名觀看歷史修復與重啟續播
+
+- `MobilePlaybackHistory` 載入成功後只修復舊「· 集名」格式，以既有且完整匹配的 Bangumi 作品身份查詢標題。正式 App 注入 `MobileLibrary` 查詢：優先讀取通過檔案及內嵌作品 ID 驗證的詳情快取，其次採同 ID 且名稱唯一的收藏快照；不依片名相似度、集號或媒體網址猜配。無來源身份、無可信名稱、本地影片與已有完整名稱的記錄不變。
+- 修復只改 title；id、context（作品／集數／來源／線路／品質／修訂）、position、duration、completed、updatedAt 與本地引用皆保留。沿用既有驗證、暫存及原子替換流程，成功保存後才發布新記錄；寫入失敗保留原磁碟與記憶體資料並顯示既有儲存錯誤，重試讀取可再修復。壞檔及未知版本仍禁止覆寫，不增加 archive 版本或清除資料。
+- 自動回歸：`Tests/run-ios-history.sh` exit 0，新增精確身份、名稱修復、所有播放欄位保存、未知作品不猜配、不覆寫完整標題、無效名稱、重啟冪等、暫存寫入失敗與重試、壞檔／未知版本保護。`Tests/run-ios.sh` exit 0，補查詳情快取及收藏的同 ID 名稱取得、錯誤內嵌身份拒絕與無資料返回空值。首次新增測試誤將未知作品也提供可用名稱，導致冪等比較失敗；修正測試供應者為只回傳指定作品後全數通過，未隱藏產品失敗。
+- 正式 App 建置：ANI Debug Simulator 成功，XcodeBuildMCP 無回報警告；iPhone 18 Pro／iOS 27.2，初始 PID 13726。建置日誌 `build_run_sim_2026-11-04T13-48-51-548Z_pid61899_bd996200.log`。
+- 舊資料重現：現有芙莉蓮第三集已於前輪正常實播修好；本輪先終止 App 並備份整份模擬器歷史，只把該驗收記錄的 title 還原為「 · 第03集」，保留其 31.114416666666667 秒及其他全部欄位，不替換其他歷史。正式新版啟動後自行讀取同作品 400602 快取，恢復「葬送的芙莉莲 · 第03集」。逐欄比對整份輸入與輸出只有該 title 一項變動；未以手動補名冒充產品修復。
+- 再次終止／重啟（PID 14130）：首頁完整標題與 0:31 位置保持，播放前的歷史檔與首次修復後逐位元相同，確認不重複寫入。點擊該歷史在線重新解析並恢復第三集真實動畫，實際進度觀察到 36.8 秒，最後 53.4 秒暫停；播放器、Now playing 與播放佇列均為完整第三集標題。沒有重新選第二集來覆蓋缺名資料，也沒有從零開始。
+- 證據 `.build/ios-history-title-repair/`：`history-original-backup.json`、`history-legacy-input.json`、`history-repaired.json`、`repaired-history.jpg`、`restarted-history.jpg`、`resumed-player.jpg`、`ui-evidence.json`、`history-tests.log`、`mobile-tests.log`。備份及歷史僅含既有持久化公開身份與進度，未保存憑證或完整簽名媒體 URL；不納入版本控制。
+- 限制：缺少可驗證 Bangumi 關聯／本地作品資料的舊記錄保持原名，後續取得詳情或收藏資料後於再次啟動／重試讀取時處理；不在線搜尋猜名。未驗最低 iOS、實機、自然 EOF、人工音訊聽測或整片。保留既有工作樹修改。`git diff --check` 通過。
+
+## 2026-11-04 — 雙端頁面提示精簡
+
+- macOS：發現、搜尋、Bilibili／YouTube 頁已有內容時隱藏背景刷新與分頁載入文字；移除推薦瀏覽完畢的常駐提示。詳情主頁與來源面板隱藏常態就緒訊息，來源診斷仍保留完整狀態，錯誤與操作原因繼續顯示。
+- iOS：來源、續播、榜單、日曆、配置下載及帳號操作保留轉圈，將載入文字移至 VoiceOver 標籤；移除三段重複的來源內部流程說明；正常更新成功後隱藏快取時間提示，使用快取或更新失敗時仍顯示。已有集數時不再顯示刷新轉圈。
+- 原始碼檢查：`git diff --check` 與六個修改的 iOS Swift 檔案語法解析通過；重用既有本地化字串，未新增翻譯鍵。
+- 回歸：`Tests/run-workspace-detail-episodes.sh`、`Tests/run-ios-catalog.sh` 通過。
+- 建置：macOS Debug 正式工程建置成功。iOS Simulator 建置受阻於 `.build/ios/SourcePackages/artifacts/mpvkit` 缺少 Libavcodec 等 XCFramework；本次未完成 iOS typecheck／App 執行驗收。
+- 執行：重新啟動本次 `.build/xcode/Build/Products/Debug/IINA-ANI.app`，在正式首頁操作「Load More」，推薦由 24 增至 47，檢查 AX 與視窗截圖未見重複載入文字；觀看進度仍顯示。未完整逐頁驗收帳號、播放、網路失敗與 VoiceOver 情境。
+
+## 2026-11-04 — 移除來源匹配證據與未登入常態提示
+
+- macOS 來源面板移除 Match evidence 與附帶候選說明文字；保留候選選單、匹配判斷及來源診斷。
+- 移除番劇播放提交後的訪客身分常駐提示。詳情自動讀取 Bangumi 收藏分類前檢查有效登入帳號；未登入時保留本機分類並略過遠端查詢，不顯示要求登入的錯誤。實際查詢失敗與主動操作錯誤仍沿用原處理。
+- 驗證：最終 macOS Debug xcodebuild 成功；Tests/run-workspace-detail-episodes.sh 通過；git diff --check 通過。建置日誌 .build/source-panel-cleanup-build.log。
+- 正式 App：重建後從搜尋開啟「学生会也有洞！」並選第一集，AX 與截圖確認匹配來源區不再出現證據說明，候選選單及播放設定仍可見。既有精確來源自動提交播放，觀看進度因此更新。最終加入未登入查詢與訪客提示修改後再建置並重啟成功；這兩項最終分支未再次逐項 UI 驗收，未驗已登入帳號同步、播放取消／重連及彈幕。保留工作樹既有修改與使用者資料。
+
+## 2026-11-04 — BT 搜尋與匯入介面簡化
+
+- 將 macOS WorkspaceTorrentController 的 BT 下拉選單改為漢化組分區、集數自然排序的結果表，保留完整原始標題與來源、不同字幕／畫質版本；以標題解析顯示提示，未知組別／集數保留回退標示，不修改下載身份。
+- 移除所選結果的 metadata 按鈕，雙擊結果或選取後 Return 匯入；一般選取、組別標題及空白處不匯入。手動地址入口改名「匯入」。上傳說明收進驚嘆號圖示 tooltip，亦可點擊查看 popover；保留首次上傳確認、限速及取消機制。新增文案提供 en／zh-Hans／zh-Hant。
+- 驗證：Tests/run-torrent-search.sh 通過，增加括號／中文括號、版本、合集、S01E02 與畫質／年份不誤判的解析案例；最終 macOS Debug xcodebuild 成功；git diff --check 通過。
+- 正式 App：重啟 .build/xcode/Build/Products/Debug/IINA-ANI.app，從作品搜尋進入 FX战士久留美 → 快速下載 → BT，實際取得 100 筆結果，AX 與截圖確認 ANi 分組、01–05 集順序、完整標題、移除多餘按鈕及驚嘆號說明 popover。單擊結果仍顯示 No torrent imported。Tooltip 文字已於 AX Help 核對，未實際計時懸浮；未啟動 P2P 匯入、下載、播放及彈幕驗收。來源 nyaa.land 仍回傳 HTTP 403，保留部分失敗回報。結果分組依 RSS 標題推斷，非來源提供的權威漢化組欄位。保留既有工作樹修改及使用者資料。
+
+## 2026-11-04 — BT 搜尋左右分欄
+
+- 依使用者圖片改為左側漢化組篩選（含全部與結果數）、右側集數／版本列表；預設展示首組但不選取或匯入種子。集數降冪，同集保留不同版本，左右清單獨立捲動。
+- 每列固定右側複製磁鏈、選擇下載檔案、選擇播放檔案入口；快速下載模式隱藏播放入口。匯入仍遵守首次 P2P 同意與明確選取影片流程，沒有自動選擇首檔。無 metadata 時隱藏空白檔案表與相關操作。標題最多三行換行，完整標題與來源可於 tooltip 查看；上傳驚嘆號說明保留。同步三語文案。
+- 驗證：Tests/run-torrent-search.sh 通過、最終 Debug xcodebuild 成功、git diff --check 通過。正式來源 App 重啟並搜尋 FX战士久留美，取得 100 筆，核對左側組別、右側 05→01 及 ANi→LoliHouse 篩選；最終多行排版再建置並重啟驗收。未執行真實下載／播放，未驗證複製剪貼簿及匯入後自動捲動。RSS 模型目前沒有日期／大小獨立欄位，因此不虛構圖片中的日期與大小；標題自帶的資訊完整保留。nyaa.land HTTP 403 仍依既有行為回報。
+
+## 2026-11-04 — BT 緊湊列、發布資訊與完整分頁
+
+- 搜尋列高由 76 降至 52 pt、列間距由 8 降至 2 pt，標題最多兩行；獨立顯示 RSS pubDate 與 enclosure length 的發布日期／大小，缺值顯示破折號。調整結果表寬度以保留固定資訊及操作欄。
+- 搜尋排除名稱或主機含 nyaa 的來源，下載器與重新導向亦阻止 nyaa 搜尋。舊 garden.breadio.wiki RSS 實測忽略頁碼、重複首 100 筆，因此將該已知鏡像搜尋適配至 AnimeGarden 官方 api.animes.garden/feed.xml（type／search）；依官方實作使用 page／pageSize，自動讀至空頁、跨頁去重，沒有 100 筆總數上限。重複頁停止並提示未完整；後續頁錯誤保留先前結果與失敗提示。來源自身的深分頁／網路限制仍可能造成部分結果，並非保證來源收錄所有資源。
+- 回歸：Tests/run-torrent-search.sh 通過，新增發布日期／大小解析與缺值重置、205 筆跨頁／重疊去重、nyaa 零請求、重複頁停止及後頁失敗保留結果案例。git diff --check 通過。
+- 真實網路：FX战士久留美 102 筆、无职转生 1318 筆，均無來源錯誤；後者 1318 筆全部具有日期與大小。正式 Debug App 重啟後從快速下載搜尋无职转生，AX／截圖確認 1318 筆、日期與 MB 大小、新行高與無 nyaa 錯誤。沒有啟動 P2P／實際下載或播放；保留使用者資料與既有修改。
+
+- 最終欄寬修正 Debug xcodebuild 成功（/tmp/iina-bt-compact-layout.log）。
+- 最終欄寬修正版再次啟動正式 App，以 FX战士久留美 搜尋取得 102 筆；截圖確認日期／大小欄與複製磁鏈、下載按鈕均完整可見，右側不再被裁切。
+
+## 2026-11-04 — 移除搜尋結果下載圖示
+
+- 移除 BT 搜尋結果列的向下箭頭（downloadResult），避免誤認為下載 .torrent 檔案；操作欄由 110 縮至 74 pt。保留複製磁鏈、播放入口、雙擊／Return 匯入，以及匯入後的影片檔案下載流程。
+- 驗證：Debug xcodebuild 成功、git diff --check 通過。啟動此次正式 App，快速下載 → BT 搜尋取得 247 筆，AX 與截圖確認結果列沒有下載箭頭、保留複製磁鏈及日期／大小。此次僅刪除 UI 入口，未新增測試或啟動 P2P／播放／下載。
+
+## 2026-11-04 — 清理舊建置、快取與測試產物
+
+- 使用者明確確認只清理測試產物，保留測試原始碼及腳本。移除 256 個產物路徑，清理前磁碟佔用合計約 22.01 GiB：專案 .build 歷次驗收／診斷、截圖、日誌、xcresult、舊 macOS／iOS 建置、Xcode 中間檔與模組快取、下載依賴／原生建置暫存、SourceCore／HuyaKit .build、本專案舊系統 DerivedData，以及本次 BT 工作在 /tmp 的工具腳本／回應／日誌。
+- 保留目前執行的 .build/xcode/Build/Products/Debug 全部 App 及同批資源；清理後 .build 約 140 MiB。保留原始碼、鎖定檔、測試腳本、使用者 Application Support／帳號／偏好與下載資料、正式 Xcode Archives。歷史工作記錄引用的測試產物路徑可能不再存在；記錄本身保留，.build/README.md 已更新。
+- 驗證：清理前後 114 個 Tests 檔案 SHA-256 完全一致；追加本記錄前 git status 完全一致，沒有新增原始碼刪除／改動；清理無錯誤，當前 App executable 仍在、動態依賴未引用被刪除的 .build 原生目錄，git diff --check 通過。沒有重新建置或跑測試，以免立即重建已清除的產物；下次建置需重新取得依賴並完整編譯。

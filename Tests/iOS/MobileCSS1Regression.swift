@@ -27,6 +27,21 @@ import Foundation
         precondition(batch.drafts[3].configuration.webSelector?.episodeLinks == "a")
         precondition(batch.notices.isEmpty)
 
+        for height in [720, 1080] {
+            var qualitySearch = search(anchor)
+            qualitySearch["defaultResolution"] = "\(height)P"
+            let draft = try MobileCSS1Configuration.convert(data: encode(["mediaSources": [replacingSearch(anchor, qualitySearch)]])).drafts[0]
+            let reloaded = try MobileSourceLibrary.validate(draft.data)
+            precondition(reloaded.webSelector?.preferredVideoHeight == height)
+            precondition(reloaded.configurationRevision != batch.drafts[0].configuration.configurationRevision)
+        }
+        for height in [0, 4321] {
+            var invalid = try JSONSerialization.jsonObject(with: batch.drafts[0].data) as! [String: Any]
+            var selector = invalid["webSelector"] as! [String: Any]
+            selector["preferredVideoHeight"] = height
+            invalid["webSelector"] = selector
+            rejects { try MobileSourceLibrary.validate(encode(invalid)) }
+        }
         let preferred = try MobileCSS1Configuration.convert(data: encode(["mediaSources": [anchor],
             "exportedMediaSourceDataList": ["mediaSources": [indexed]]]))
         precondition(preferred.drafts.map { $0.configuration.id } == ["standalone-a"])

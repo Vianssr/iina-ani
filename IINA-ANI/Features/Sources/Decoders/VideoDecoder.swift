@@ -6,6 +6,7 @@
 //  Copyright © 2018 xjbeta. All rights reserved.
 //
 
+import SourceCore
 import Cocoa
 import Alamofire
 import Marshal
@@ -85,6 +86,7 @@ actor VideoDecoder {
             "youknow": { [youknow] str in let list = try await youknow.episodeList(str); return NativeCatalogResult(nodes: list.nodes, current: list.current, selection: nil) },
             "wedm": { [wedm] str in let list = try await wedm.episodeList(str); return NativeCatalogResult(nodes: list.nodes, current: list.current, selection: nil) },
             "fengche": { [fengche] str in let list = try await fengche.episodeList(str); return NativeCatalogResult(nodes: list.nodes, current: list.current, selection: nil) },
+            "mutedm": { [mutedm] str in let list = try await mutedm.episodeList(str); return NativeCatalogResult(nodes: list.nodes, current: list.current, selection: nil) },
             "rebo": { [rebo] str in let list = try await rebo.episodeList(str); return NativeCatalogResult(nodes: list.nodes, current: list.current, selection: nil) },
             "huya": { [huya] str in
                 let rooms = try await huya.getHuyaRoomList(str)
@@ -141,6 +143,7 @@ actor VideoDecoder {
             .hanime1: hanime1,
             .wedm: wedm,
             .fengche: fengche,
+            .mutedm: mutedm,
             .rebo: rebo
         ]
     }
@@ -180,6 +183,7 @@ actor VideoDecoder {
     lazy var wedm = Wedm()
     lazy var fengche = Fengche()
     lazy var rebo = Rebo()
+    lazy var mutedm = Mutedm()
 	
     nonisolated func isSourceEnabled(_ sourceID: String) -> Bool { sourceEnabledPolicy(sourceID) }
     nonisolated func episodeIdentity(_ leaf: VideoTreeNode) throws -> String { try registry.episodeIdentity(for: leaf) }

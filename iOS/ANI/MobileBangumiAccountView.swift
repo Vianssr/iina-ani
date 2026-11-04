@@ -24,7 +24,7 @@ struct MobileBangumiAccountView: View {
                 }
                 .disabled(token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || account.isAuthenticating)
                 .accessibilityIdentifier("bangumi-sign-in")
-                if account.isAuthenticating { ProgressView("Validating account…") }
+                if account.isAuthenticating { ProgressView().accessibilityLabel(Text("Validating account…")) }
             } header: { Text("Bangumi account") }
 
             if let user = account.user {
@@ -35,11 +35,11 @@ struct MobileBangumiAccountView: View {
                     Button("Retry collection sync") { Task { await account.retrySync() } }
                         .disabled(account.isSyncing || account.isAuthenticating || !library.isReadable)
                         .accessibilityIdentifier("bangumi-sync-retry")
-                    if account.isSyncing { ProgressView("Syncing collection categories…") }
+                    if account.isSyncing { ProgressView().accessibilityLabel(Text("Syncing collection categories…")) }
                     Button("Import Bangumi collections") { Task { await account.importCollections() } }
                         .disabled(account.isImporting || account.isAuthenticating || !library.isReadable)
                         .accessibilityIdentifier("bangumi-import")
-                    if account.isImporting { ProgressView("Importing collections…") }
+                    if account.isImporting { ProgressView().accessibilityLabel(Text("Importing collections…")) }
                     if account.lastImportedCount != nil { Text("Import complete. Existing local favorites were preserved.") }
                     Button("Sign out of Bangumi", role: .destructive) { account.signOut() }
                         .accessibilityIdentifier("bangumi-sign-out")

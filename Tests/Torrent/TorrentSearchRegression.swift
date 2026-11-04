@@ -8,7 +8,7 @@ struct TorrentSearchRegression {
     <?xml version="1.0"?>
     <rss version="2.0" xmlns:nyaa="https://nyaa.si/xmlns/nyaa"><channel>
       <item><title><![CDATA[A & B]]></title><link>https://rss.example/view/1</link>
-        <enclosure url="/download/1.torrent" type="application/x-bittorrent"/>
+        <pubDate>Wed, 04 Nov 2026 08:30:00 GMT</pubDate><enclosure url="/download/1.torrent" length="416808960" type="application/x-bittorrent"/>
         <nyaa:infoHash>aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa</nyaa:infoHash></item>
       <item><title>Magnet only</title><link>magnet:?xt=urn:btih:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb&amp;dn=Test</link></item>
       <item><title>Typed download</title><enclosure url="https://rss.example/get?id=3" type="application/x-bittorrent"/></item>
@@ -52,7 +52,44 @@ struct TorrentSearchRegression {
         func subscriptionReads() -> Int { requests.filter { $0 == TorrentSearchService.endpoint }.count }
     }
 
+    actor PagingTransport {
+        var pages: [Int] = []
+        let repeatPage: Bool
+        let failPage: Bool
+        init(repeatPage: Bool = false, failPage: Bool = false) { self.repeatPage = repeatPage; self.failPage = failPage }
+        func fetch(_ url: URL, _ limit: Int) throws -> (Data, URL) {
+            if url == TorrentSearchService.endpoint {
+                return (try TorrentSearchRegression.subscription([
+                    ("nyaa.land", "https://nyaa.land/?q={keyword}"),
+                    ("Mirror", "https://nyaa.si/?q={keyword}"),
+                    ("AnimeGarden", "https://garden.breadio.wiki/feed.xml?q={keyword}")
+                ]), url)
+            }
+            try TorrentSearchRegression.require(url.host == "api.animes.garden", "Nyaa must never be requested")
+            let items = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!
+            try TorrentSearchRegression.require(items.first { $0.name == "search" }?.value == "Test + &", "Paging preserves keyword encoding")
+            let page = Int(items.first { $0.name == "page" }!.value!)!
+            pages.append(page)
+            if failPage && page == 2 { throw TorrentSearchError.httpStatus(503) }
+            let range = repeatPage ? 0..<100 : page == 1 ? 0..<100 : page == 2 ? 99..<199 : page == 3 ? 199..<205 : 205..<205
+            let entries = range.map { "<item><title>Episode \($0)</title><enclosure url='https://files.example/\($0).torrent' type='application/x-bittorrent'/></item>" }.joined()
+            return (Data("<rss><channel>\(entries)</channel></rss>".utf8), url)
+        }
+    }
+
     static func main() async throws {
+        for (title, group, episode) in [
+            ("[綠茶字幕組] FX [03][1080p]", "綠茶字幕組", "03"),
+            ("【桜都字幕组】 FX - 04 [1080p]", "桜都字幕组", "04"),
+            ("[Group] FX [01v2][WebRip]", "Group", "01v2"),
+            ("[Group] FX [01-12][1080p]", "Group", "01-12"),
+            ("[Group] FX S01E02 [1080p]", "Group", "02")
+        ] {
+            let result = TorrentSearchResult(title: title, sourceName: "RSS", magnetURL: nil, torrentURL: nil)
+            try require(result.releaseGroup == group && result.episode == episode, "Release display parsing: \(title)")
+        }
+        let unknown = TorrentSearchResult(title: "FX [1080p][2026]", sourceName: "RSS", magnetURL: nil, torrentURL: nil)
+        try require(unknown.episode == nil, "Resolution and year must not become episode numbers")
         if CommandLine.arguments.dropFirst().first == "--smoke" {
             let keyword = CommandLine.arguments.count > 2 ? CommandLine.arguments[2] : "葬送"
             let report = try await TorrentSearchService().search(keyword: keyword)
@@ -60,6 +97,7 @@ struct TorrentSearchRegression {
             let counts = Dictionary(grouping: report.results, by: \.sourceName).mapValues(\.count)
             for name in counts.keys.sorted() { print("  \(name): \(counts[name]!) importable results") }
             for failure in report.failures { print("  FAILURE: \(failure)") }
+            print("  Dates: \(report.results.filter { $0.publishedAt != nil }.count); sizes: \(report.results.filter { $0.sizeBytes != nil }.count)")
             try require(report.results.allSatisfy { $0.magnetURL != nil || $0.torrentURL != nil }, "Every result must be importable")
             return
         }
@@ -87,6 +125,8 @@ struct TorrentSearchRegression {
         try require(results[1].magnetURL?.contains("&dn=Test") == true && results[1].torrentURL == nil, "RSS escaped magnet query decodes")
         try require(results[2].torrentURL?.path == "/get", "Typed torrent download need not end in .torrent")
         try require(results[4].title == "Garden magnet enclosure" && results[4].magnetURL?.contains("&tr=") == true && results[4].torrentURL == nil, "Garden magnet enclosure preserves import URL and tracker")
+        try require(results[0].sizeBytes == 416808960 && results[0].publishedAt != nil, "RSS enclosure size and publication date survive")
+        try require(results[1].sizeBytes == nil && results[1].publishedAt == nil, "Missing metadata does not leak from prior item")
         let empty = try TorrentSearchService.parseRSS(data: Data("<rss><channel/></rss>".utf8), sourceName: "Empty", responseURL: base)
         try require(empty.isEmpty, "A valid empty feed is successful search with no matches")
         for xml in ["<html><body>challenge</body></html>", "<rss><channel>", "<!DOCTYPE rss [<!ENTITY x SYSTEM 'file:///etc/passwd'>]><rss><channel><item><title>&x;</title></item></channel></rss>", "<!DOCTYPE rss [<!ENTITY x 'expanded'>]><rss><channel><item><title>&x;</title></item></channel></rss>"] {
@@ -125,6 +165,17 @@ struct TorrentSearchRegression {
             _ = try await service.search(keyword: "Test")
             throw Failure(message: "Cancellation must escape rather than become source failure")
         } catch is CancellationError {}
+        let paging = PagingTransport()
+        let paged = try await TorrentSearchService(fetch: { try await paging.fetch($0, $1) }).search(keyword: "Test + &")
+        try require(paged.results.count == 205 && paged.failures.isEmpty, "Read past 100, deduplicate overlapping pages and stop only at empty page")
+        let requested = await paging.pages
+        try require(requested == [1, 2, 3, 4], "All pages requested in order without nyaa requests")
+        let repeated = PagingTransport(repeatPage: true)
+        let repeatedReport = try await TorrentSearchService(fetch: { try await repeated.fetch($0, $1) }).search(keyword: "Test + &")
+        try require(repeatedReport.results.count == 100 && repeatedReport.failures.count == 1, "Repeated page is reported as incomplete instead of looping")
+        let failingPage = PagingTransport(failPage: true)
+        let partial = try await TorrentSearchService(fetch: { try await failingPage.fetch($0, $1) }).search(keyword: "Test + &")
+        try require(partial.results.count == 100 && partial.failures.count == 1, "Later page failure preserves fetched results")
         let sleeper = TorrentSearchService(fetch: { url, _ in
             try await Task.sleep(for: .seconds(30))
             return (Data(), url)

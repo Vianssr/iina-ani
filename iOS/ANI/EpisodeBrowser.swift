@@ -1,3 +1,4 @@
+import SourceCore
 import SwiftUI
 
 struct EpisodeBrowser: View {
@@ -17,13 +18,11 @@ struct EpisodeBrowser: View {
             Text("Episodes and sources").font(.title2.bold())
             Text("Select an episode, then confirm a source and its episode before playback.")
                 .font(.footnote).foregroundStyle(.secondary)
-            Text("Saved episode information is not downloaded video. Sources must be checked online before playback.")
-                .font(.footnote).foregroundStyle(.secondary)
             if let fetchedAt {
                 CatalogCacheNotice(fetchedAt: fetchedAt, cached: showingCached, stale: failed)
                     .accessibilityIdentifier("episodes-cache-notice")
             }
-            if loading { ProgressView() }
+            if loading && episodes.isEmpty { ProgressView() }
             if failed {
                 Text("Episodes could not be loaded.").foregroundStyle(.secondary)
             }
@@ -130,10 +129,8 @@ struct SourcePicker: View {
                                 authority: { try sources.configurationRevision(for: $0) })
                         }.frame(minHeight: 48).buttonStyle(.borderedProminent)
                             .disabled(discovery.busy).accessibilityIdentifier("source-automatic-find")
-                        Text("Only one exact work, season and episode with independent year and format evidence can start automatically. Other matches require confirmation.")
-                            .font(.footnote).foregroundStyle(.secondary)
                         if discovery.busy {
-                            ProgressView("Loading source…")
+                            ProgressView().accessibilityLabel(Text("Loading source…"))
                             Button("Cancel request") { discovery.cancel() }.frame(minHeight: 48)
                         }
                         if discovery.searched && discovery.automatic == nil {
@@ -325,8 +322,6 @@ private struct SourceContent: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Saved source selection").font(.headline)
                     Text(verbatim: mapping.sourceTitle)
-                    Text("Playback checks this exact episode, line and quality online again. No saved video URL is reused.")
-                        .font(.footnote).foregroundStyle(.secondary)
                     if flow.requiresReconfirmation {
                         Text("This saved selection is no longer valid. Choose the source again to confirm the work and episode.")
                             .foregroundStyle(.secondary)
@@ -384,7 +379,7 @@ private struct SourceContent: View {
                 }
             }
             if flow.busy {
-                ProgressView("Loading source…")
+                ProgressView().accessibilityLabel(Text("Loading source…"))
                 Button("Cancel request") { flow.cancel() }.frame(minHeight: 48)
             }
             if let failure = flow.failure {

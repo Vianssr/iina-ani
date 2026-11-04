@@ -1,3 +1,4 @@
+import SourceCore
 import AppKit
 
 @MainActor
@@ -806,7 +807,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
             : youtubeMessage ?? (youtubeVideos.isEmpty
                 ? String(localized: "No YouTube videos to show. Try Search, or sign in in your browser and import cookies for your home feed.")
                 : ""))
-        status.isHidden = status.stringValue.isEmpty
+        status.isHidden = status.stringValue.isEmpty || (youtubeFailure == nil && youtubeLoading && !youtubeVideos.isEmpty)
         status.workspaceSkinBinding?.state = youtubeFailure != nil ? .error : youtubeLoading || youtubeAccountBusy ? .loading : .normal
     }
 
@@ -1195,7 +1196,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         status.stringValue = recommendationFailure ?? (recommendationLoading
             ? String(localized: "正在載入 Bilibili 推薦影片…")
             : followedCards.isEmpty ? String(localized: "暫無可播放的 Bilibili 推薦影片；可刷新或載入更多。") : "")
-        status.isHidden = status.stringValue.isEmpty
+        status.isHidden = status.stringValue.isEmpty || (recommendationFailure == nil && recommendationLoading && !followedCards.isEmpty)
         status.workspaceSkinBinding?.state = recommendationFailure != nil ? .error : recommendationLoading ? .loading : .normal
     }
 
@@ -1290,7 +1291,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         feedLoading = true; feedFailure = nil
         secondary.isEnabled = false; secondary.title = String(localized: "載入更多")
         secondary.setFunctionIcon(.add)
-        status.stringValue = String(localized: "載入推薦…"); status.isHidden = false
+        status.stringValue = String(localized: "載入推薦…"); status.isHidden = !rows.isEmpty
         status.workspaceSkinBinding?.state = .loading
         let generation = feedGeneration
         let page = feedPage
@@ -1324,7 +1325,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
                     self.feedPage += 1
                     self.feedHasMore = result.value.hasMore
                 }
-                self.status.stringValue = self.feedFailure ?? (self.feedHasMore ? "" : String(localized: "已瀏覽全部推薦。"))
+                self.status.stringValue = self.feedFailure ?? ""
                 self.status.isHidden = self.status.stringValue.isEmpty
                 self.status.workspaceSkinBinding?.state = self.feedFailure == nil ? .normal : .error
                 if self.feedFailure == nil, self.feedHasMore {
@@ -1351,7 +1352,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         guard isViewLoaded, attached else { return }
         operation?.cancel()
         status.stringValue = String(localized: "Refreshing…")
-        status.isHidden = false
+        status.isHidden = !rows.isEmpty
         status.workspaceSkinBinding?.state = .loading
         operation = Task { [weak self] in
             guard let self else { return }
@@ -1544,7 +1545,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         searching = true
         cancelButton.isEnabled = true
         status.stringValue = String(localized: "載入更多結果…")
-        status.isHidden = false
+        status.isHidden = !rows.isEmpty
         status.workspaceSkinBinding?.state = .loading
         operation = Task { [weak self] in
             guard let self, let service = self.browseSearch else { return }
@@ -1629,7 +1630,7 @@ final class WorkspaceServicePanelController: NSViewController, NSTableViewDataSo
         storeState()
         if searching {
             status.stringValue = String(localized: "載入更多結果…")
-            status.isHidden = false
+            status.isHidden = !rows.isEmpty
             status.workspaceSkinBinding?.state = .loading
         }
     }
@@ -2660,7 +2661,7 @@ extension WorkspaceServicePanelController: BilibiliDynamicMangerDelegate {
         followedLoading = isLoading
         primary.isEnabled = !isLoading; secondary.isEnabled = !isLoading && !followedCards.isEmpty
         status.stringValue = followedFailure ?? (isLoading ? String(localized: "載入 Bilibili 關注動態…") : followedCards.isEmpty ? String(localized: "尚無動態；需登入 Bilibili 帳號，可至設定登入後刷新。") : "")
-        status.isHidden = status.stringValue.isEmpty
+        status.isHidden = status.stringValue.isEmpty || (followedFailure == nil && isLoading && !followedCards.isEmpty)
         status.workspaceSkinBinding?.state = followedFailure != nil ? .error : isLoading ? .loading : .normal
     }
     func bilibiliDynamicFailed(_ message: String) {
