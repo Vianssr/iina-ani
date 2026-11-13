@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 @testable import IINA_ANI
 
@@ -94,6 +95,7 @@ import Foundation
         try await completedSeason(root: root)
         try staleRecorders(root: root)
         try configuredHistory(root: root)
+        try staticHistory(root: root)
         try localFileReferences(root: root)
         print("Playback history regressions passed: exact seconds, restart, native/source resume identity, configured file/revision safety, recorder/delete races, retained EOF, local bookmarks and reauthorization")
     }
@@ -238,6 +240,62 @@ import Foundation
         do {
             _ = try reopened.selectionForResume(legacy)
             throw Failure(message: "Legacy configured progress without a revision silently resumed")
+        } catch PlaybackFailure.configurationChanged {}
+    }
+
+    @MainActor static func staticHistory(root: URL) throws {
+        let item: [String: Any] = ["factoryId": "web-selector", "version": 2, "arguments": [
+            "name": "Static history fixture", "searchConfig": [
+                "searchUrl": "https://history.example/search?q={keyword}", "subjectFormatId": "a",
+                "selectorSubjectFormatA": ["selectLists": "a.result"],
+                "channelFormatId": "index-grouped",
+                "selectorChannelFormatFlattened": ["selectChannelNames": ".line", "selectEpisodeLists": ".episodes", "selectEpisodesFromList": "a"]]]]
+        let config = try SourceWebConfigurationConverter.configuration(item)
+        let directory = root.appendingPathComponent("static-history/sources")
+        let users = root.appendingPathComponent("static-history/users")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let file = directory.appendingPathComponent("static.json")
+        try config.encodedData().write(to: file)
+        let registry = SourceRegistry(builtinDirectory: directory, userDirectory: users)
+        let selection = PlayableSelection(
+            item: try config.webItem("https://history.example/series?id=42", kind: .work),
+            episode: try config.webItem("https://history.example/watch?ep=7", kind: .episode),
+            lineID: "0", qualityID: "Line 1",
+            classification: MediaClassification(kind: .anime, provenance: "fixture"))
+        let url = root.appendingPathComponent("static-history/history.json")
+        let store = try PlaybackHistoryStore(url: url, registry: registry)
+        let recorder = PlaybackProgressRecorder(store: store, selection: selection, title: "Static", coverURL: nil)
+        recorder.update(position: 71.25, duration: 600)
+        let entry = try store.unfinished.first.unwrap()
+        try require(entry.position == 71.25 && entry.selection == selection &&
+                    entry.context?.configurationRevision == config.configurationRevision &&
+                    store.continuing(downloads: []).first?.id == entry.id,
+                    "Static playback must preserve real progress, exact pages and confirmed classification")
+        try recorder.validateForContinuation()
+        let reopened = try PlaybackHistoryStore(url: url, registry: registry)
+        let saved = try reopened.unfinished.first.unwrap()
+        try require(saved.context == entry.context && saved.position == 71.25 &&
+                    reopened.selectionForResume(saved) == selection,
+                    "Static history must survive restart and retain the exact resume selection")
+        var other = selection
+        other.item = try config.webItem("https://history.example/series?id=43", kind: .work)
+        other.episode = try config.webItem("https://history.example/watch?ep=8", kind: .episode)
+        try store.record(selection: other, title: "Other", coverURL: nil, position: 12, duration: 600, completed: false)
+        let otherEntry = try store.unfinished.first(where: { $0.selection == other }).unwrap()
+        try require(otherEntry.context?.work != entry.context?.work && otherEntry.context?.episode != entry.context?.episode,
+                    "Static identities must distinguish public query values, not just page paths")
+        let orphan = PlayableSelection(item: selection.episode!)
+        do {
+            try store.record(selection: orphan, title: "Orphan", coverURL: nil, position: 10, duration: 600, completed: false)
+            throw Failure(message: "A static episode page invented its missing work identity")
+        } catch PlaybackFailure.missingEpisode {}
+        var changed = try JSONSerialization.jsonObject(with: config.encodedData()) as! [String: Any]
+        changed["name"] = "Changed static source"
+        try JSONSerialization.data(withJSONObject: changed).write(to: file)
+        try registry.reload(builtinDirectory: directory, userDirectory: users)
+        do {
+            try recorder.validateForContinuation()
+            throw Failure(message: "Static continuation accepted changed source authority")
         } catch PlaybackFailure.configurationChanged {}
     }
 

@@ -1,20 +1,20 @@
 import Foundation
 
-/// Startup is intentionally empty. These tests preserve the historical runner signature.
+/// Atomic configured imports preserve legacy files and inactive subscription authority.
 @MainActor enum DefaultSubscriptionRegression {
     static func run(root: URL) async throws {
         let original = try Data(contentsOf: root.appendingPathComponent("IINA-ANI/Sources/fqdm.json"))
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("explicit-source-import-" + UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        try emptyStartup(directory.appendingPathComponent("empty"))
+        try emptyInjectedCatalog(directory.appendingPathComponent("empty"))
         try legacyAndBatchPersistence(original, directory.appendingPathComponent("persistence"))
         try allOrNothing(original, directory.appendingPathComponent("atomic"))
         try countLimit(original, directory.appendingPathComponent("limit"))
-        print("PASS: empty startup, explicit single/batch import persistence, atomic validation/storage failure, source limit and legacy/subscription preservation")
+        print("PASS: empty injected catalog, explicit single/batch import persistence, atomic validation/storage failure, source limit and legacy/subscription preservation")
     }
 
-    private static func emptyStartup(_ directory: URL) throws {
-        let library = MobileSourceLibrary(directory: directory)
+    private static func emptyInjectedCatalog(_ directory: URL) throws {
+        let library = MobileSourceLibrary(directory: directory, bundled: { [] })
         precondition(library.sources.isEmpty && library.subscriptionBaselines.isEmpty && library.issues.isEmpty)
         library.reload()
         precondition(library.sources.isEmpty)
@@ -48,21 +48,21 @@ import Foundation
         try FileManager.default.createDirectory(at: subscriptionFile.deletingLastPathComponent(), withIntermediateDirectories: true)
         try subscriptionBytes.write(to: subscriptionFile)
 
-        let library = MobileSourceLibrary(directory: directory)
+        let library = MobileSourceLibrary(directory: directory, bundled: { [] })
         precondition(library.sources.count == 1 && library.sources[0].imported)
-        precondition(library.sources[0].configuration.name == "Legacy source")
+        precondition(library.sources[0].source.name == "Legacy source")
         for id in ids { UserDefaults.standard.set(true, forKey: key(id)) }
         let applied = try library.apply(MobileSourceBatchDraft(drafts: [replacement, imported]))
         precondition(applied == [legacy.configuration.id, imported.configuration.id])
         precondition(library.sources.count == 2 && library.sources.allSatisfy(\.imported))
-        precondition(library.sources.first(where: { $0.id == legacy.configuration.id })?.configuration.name == "Batch replacement")
+        precondition(library.sources.first(where: { $0.id == legacy.configuration.id })?.source.name == "Batch replacement")
         precondition(read(legacyFile) == legacy.data, "Batch import must preserve legacy source bytes")
         precondition(read(subscriptionFile) == subscriptionBytes, "Batch import must preserve search subscription authority")
         precondition(!UserDefaults.standard.bool(forKey: key(legacy.configuration.id)))
         precondition(!UserDefaults.standard.bool(forKey: key(imported.configuration.id)))
         precondition(UserDefaults.standard.bool(forKey: key(single.configuration.id)), "Unrelated enablement changed")
 
-        let reopened = MobileSourceLibrary(directory: directory)
+        let reopened = MobileSourceLibrary(directory: directory, bundled: { [] })
         precondition(reopened.sources.map(\.id) == library.sources.map(\.id))
         precondition(reopened.replaces(replacement))
         let newer = try draft(original, id: legacy.configuration.id, name: "Single update of batch source")
@@ -71,9 +71,9 @@ import Foundation
         try reopened.apply(single)
         precondition(read(directory.appendingPathComponent(single.configuration.id + ".json")) == single.data,
                      "Single-file compatibility was lost")
-        let final = MobileSourceLibrary(directory: directory)
+        let final = MobileSourceLibrary(directory: directory, bundled: { [] })
         precondition(final.sources.count == 3)
-        precondition(final.sources.first(where: { $0.id == legacy.configuration.id })?.configuration.name == "Single update of batch source")
+        precondition(final.sources.first(where: { $0.id == legacy.configuration.id })?.source.name == "Single update of batch source")
         precondition(read(subscriptionFile) == subscriptionBytes)
     }
 
@@ -83,11 +83,11 @@ import Foundation
         let update = try draft(original, id: first.configuration.id, name: "Updated one")
         let defaults = savedDefaults([first.configuration.id, second.configuration.id])
         defer { restoreDefaults(defaults) }
-        let library = MobileSourceLibrary(directory: directory)
+        let library = MobileSourceLibrary(directory: directory, bundled: { [] })
         try library.apply(MobileSourceBatchDraft(drafts: [first, second]))
         let stateFile = directory.appendingPathComponent("ConfigurationImports/state.json")
         let before = read(stateFile)
-        let beforeRevisions = library.sources.map { $0.configuration.configurationRevision }
+        let beforeRevisions = library.sources.map { $0.source.configurationRevision }
         UserDefaults.standard.set(true, forKey: key(first.configuration.id))
         let invalid = MobileSourceDraft(configuration: second.configuration, data: Data("broken".utf8))
         rejects { try library.apply(MobileSourceBatchDraft(drafts: [update, invalid])) }
@@ -96,7 +96,7 @@ import Foundation
         let mismatched = MobileSourceDraft(configuration: first.configuration, data: second.data)
         rejects { try library.apply(MobileSourceBatchDraft(drafts: [update, mismatched])) }
         precondition(read(stateFile) == before)
-        precondition(library.sources.map { $0.configuration.configurationRevision } == beforeRevisions)
+        precondition(library.sources.map { $0.source.configurationRevision } == beforeRevisions)
         precondition(UserDefaults.standard.bool(forKey: key(first.configuration.id)), "Failed import changed source enablement")
 
         let blockedDirectory = directory.appendingPathComponent("blocked")
@@ -105,10 +105,10 @@ import Foundation
         try first.data.write(to: legacyFile)
         let blocker = blockedDirectory.appendingPathComponent("ConfigurationImports")
         try Data("preserved non-directory".utf8).write(to: blocker)
-        let blocked = MobileSourceLibrary(directory: blockedDirectory)
+        let blocked = MobileSourceLibrary(directory: blockedDirectory, bundled: { [] })
         rejects { try blocked.apply(MobileSourceBatchDraft(drafts: [update, second])) }
         precondition(read(legacyFile) == first.data && read(blocker) == Data("preserved non-directory".utf8))
-        precondition(blocked.sources.count == 1 && blocked.sources[0].configuration.name == "Original one")
+        precondition(blocked.sources.count == 1 && blocked.sources[0].source.name == "Original one")
         precondition(UserDefaults.standard.bool(forKey: key(first.configuration.id)))
 
         // Unknown or corrupt new authority must not silently fall back to legacy sources or be overwritten.
@@ -116,7 +116,7 @@ import Foundation
         try first.data.write(to: oldLegacy)
         for broken in [Data("broken batch authority".utf8), Data(#"{"version":2,"configurations":{}}"#.utf8)] {
             try broken.write(to: stateFile, options: .atomic)
-            let unreadable = MobileSourceLibrary(directory: directory)
+            let unreadable = MobileSourceLibrary(directory: directory, bundled: { [] })
             precondition(unreadable.sources.isEmpty && unreadable.issues.contains("ConfigurationImports/state.json"))
             rejects { try unreadable.apply(MobileSourceBatchDraft(drafts: [update])) }
             rejects { try unreadable.apply(update) }
@@ -132,7 +132,7 @@ import Foundation
         let excess = try draft(original, id: "fixture-limit-100", name: "Excess")
         let defaults = savedDefaults(items.map { $0.configuration.id } + [excess.configuration.id])
         defer { restoreDefaults(defaults) }
-        let library = MobileSourceLibrary(directory: directory)
+        let library = MobileSourceLibrary(directory: directory, bundled: { [] })
         try library.apply(MobileSourceBatchDraft(drafts: items))
         precondition(library.sources.count == 100)
         let stateFile = directory.appendingPathComponent("ConfigurationImports/state.json")
@@ -143,7 +143,7 @@ import Foundation
         let replacement = try draft(original, id: items[0].configuration.id, name: "Replacement at capacity")
         try library.apply(MobileSourceBatchDraft(drafts: [replacement]))
         precondition(library.sources.count == 100)
-        precondition(library.sources.first(where: { $0.id == replacement.configuration.id })?.configuration.name == "Replacement at capacity")
+        precondition(library.sources.first(where: { $0.id == replacement.configuration.id })?.source.name == "Replacement at capacity")
     }
 
     private static func rejects<T>(_ operation: () throws -> T) {

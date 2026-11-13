@@ -1994,3 +1994,133 @@
 - 使用者明確確認只清理測試產物，保留測試原始碼及腳本。移除 256 個產物路徑，清理前磁碟佔用合計約 22.01 GiB：專案 .build 歷次驗收／診斷、截圖、日誌、xcresult、舊 macOS／iOS 建置、Xcode 中間檔與模組快取、下載依賴／原生建置暫存、SourceCore／HuyaKit .build、本專案舊系統 DerivedData，以及本次 BT 工作在 /tmp 的工具腳本／回應／日誌。
 - 保留目前執行的 .build/xcode/Build/Products/Debug 全部 App 及同批資源；清理後 .build 約 140 MiB。保留原始碼、鎖定檔、測試腳本、使用者 Application Support／帳號／偏好與下載資料、正式 Xcode Archives。歷史工作記錄引用的測試產物路徑可能不再存在；記錄本身保留，.build/README.md 已更新。
 - 驗證：清理前後 114 個 Tests 檔案 SHA-256 完全一致；追加本記錄前 git status 完全一致，沒有新增原始碼刪除／改動；清理無錯誤，當前 App executable 仍在、動態依賴未引用被刪除的 .build 原生目錄，git diff --check 通過。沒有重新建置或跑測試，以免立即重建已清除的產物；下次建置需重新取得依賴並完整編譯。
+
+## 2026-11-05 — 行動版預填訂閱網址
+
+- `MobileSourceURLImportView` 的網址欄預填與桌面相同的 `https://sub.creamycake.org/v1/css1.json`；仍可清除或編輯，須主動下載、預覽並確認匯入。不自動安裝／啟用來源，不修改既有配置或訂閱資料。
+- 調整兩個既有 URL 匯入 UI 案例，輸入自訂網址前先清除預填值；移除舊空欄位預設斷言，保留錯誤、預覽、取消與匯入流程驗證。同步 iOS 指南。
+- 資料回歸：`bash Tests/run-ios-sources.sh` 通過，涵蓋空庫啟動、匯入與訂閱保存、取消及失敗保護；可選的下載 CSS1 樣本不存在，因此該樣本檢查略過，合成案例通過。編譯仍有既有 trailing-closure／weak-variable 警告。
+- 建置與實際介面：iPhone 18 Pro／iOS 27.2 Simulator 的正式 ANI target 建置成功；`testConfigurationOnlyURLImport`、`testMobileBrowseAndURLConfiguration` 共 2 項通過。已查看匯出截圖，確認完整預填網址、清除按鈕及可用的下載按鈕。結果：`.build/mobile-default-link.xcresult`；截圖：`.build/mobile-default-link-attachments/`。
+- 限制：UI 匯入使用隔離 fixture，未驗證該預設網址的即時服務可用性、真實訂閱逐站播放、iPad 或實機；未變更桌面程式。
+
+## 2026-11-05 — macOS／iOS 核心比較
+
+- 原始碼調查：兩個 target 連結同一本機 SourceCore，共用配置驗證／修訂、來源與集數身份、平台能力及固定公開播放器協議；播放事件契約亦共用。macOS 使用外部 IINA／mpv，iOS 使用 MPVKit 嵌入 libmpv，解析器、CSS1 匯入與傳輸仍分平台實作。
+- 差異：iOS 的 v3 webSelector 配置不能直接視為桌面可用配置；同一訂閱 URL 不代表相同匯入語意或站點播放能力。舊行動搜尋訂閱 converter 缺少桌面 mutedm 的特定 json-path-indexed 分支，但目前 URL 匯入走 single／batch CSS1 路徑，不能據此宣稱預設網址匯入失敗。
+- 實際驗證：SourceCore XCTest 5 項通過；`Tests/run-multiplatform-contracts.sh` 在 macOS 與 iPhone 18 Pro／iOS 27.2 Simulator 均執行成功，身份／映射／配置修訂／平台能力與播放事件順序契約皆通過。
+- 限制：本次未修改產品程式；未重建或操作完整雙端 App，未驗證同一真實站點端到端播放、遠端訂閱可用性及實機。契約程式通過不等於兩個平台引擎與站點適配完全一致。
+
+## 2026-11-05 — 桌面來源解析與 CSS1 訂閱移植到 iOS
+
+- 範圍依使用者選擇涵蓋 CSS1 對應的 17 個本機來源身份：16 個桌面衍生原生適配器與 fqdm 完整配置；不移植 Bilibili／直播平台，保留行動版內嵌 libmpv。新增 SourceRuntime 產品，承載原生／完整配置解析、匿名 HTTPS 傳輸、桌面搜尋基線、CSS1 轉換／下載／驗證；桌面改用共用訂閱轉換及下載，原有帳號與原生解碼器整合保留。
+- 預設 `https://sub.creamycake.org/v1/css1.json` 採桌面搜尋訂閱語意：根層 mediaSources 優先，保留舊巢狀格式；更新前預覽／探測，不下載執行碼、不改播放修訂或來源開關。新內建來源與搜尋不自動啟用；既有來源開關保留。一般 HTTPS 完整來源 JSON／清單匯入保留。
+- 移除兩個 MobileCSS1 實作及四個舊解析回歸套件，切換來源介面、URL 匯入、搜尋、選集、已保存映射、歷史與接續呼叫。舊 webSelector／衝突配置保留原始資料但不執行，不按名稱／host 猜配；個別失效批次項目不清空健康來源，未知批次根結構／版本仍阻止覆寫。原生 ID／host 衝突匯入拒絕，舊修訂必須重新確認。
+- 動態線路只探測所選集數，明確選擇品質；已保存／下一集不回退到首條線路。Hanime1 僅允許同來源、同頁、line 0 與明確品質的 video 身份保存。Didahd 保留每個 client 的已核對目錄快取，使用 loopback-only HTTP 服務重寫 PNG 包裝 TS；公開 MP4 探測的重新導向驗證保留原請求 Range。
+- 回歸：`swift test --package-path SourceCore --scratch-path .build/source-core` 的 43 個 SourceRuntime 與 5 個 SourceCore XCTest 通過；含 16 個適配器、動態品質、精確身份、付費／預覽拒絕、重新導向 MP4 探測，以及真正透過 127.0.0.1 取得 playlist／剝除 PNG 的 TS、拒絕未知 token／路徑。`Tests/run-ios-sources.sh`、`Tests/run-ios-history.sh`、`Tests/run-w3-sources.sh` 通過；跨平台契約在 macOS 與 iOS Simulator 均通過。行動回歸仍有既有 weak-variable 編譯警告。
+- 建置：標準 macOS Debug xcodebuild 成功；iPhone 18 Pro／iOS 27.2 Simulator 正式 ANI target 建置成功。UI 回歸調整為先處理失效映射再要求來源 picker，未清除使用者映射以繞過狀態。
+- 真實網路 smoke：固定 CSS1 端點下載 102,063 bytes，轉換產生 15 個可接受搜尋更新、23 個預覽項目；這是下載與轉換結果，不代表逐站搜尋驗證或播放皆成功。一筆 mutedm 真實目錄請求回報 catalogStructure，未宣稱其即時可用；臨時 smoke 程式已移除。
+- 文件與授權：更新 SourceCore README、根 README、iOS 指南、架構與第三方聲明；保留 CryptoSwift 1.9.0 原授權及要求的 acknowledgment，加入 SourceRuntime 資源。
+- 限制：macOS 正式視窗驗收未完成；已用 open -n 送出本次 App 啟動，但 System Events 查詢逾時，screencapture 回報 could not create image from display，沒有桌面視窗／播放成功的證據。不宣稱所有即時站點、Didahd 真實遠端串流、iPad、實機或最低 OS 版本通過。
+- 正式 iOS 介面最終驗收：`testConfigurationOnlyURLImport`、`testDesktopNativeSourcePlayback`、`testDetailSourcePlayback`、`testMobileBrowseAndURLConfiguration` 共 4 項通過。已查看訂閱預覽、原生 Jibi 目錄／mpv 實際畫面、重啟後映射與來源停用拒絕畫面；播放器實際進度超過 1 秒。修正預覽大標題截斷，內嵌標題完整可見。結果 `.build/source-transplant-verified.xcresult`，截圖 `.build/source-transplant-verified-attachments/`。上述播放使用確定性站點回應與 bundled MP4，證明正式解析器至播放器交接，不代表真實 Jibi 服務驗收。
+
+## 2026-11-05 — macOS 彈幕能力與 IINA overlay 層級調查
+
+- 僅調查，不實作：檢查桌面彈幕來源、XML／WebSocket 契約、App／JSPlayer 設定，以及本機封裝 Danmaku 0.1.21／build 127。未修改產品程式、外掛封裝、安裝狀態或使用者偏好。
+- 原始碼：點播 XML 保留顏色／模式／字號；直播 DanmakuComment 僅攜文字及圖片欄位，Bilibili live 解碼後未傳遞既有顏色／模式。內建兩個 Web renderer 與外掛直播接收端均固定白色、mode 1。App 字級 getter 固定 24、dmFontSize 接收分支未實作，loadFilters 內容被註解；外掛從自身 preferences 載入速度／透明度／字型／類型屏蔽，不能視為 App 設定已同步。
+- 隔離執行：從既有封裝唯讀取得原始 renderer，以記憶體 loopback HTTP 及 Chromium 執行；僅提供檢查用 iina 訊息註冊邊界。三條合成 XML 解析／DOM 計算色為紅色滾動、綠色頂部固定、藍色底部固定；實際呼叫外掛 WebSocket 訊息處理器，輸入綠色頂部 comment 後得到白色 mode 1。dmOpacity／dmSpeed 訊息送入同一處理器後值仍為 1／680，符合該接收分支未處理設定事件的程式。檢查分頁與伺服器已關閉，未建立永久測試或修改 renderer。
+- 層級：查閱官方 Overlay API 及 IINA 上游 develop 的 MainWindowController.swift；pluginOverlayViewContainer 插在 bufferIndicatorView 下方，該插入點仍高於 OSC。公開 overlay API 無原生 z-order 操作，CSS 無法重排 WKWebView 與原生控制列；真正置於 UI 下方需調整 IINA 宿主容器，插件遮罩／避讓只是替代方案。滑鼠 hover 暫停目前未接線；官方 setClickable／data-clickable 僅提供互動入口，不能據此宣稱 hover／控制列命中已驗證。
+- 限制：未建置或啟動完整 App／IINA，未測真實直播、原生 WKWebView hover、全螢幕／多視窗／重連；上游 develop 原始碼不代表使用者安裝版的精確實作。Chromium 截圖逾時，僅有實際 parser／renderer DOM 與事件輸出，沒有視覺截圖驗收。首次 Python 記憶體伺服器嘗試逾時並由工具終止，改用 Bun 成功完成上述隔離檢查。
+
+## 2026-11-06 — 彈幕原色、逐條懸停與即時設定
+
+- 依使用者決定，將 IINA 彈幕高於原生控制列的問題標記為「無法修復（IINA 插件 API 限制）」；設定頁與使用指南均說明不修改 IINA 本體，沒有以 CSS／避讓宣稱已改變原生層級。
+- 保留點播 XML 與 Bilibili 直播實際提供的顏色、模式及字號；缺少 metadata 才回退白色滾動。新增來源原色／統一白色、滾動／頂部／底部類型、逐條 hover 暫停，補齊字型、字重、字級、速度與透明度的保存及即時同步。hover 只凍結該條生命週期與動畫，不暫停影片或其他彈幕。
+- App `Preferences` 發送完整設定快照至 v2 WebSocket／JSPlayer；舊協議維持既有格式。XML 插件使用 settings-only 連線；斷線後重新取得最新快照。共用 `danmaku-settings.js` 管理 renderer、可逆篩選與逐條互動，插件關閉／換片清除連線、計時器與 provider。
+- 將插件原始碼及固定 vendor 依賴維護於 `Plugins/Danmaku/`，保留上游版權／授權。封裝版本 `0.1.22-ani.1`／build 128；`PackageDanmakuPlugin.sh` 離線、可重現打包並核對 App 版本，Xcode 自動打包。`InstallDeps.sh` 不再下載上游 latest／改寫版本常數；插件不配置會覆寫衍生修改的上游自動更新入口。更新繁中／簡中／英文設定資源、README、使用指南、架構與建置說明。
+- 回歸與建置：`bash Tests/run-dependency-regression.sh --unit` 通過，包含新增的 `DanmakuRegression`（偏好保存／通知、v0／v1／v2 協議、Bilibili metadata 與邊界）；`node Tests/Playback/JSPlayerAutoplayRegression.js` 通過。五個變更 JS 的 `node --check`、工程 plist 與 JSON 資源檢查通過。標準 Debug `xcodebuild` 最終結果為 `BUILD SUCCEEDED`，並成功封裝外掛；未作正式簽署。
+- 正式 App：啟動本次 Debug 產物的隔離副本，只修改驗證用 Bundle ID／HOME，不接觸使用者偏好或插件。透過正式選單進入設定，實際點擊顏色／hover／頂部開關及提交字級 36；兩個 WebSocket client 與真實插件 renderer 同時收到對應完整快照。新連線取得已變更設定；renderer 主動斷線後重連亦取得相同快照。實際原生設定視圖截圖：`.build/danmaku-verification/native-settings.png`、`native-layer-limitation.png`；去敏設定事件記錄於同目錄。System Events 無輔助權限，改以 LLDB 將正式 menu／NSControl action 排入主執行緒，截取實際 AppKit 視圖，未另建測試設定介面。
+- 渲染 smoke：以實際 CCL／插件頁面及 App 封裝的 JSPlayer 頁面在獨立 Chrome 執行，注入合成 XML／直播訊息。已觀察紅色滾動、綠色頂部、藍色底部及對應字級；App 關閉頂部類型後，真實插件 renderer 只生成紅色滾動與藍色底部。原色／白色、字級、透明度與類型切換可恢復。滑鼠移入後該條 TTL 在 900 ms 內保持不變，另一條繼續遞減；移出後原條恢復。插件 close 後 records／pending／runline 歸零、provider／重連／resize timer 清除，三條測試 WebSocket 均確認關閉且未重連；內建 helper dispose 同樣釋放記錄與待送項目。
+- 限制：Chrome 檢查使用檢查用 IINA 訊息邊界，不等於原生 IINA WKWebView 驗收。隔離 IINA 嘗試分別遇到 `Cannot create display link (-6661)` 與 `Cannot get user config file`，未取得其實際播放／原生滑鼠命中證據；未驗證 IINA 全螢幕、多播放視窗、最低 macOS／Intel 或真實直播站點。沒有安裝／覆寫使用者的 IINA 插件、清理使用者資料，亦未擴充 mpv 或 iOS 彈幕能力。
+- 結束檢查：最終 `.iinaplgz` 的 `unzip -t` 全部通過；正式 App 正常退出（exit 0），19080 listener 已釋放。瀏覽器測試分頁、loopback fixture 與測試連線已關閉；移除本輪隔離 App／IINA 副本、測試 HOME 與合成媒體，保留去敏事件及實際視圖截圖。
+
+## 2026-11-06 — iOS 彈幕外觀設定
+
+- 依使用者確認的範圍補齊顯示設定，不增加彈幕來源或猜配集數。播放器「彈幕 → 彈幕外觀」提供裝置字型（含字型本身的字重款式）、12–48 pt 字級、0.5×–2× 彈幕速度、10%–100% 不透明度、來源原色／統一白色及文字預覽；新增字串均含 en／zh-Hans／zh-Hant。
+- `MobileDanmakuStore` 以獨立 appearance 偏好保存設定，切集清空附件不重設外觀；值正規化後才發布及保存。變速重建時間軸的生命週期與軌道預約，慢速二分查找窗口同步延長；仍跟隨 mpv 實際時間，不改影片倍速、暫停或位置。Canvas 使用所選字型與透明度，依實際行高和播放區域限制可見行數。
+- 資料回歸：`bash Tests/run-ios-danmaku.sh` 通過，涵蓋匯入／自動下載原有邊界，以及新增的外觀保存、無效值界限、慢速超過原 8 秒窗口、快慢速軌道重排、暫停與雙向跳轉。開發時回歸曾捕捉 Observation 屬性 observer 自我賦值遞迴，已改為正規化後寫入獨立 backing property；同一回歸重跑通過。11 個新增字串的三語完整性檢查通過。
+- 正式 App 驗收：iPhone 18 Pro／iOS 27.2 Simulator 建置並操作正式 ANI target，以獨立 `com.LlS.iina-ani.ios.danmaku-smoke` Bundle ID 隔離原 App。臨時 `testDanmakuAppearanceSmoke` 最終通過：實際選字型、調整字級／速度／透明度／顏色、確認影片仍暫停在原秒數且維持 1×、橫向旋轉、關閉重啟後恢復全部外觀。已查看來源紅色與自訂白色／字型／透明度在影片上的截圖及重啟設定截圖。結果 `.build/ios-danmaku-acceptance.xcresult` 的 appearance 個案通過；該次整體結果因下述既有控制案例失敗而非全綠。
+- 既有 `testMPVPlayerControls` 首次在過濾後數量列離開可視區時失敗；錄影確認開關正常而數量列在畫面下方。調整驗收操作為先捲到數量列、再返回開關，不改產品過濾邏輯或放寬數量斷言。移除臨時 appearance smoke 方法後，重新建置並執行既有播放器控制案例通過，結果 `.build/ios-danmaku-controls.xcresult`；涵蓋實際 libmpv、字幕、彈幕開關／過濾、倍速、雙擊跳轉、切集、背景與重新啟播。外觀截圖保存在 `.build/ios-danmaku-acceptance-attachments/`，iOS 使用指南已更新。
+- 限制：本輪使用內附影片及合成 XML，不代表真實站點自動彈幕驗收；未驗證 iPad、實機、最低 iOS 17 或所有裝置字型。沒有移植桌面滑鼠 hover、外部字型檔匯入或擴充來源，也未修改桌面播放器。未清除使用者資料或覆寫原 App。
+
+## 2026-11-06 — 未提交變更程式碼審查
+
+- 審查工作樹相對 HEAD 的來源核心／iOS 遷移、彈幕設定、WebSocket／renderer、外掛封裝及工程整合；未修改產品程式或永久測試。
+- 實際驗證：`swift build --package-path SourceCore --product SourceRuntime --scratch-path .build/source-core` 成功。臨時 Swift smoke 使用實際 SourceRuntime 載入 17 個內建來源，經合成 Girigiri 目錄及播放器回應解析指定第 2 集，取得預期 HTTPS 媒體地址。
+- 重現五項回歸：加入無關停用來源使唯一可信候選不再自動交接；JSON 目錄把獨立 player 路徑當 episode 頁而拋出 invalidURL；缺少顯式編號欄位時把 sid=2／nid=7 改為 line=1／number=1，解析拋出 mediaNotFound；HTTP 401／403／503 均誤分類為 mediaNotFound；只含 `{page}` 的搜尋模板未附加查詢詞。探針使用實際產品程式及隔離 fixture，未存取使用者來源庫或偏好。
+- 限制：未重建完整 macOS／iOS App、未執行正式 UI、IINA／mpv、真實站點及完整回歸套件；隔離探針不等於端到端播放驗收。獨立 CLI 初次未提供 SwiftPM 資源 bundle 路徑而終止，補上產物目錄後成功執行；非 App bundle 缺失的證據。臨時探針及執行檔於審查結束移除，以上缺陷僅回報，未修復。
+
+## 2026-11-07 — Animeko online.json 來源可用性抽測
+
+- 下載使用者提供的 `https://ghfast.top/raw.githubusercontent.com/MajoSissi/animeko-source/main/dist/online.json` 與 GitHub 原始地址：兩者 HTTP 200、170,663 bytes，SHA-256 同為 `7e54969e4d8de3535242927af3c27e09a8e8d47f65ab9649a84a2163c975535c`。JSON 有 63 筆巢狀 `web-selector` v2 配置。
+- 原始碼檢查：現有桌面訂閱下載入口固定為 creamycake CSS1；iOS 的 `mediaSources` 匯入也要求該精確端點。這個 ghfast URL 不能直接作為目前 App 的訂閱匯入。完整來源 JSON 匯入使用另一個 schema，不能以更改網址或檔名代替格式適配；本輪沒有修改這些入口。
+- 隔離轉換：直接將下載內容送進目前 `SourceSubscriptionConverter`，9 筆可轉為搜尋規則（didahd、eacg、haixing、hanime1、kanba、rebo、wedm、yinghua、youknow）；51 筆網域未在現有對應表、2 筆已知來源的 indexed 規則不相容（jibi、girigiri）、1 筆 forest 已排除。轉換結果另外列出的 6 筆「缺少，已保留」不計入原始 63 筆。接受搜尋規則不會新增播放適配器，也不代表正式匯入或播放成功。
+- 全表連通性：以「海贼王」替換每筆原始搜尋模板、匿名 curl GET、正常 TLS 驗證、每筆最多 20 秒，63 筆得到 HTTP 200 共 26、403 共 10、502／444／404 各 1，未取得 HTTP 回應 24（逾時 14、TLS 握手 6、憑證驗證 2、其他傳輸錯誤 2）。26 筆 HTTP 200 中至少 9 筆呈現轉跳／載入／安全驗證／下載或無關頁面，例如柯南轉至 Google、喵物次元轉至 OXFUN 下載頁；沒有把 HTTP 200 或泛用 Cloudflare 字串當成可用／不可用的充分證據。
+- 真網解析：隔離程式連結目前 SourceRuntime 靜態庫與相同資源，使用實際搜尋、原生目錄與解析 API；每來源最多前 2 個搜尋結果、每結果前 2 條線首集。嘀嗒搜尋 2 筆，3 個樣本解析並讀取 MP4 前綴成功、另 1 個 BD1 樣本解析失敗；熱播搜尋 2 筆，4 個樣本 MP4 前綴成功；以上成功樣本均 HTTP 206、最多讀取 64 KiB 並確認 `ftyp`。櫻花搜尋 10 筆，首個作品兩條線讀到 HTTP 200 HLS 清單，第二個作品目錄逾時，未讀取 HLS 子清單或影片分片。
+- 其餘相容項目：海星搜尋 24 筆，首個作品目錄失敗，第二個作品一條線的 m3u8 返回 404、另一條被現有媒體網址契約拒絕；E-ACG、去看吧、新優酷搜尋 HTTP 403；Hanime1 搜尋回應不符合規則，未進行成人媒體抽樣；wedm 在實際搜尋傳輸逾時，獨立 curl 曾回 200，因此不判定站點永久失效。內部 `mediaNotFound` 錯誤只記為解析失敗，不當作已證實媒體端 HTTP 404。
+- 證據：忽略目錄 `.build/animeko-source-check/` 的 `summary.json`、`site-connectivity.json`、`compatibility/plan.json` 與 `compatibility/live-results.jsonl`，保留可重跑隔離工具；媒體記錄僅列 host／格式／HTTP 狀態，不含完整簽名 URL。全部 9 個相容項目測試結束，工具 exit 0；原始碼與連結靜態庫時間、資源內容已核對。
+- 限制：沒有安裝或套用來源、改動產品程式或使用者資料；沒有重建或操作正式 App、FFmpeg 解碼、IINA／mpv 實播、音訊、彈幕、整集／所有線路驗收。MP4 檔頭與 HLS 清單可讀不等於完整可播；搜尋標題可能包含真人版或不同作品。本次為澳門時間 2026-11-07 的抽樣快照，curl 與實際解析器的逾時、傳輸及轉址規則不同，結果不可互相替代。
+
+
+## 2026-11-07 — 通用訂閱轉換與跨平台靜態來源
+
+- 依使用者最新「大部分站點讀取配置即可使用」的範圍，從僅擴充既有搜尋改為新增共用靜態來源引擎。兩端接受自訂公開 HTTPS 訂閱、Animeko web-selector v2 根層或巢狀清單；預覽、取消、過期保護、原子套用、重啟恢復及新來源預設停用。來源缺項不刪除既有配置，原生／手動來源身份及主機衝突不被訂閱覆寫。
+- 搜尋支援 a、按 DOM 結構配對的 indexed、同一陣列下受限 JSONPath／替代欄位、明確相對連結模板、路徑／查詢關鍵詞及頁碼。新來源從明確 pagesize 等欄位推導每頁筆數，無分頁模板不產生重複下一頁。共用驗證接入兩端；v1／v2 固定 fl[] 陣列查詢保留窄相容，修正 Foundation 在未展開大括號時重複編碼既有百分比的問題，v4／遠端轉換仍拒絕重複參數。
+- 未知主機轉為明確 v4 配置及穩定 origin 身份，StaticWebSourceClient 共用搜尋、index-grouped／no-channel 目錄、精確作品／集數／線路核對、HTML5 媒體及 MacCMS encrypt 0／1／2。拒絕歧義媒體、錯集、付費／預覽、缺少指定畫質與驗證頁；不執行遠端 JavaScript、嗅探規則、任意 iframe 解析服務或登入資料。舊 v3 配置與映射繼續保留停用，不猜測遷移。macOS 選集、歷史、接續的呼叫端保留 work／episode 身份；iOS 靜態搜尋經完整共用傳輸邊界。
+- 傳輸：訂閱匿名 HTTPS、2 MiB 上限、最多 5 次重新導向且每跳重新建立匿名請求／檢查公開 DNS；靜態來源頁有大小與主機限制。修改規則的原生搜尋探測最多 4 個並行，單站失敗只拒絕該更新。新靜態來源預覽只驗證結構，不將轉換成功標成網站即時可用。
+- 最終離線轉換重跑：使用前筆相同 SHA-256 的 63 筆 online.json，11 筆既有來源搜尋覆寫及 48 筆 v4 靜態配置，共 59／63；拒絕 HTTP 來源 2、既有排除站 1、非標準連接埠 1。證據為 `.build/source-converter/online-plan.json` 與 `online-conversion.log`，不是 59 個播放成功來源。
+- 真網抽查：48 個新靜態來源，3 個並行、每站搜尋「海贼王」且零結果時再試「鬼灭之刃」、每站最多一作品一線一集、媒體最多 64 KiB；成人命名來源只搜尋。7 個有搜尋結果、9 個零結果、32 個搜尋失敗（傳輸 15、301 7、403 5、404 2、500／502／522 各 1）；5 個取得目錄、2 個解析出媒體地址，但秋之／飯團媒體前綴分別 404／403，未確認任何新靜態樣本媒體可讀。這是驗證頁分類修正前的快照，不能把 9 個零結果解釋為站點無內容。後續補入 verify_check 驗證頁 fixture；沒有重新真網宣稱通過。部分 301 已有跨主機或無關頁面證據，沒有擅自放行。進一步網路檢查的授權請求中止，未執行 iframe／其他線路補測。
+- 回歸：SourceCore 5 項及 SourceRuntime 70 項（共 75）全部通過；`Tests/run-ios-sources.sh` 通過，涵蓋匯入預覽／原子保存／重啟、來源限制、舊版保留、搜尋、精確第二集選擇／恢復及取消；`Tests/run-w3-sources.sh` 全部通過，包括新靜態訂閱與播放身份案例。W3 首次因沙盒外 ModuleCache 寫入失敗，提權等待中止後，改用工作區內 CLANG_MODULE_CACHE_PATH／SWIFT_MODULECACHE_PATH 成功。兩端新靜態／訂閱提示的 en、zh-Hans、zh-Hant 完整性及 git diff --check 通過。
+- 工程／執行界限：iOS 正式 ANI target 的最終 build-for-testing 成功，使用獨立測試 Bundle ID；macOS 正式 Debug 工程建置成功。較早的同輪 macOS 產物副本以獨立 Bundle ID／CFFIXED_USER_HOME 走正式 AppDelegate 啟動，日誌證實資料與快取位於隔離目錄；CUA 回覆未獲准操作 IINA-ANI，未完成視窗操作或截圖，測試程序已結束。iOS 無已啟動模擬器，依 ios-debugger-agent skill 發出啟動問題但未獲回覆，因此沒有啟動模擬器或執行新增 UI 測試；不能把建置與資料回歸當成 UI 驗收。
+- 本輪未驗證 IINA／mpv 實播、解碼、音訊、完整集數、所有線路、最低系統或實機。通用靜態規則無法保證需要瀏覽器執行、特殊加密、站方驗證或失效 CDN 的網站可播；「大部分站點讀完即播」尚無實測證據。使用者原 App 資料未清除；所有探針、日誌與測試產物位於忽略的 `.build/source-converter/` 等目錄，媒體記錄不含完整簽名 URL。
+
+## 2026-11-07 — 未提交變更程式碼複審
+
+- 審查工作樹相對 HEAD 的共用來源引擎、桌面整合、iOS 來源遷移、彈幕 renderer／外掛與工程設定；未修改產品程式或正式測試。
+- 實際驗證：正式 macOS Debug 工程依根目錄指令建置成功；`swift test --package-path SourceCore` 的 75 項測試、`Tests/run-w3-sources.sh`、`Tests/run-ios-sources.sh`、`Tests/run-ios-danmaku.sh` 均通過，`git diff --check` 通過。桌面建置與來源回歸日誌分別位於忽略的 `.build/code-review-macos-build.log`、`.build/code-review-w3.log`。
+- 隔離重現六項回歸：JSON 目錄混用集數頁與獨立 player URL；缺少可選編號欄位時未沿用 URL 中的線路／集號；HTML 配置省略可選集名 selector 導致目錄清空；iOS 尋源被原本停用的來源阻止自動交接；自訂 ID 的 v4 配置套用搜尋覆寫後仍使用舊規則；直播彈幕每 150 ms 僅排出一條且無佇列上限。最後一項以實際 JavaScript helper 和模擬時鐘輸入每秒 20 條，60 秒後積壓 799 條、顯示內容落後約 40 秒。問題僅回報，未修復。
+- 限制：本輪未建置 iOS App、未啟動或操作正式 App、未進行真實站點、IINA／mpv、音訊、完整播放、最低系統或實機驗收。Swift／JavaScript fixture 重現不代表端到端播放驗收；未變更使用者來源庫、偏好或其他資料。
+
+## 2026-11-12 — 未提交變更程式碼審查
+
+- 審查工作樹相對 HEAD 的共用來源引擎、macOS／iOS 整合及彈幕外掛；未修改產品程式或永久測試。
+- 實際驗證：`swift build --package-path SourceCore --product SourceRuntime --scratch-path .build/review-source-runtime` 成功；依根目錄指令執行正式 macOS Debug `xcodebuild`，結果 `BUILD SUCCEEDED`。隔離 Swift smoke 使用實際 NativeSourceClient 取得 Girigiri 合成目錄第 2 集並解析預期 HTTPS 媒體；初次原生 fixture 的 selector／id 型別不符解析器，修正 fixture 後成功，未修改產品程式。
+- 使用實際 ConfiguredSourceClient 重現 iOS 遷移後的目錄／錯誤契約問題：JSON 獨立 player URL 被當作集數頁而拋出 invalidURL；省略可選編號欄位時，URL 中 line=2／episode=7 被改成 1／1，解析失敗；省略可選集名 selector 的 HTML 目錄變空；HTTP 401／403／503 全部映射為 mediaNotFound。已比對 HEAD 的 iOS 解析行為，未將桌面原有相同行為當成新桌面回歸。
+- 編譯並執行實際 MobileSourceDiscovery／MobileSourceClient：只有啟用來源時取得唯一可信候選並允許自動交接，加入一個原本停用的無關來源後，候選仍為一筆但自動交接被阻止；v4 配置傳入新搜尋覆寫 `/new` 及新 selector，實際仍請求舊 `/old` 並取得零結果。
+- 以實際 danmaku-settings.js 及隔離時鐘輸入每 500 ms 一批 10 條直播彈幕，60 秒共輸入 1,200 條、送出 401 條、積壓 799 條，最新顯示內容落後 40 秒。逐條、每 50 ms 到達的控制情境沒有積壓；問題觸發條件為批次持續快於佇列排出。
+- 額外以本次建置的 `IINA-ANI.debug.dylib` 執行隔離桌面探針：有效 v4 配置載入成功，但 `PlaybackHistoryStore.record` 拋出 missingEpisode；recorder 收到 71 秒實際進度後仍為零筆歷史，`validateForContinuation` 拋出 CancellationError。另以實際 ConfiguredSource 對作品頁取目錄成功，改用 Processes 下一集流程傳入的播放頁則拋出 catalogStructure；v4 缺少從播放頁反推作品頁的路由，須保留原作品身份。探針使用獨立 CFFIXED_USER_HOME／來源及歷史目錄，不啟動 UI。
+- 限制：未執行完整回歸套件、iOS App 建置、正式 UI 或 IINA／mpv 實播、真實站點、音訊及最低系統驗收。隔離 fixture 不等於端到端播放證據。未清除或修改使用者來源庫／偏好；本輪臨時探針及執行檔已移除。
+
+## 2026-11-12 — 修正審查中的兩項 P1
+
+- 桌面 v4 歷史以已驗證的作品／集數完整頁面 URL 計算身份 hash，與 iOS 慣例一致，不再要求不存在的 route episode capture；保留原歷史主鍵及 v1／v2 路由邏輯。只有播放頁、缺少作品身份的 v4 選擇仍拒絕保存，不猜測所屬作品。
+- iOS 尋源在第一個網路請求前固定參與來源集合：原本停用的來源不參與唯一候選判定；參與後被停用、配置或搜尋權威改變，仍撤銷自動交接。零結果但曾參與的來源亦在交接前重新驗證，不只檢查候選來源。
+- 新增行為回歸：v4 實際秒數／精確續播選擇／重啟／繼續觀看、query 身份區分、缺失作品身份拒絕及配置變更撤銷；尋源涵蓋無關停用來源不阻擋唯一可信候選，以及已參與的零結果來源中途停用仍阻擋交接。
+- 驗證通過：正式 macOS Debug 建置、`bash Tests/run-dependency-regression.sh --unit`、`bash Tests/run-ios-sources.sh`。獨立 smoke 連結本次正式 App 的 debug dylib，保存並重載 71.25 秒、精確續播選擇一致、繼續觀看一筆且 recorder 允許 continuation；實際 MobileSourceDiscovery 的有／無無關停用來源兩個情境均取得一筆候選、自動交接且無錯誤。沿用前筆修正前重現作比較，未改寫既有測試預期。
+- 範圍／限制：本輪只修兩項 P1，獨立 P2（包括 v4 下一集查錯目錄頁、彈幕佇列及其他來源問題）未修改，不能宣稱完整 v4 自動下一集已修復。未啟動正式 App UI、iOS App／實機、IINA／mpv 或真實站點播放；沒有端到端播放或畫面驗收證據。使用隔離來源／歷史目錄及 CFFIXED_USER_HOME，未修改使用者資料；臨時 smoke 原始碼與執行檔已移除。
+
+## 2026-11-12 — 修正審查中的七項 P2
+
+- 直播彈幕恢復批次獨立節奏：最多 200 條待送、單批分散不超過 1.5 秒，捨棄超量舊訊息與等待超過 2 秒的內容；停止、清空、隱藏及銷毀仍取消待送工作。新增持續批次、超量、事件迴圈停滯與生命週期行為回歸。
+- 桌面自動／手動下一集共用目錄選擇規則：v4 保留原作品頁及精確集數／分組；原生及 v1／v2 來源保留已播放頁路由行為。涵蓋非首集、末集、同組與錯誤作品目錄拒絕。
+- iOS v4 搜尋使用目前訂閱覆寫的 URL／selector，保留自訂來源 ID、原配置權威、匿名 HTTP、host 與回應大小限制。新增匯入、訂閱套用、重載後搜尋及禁止擴大傳輸權限回歸。
+- 共用配置來源修復四項契約：JSON 集數頁身份與獨立 player URL 分離，兩種相對 URL 均以目錄 URL 解析；省略可選編號欄位時沿用集數頁路由的線路／集號；HTML 省略可選集名 selector 時使用連結文字；HTTP 401／403／3xx／408／429／5xx／404／410 與過大回應保留各自失敗分類。保留錯誤作品、缺失或衝突明示編號、偽造集數及 player 身份不符的拒絕。
+- 驗證通過：正式 macOS Debug `xcodebuild`；`swift test --package-path SourceCore --scratch-path .build/review-source-runtime`（80 項 runtime、5 項 core）；`bash Tests/run-dependency-regression.sh --unit`；`bash Tests/run-ios-sources.sh`；`node Tests/Playback/DanmakuQueueRegression.js`；`node Tests/Playback/JSPlayerAutoplayRegression.js`。新增 fixture 初跑分別誤宣告無線路配置的 lines 能力、使用不受支援的多 query v4 頁面，修正 fixture 後通過，未放寬產品驗證或改寫既有預期。
+- 獨立 consumer smoke 連結本次 App debug dylib：JSON 目錄選中 line=2／episode=7，集數頁與 `/api/player42.json` 分離並解析正確媒體；401／403／503 分別得到 authenticationRequired／httpForbidden／network；桌面 v4 使用原作品頁，從第 7 集取得同組第 8 集。另編譯實際 MobileSourceClient，觀察匿名請求新 `/new` 端點並依新 selector 取得唯一精確作品，保留自訂來源 ID。
+- Chromium 實際載入本次 App 封裝的彈幕頁面與 CCL：每 500 ms 輸入 10 條，共 120 條全部且各一次送出，最大觀察延遲 1,354 ms、待送歸零，新批次首條早於前批末條送出；截圖確認實際彈幕渲染。額外 500 條突發只保留 200 條待送，停止後歸零。
+- 限制：未建置 iOS App／實機，未啟動正式 App UI 或 IINA／mpv 實播，未進行真實站點、音訊及最低系統驗收。Chromium 畫面不是 IINA WKWebView 驗收，隔離 consumer 與合成 HTTP 回應不是端到端播放。臨時探針、執行檔、HTTP server 與 browser tab 已移除／關閉；使用隔離目錄及 CFFIXED_USER_HOME，未修改使用者資料。
+
+## 2026-11-13 — 英文 README 與繁體中文版入口
+
+- 根目錄 README 改為英文，加入 macOS 本機建置步驟。原有繁體中文內容移至 `docs/README.zh-TW.md`，兩版頁首可互相切換。中文使用指南的 Bangumi 登入配置連結已改指中文版對應章節。
+- 驗證：兩版 README 的 32 個本機連結及中文使用指南的 4 個 README 連結均已核對目標路徑與章節。比對搬移前後的繁體中文內容，差異僅為語言入口與相對路徑調整。`git diff --check` 通過。
+- 本次僅修改文件，未重新建置或執行 App。

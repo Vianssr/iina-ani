@@ -27,7 +27,7 @@ for module in "$BUILD/Intermediates.noindex/GeneratedModuleMaps/"*.modulemap; do
 done
 # Unit-only by default. Real sockets/lifecycle checks stay opt-in until UI integration is complete.
 case "${1:---unit}" in
-    --unit) REGRESSIONS=(Playback/PlaybackEncodingRegression Playback/PlaybackHistoryRegression Playback/PlaybackSelectionRegression Playback/CompletedSeasonPolicyRegression Sources/ConfiguredSourceRegression Sources/SourceRegistryRegression Torrent/TorrentHTTPRangeRegression Infrastructure/PreferencesRegression) ;;
+    --unit) REGRESSIONS=(Playback/PlaybackEncodingRegression Playback/PlaybackHistoryRegression Playback/PlaybackSelectionRegression Playback/CompletedSeasonPolicyRegression Playback/DanmakuRegression Sources/ConfiguredSourceRegression Sources/SourceRegistryRegression Torrent/TorrentHTTPRangeRegression Infrastructure/PreferencesRegression) ;;
     --integration) REGRESSIONS=(Infrastructure/HTTPServerLifecycleRegression) ;;
     --playback) REGRESSIONS=(Playback/PlaybackHistoryPlayerSmoke) ;;
     *) echo "Usage: $0 [--unit|--integration|--playback]" >&2; exit 2 ;;

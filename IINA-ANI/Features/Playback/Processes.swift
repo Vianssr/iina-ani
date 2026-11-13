@@ -230,10 +230,7 @@ final class Processes: NSObject, Sendable {
             }
             let current = selection.episode ?? selection.item
             guard current.sourceID == selection.item.sourceID else { return nil }
-            // A work URL may default to its first episode; request the actual played page instead.
-            var catalogChoice = selection
-            catalogChoice.item = current
-            catalogChoice.episode = nil
+            let catalogChoice = AutoplaySelection.catalogSelection(after: selection, registry: decoder.registry)
             guard let catalog = try await decoder.catalog(for: catalogChoice) else {
                 try recorder?.retainForUpdates(through: completedAt)
                 return nil
@@ -302,9 +299,7 @@ final class Processes: NSObject, Sendable {
                 if automatic {
                     next = try await completeEpisode(after: selection, completedAt: completedAt, recorder: recorder)
                 } else {
-                    var catalogChoice = selection
-                    catalogChoice.item = selection.episode ?? selection.item
-                    catalogChoice.episode = nil
+                    let catalogChoice = AutoplaySelection.catalogSelection(after: selection, registry: decoder.registry)
                     guard let catalog = try await decoder.catalog(for: catalogChoice) else {
                         throw PlaybackFailure.missingEpisode
                     }

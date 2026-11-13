@@ -6,7 +6,7 @@ build_source_core() {
     local core_products core_sdk core_arch
     case "$1" in
         --macos)
-            swift build --package-path "$SOURCE_CORE_ROOT/SourceCore" \
+            swift build --package-path "$SOURCE_CORE_ROOT/SourceCore" --product SourceCore \
                 --scratch-path "$SOURCE_CORE_ROOT/.build/source-core" >&2
             core_products="$(swift build --package-path "$SOURCE_CORE_ROOT/SourceCore" \
                 --scratch-path "$SOURCE_CORE_ROOT/.build/source-core" --show-bin-path)"
@@ -28,4 +28,25 @@ build_source_core() {
             ;;
         *) echo "Unsupported SourceCore regression platform: $1" >&2; return 2 ;;
     esac
+}
+
+build_source_runtime() {
+    local runtime_products runtime_sdk runtime_arch
+    local runtime_args=(--package-path "$SOURCE_CORE_ROOT/SourceCore" --product SourceRuntime)
+    case "$1" in
+        --macos)
+            runtime_args+=(--scratch-path "$SOURCE_CORE_ROOT/.build/source-core")
+            ;;
+        --simulator)
+            runtime_sdk="$(xcrun --sdk iphonesimulator --show-sdk-path)"
+            runtime_arch="$(uname -m)"
+            runtime_args+=(--scratch-path "$SOURCE_CORE_ROOT/.build/source-runtime-simulator"
+                --sdk "$runtime_sdk" --triple "$runtime_arch-apple-ios17.0-simulator")
+            ;;
+        *) echo "Unsupported SourceRuntime regression platform: $1" >&2; return 2 ;;
+    esac
+    swift build "${runtime_args[@]}" >&2
+    runtime_products="$(swift build "${runtime_args[@]}" --show-bin-path)"
+    SOURCE_RUNTIME_FLAGS=(-I "$runtime_products/Modules" -I "$runtime_products"
+        -L "$runtime_products" -lSourceRuntime)
 }

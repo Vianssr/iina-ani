@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <!-- <link rel="stylesheet" href="style.css"> -->
+</head>
+
+<body>
+    <div>
+        <table>
+            <tbody>
+                <tr>
+                    <td>Opacity:</td>
+                    <td>
+                        <input type="range" data-type="float" data-pref-key="dmOpacity" id="dmOpacity" min="0" max="1"
+                            step="0.01">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Speed:</td>
+                    <td>
+                        <input type="range" data-type="float" data-pref-key="dmSpeed" id="dmSpeed" min="100" max="2000"
+                            step="1">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Font:</td>
+                    <td>
+                        <input type="text" data-pref-key="dmFont" id="dmFont">
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <font face="PingFang-SC" id="dmFontPreview">Font Preview 字体 预览</font>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Font weight:</td>
+                    <td>
+                        <input type="text" data-pref-key="dmFontWeight" id="dmFontWeight" placeholder="Regular">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Font size:</td>
+                    <td>
+                        <input type="number" data-type="int" data-pref-key="dmFontSize" id="dmFontSize" min="12" max="72">
+                    </td>
+                </tr>
+                <tr>
+                    <td>Source colors:</td>
+                    <td>
+                        <input type="checkbox" data-pref-key="dmUseSourceColor" id="dmUseSourceColor">
+                        <label for="dmUseSourceColor">Use source colors (off: render all comments white)</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Hover:</td>
+                    <td>
+                        <input type="checkbox" data-pref-key="dmHoverPause" id="dmHoverPause">
+                        <label for="dmHoverPause">Pause only the comment under the pointer</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Block Type:</td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeScroll" id="blockTypeScroll">
+                        <label for="blockTypeScroll">Scroll</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeTop" id="blockTypeTop">
+                        <label for="blockTypeTop">Top</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeBottom" id="blockTypeBottom">
+                        <label for="blockTypeBottom">Bottom</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeColor" id="blockTypeColor">
+                        <label for="blockTypeColor">Color</label>
+                    </td>
+                </tr>
+                <tr>
+                    <td></td>
+                    <td>
+                        <input type="checkbox" data-pref-key="blockTypeAdvanced" id="blockTypeAdvanced">
+                        <label for="blockTypeAdvanced">Advanced</label>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    <p>These preferences apply to XML opened directly in IINA. Playback managed by IINA-ANI uses the App's live danmaku settings instead.</p>
+
+    <hr>
+
+    <div>
+        <label>
+            IINA+ Opts Parse:
+            <input type="checkbox" data-type="int" data-pref-key="enableIINAPLUSOptsParse" id="enableIINAPLUSOptsParse">
+        </label>
+    </div>
+
+    <script type="text/javascript">
+        const { preferences } = window.iina;
+        const inputs = document.querySelectorAll("input[data-pref-key]");
+
+        let defaultFPText = "Font Preview 字体 预览"
+        let wrongFPText = "Invalid font"
+
+        let defaultPreferences = {
+            dmOpacity: 1,
+            dmSpeed: 680,
+            dmFont: 'PingFang SC',
+            dmFontWeight: 'Regular',
+            dmFontSize: 24,
+            dmUseSourceColor: 1,
+            dmHoverPause: 1,
+            enableIINAPLUSOptsParse: 0,
+            blockTypeScroll: 0,
+            blockTypeTop: 0,
+            blockTypeBottom: 0,
+            blockTypeColor: 0,
+            blockTypeAdvanced: 0,
+        };
+
+
+        function isFontAvailable(font) {
+            // https://www.samclarke.com/javascript-is-font-available/
+            var width;
+            var body = document.body;
+
+            var container = document.createElement('span');
+            container.innerHTML = Array(100).join('wi');
+            container.style.cssText = [
+                'position:absolute',
+                'width:auto',
+                'font-size:128px',
+                'left:-99999px'
+            ].join(' !important;');
+
+            var getWidth = function (fontFamily) {
+                container.style.fontFamily = fontFamily;
+
+                body.appendChild(container);
+                width = container.clientWidth;
+                body.removeChild(container);
+
+                return width;
+            };
+
+            // Pre compute the widths of monospace, serif & sans-serif
+            // to improve performance.
+            var monoWidth = getWidth('monospace');
+            var serifWidth = getWidth('serif');
+            var sansWidth = getWidth('sans-serif');
+            return monoWidth !== getWidth(font + ',monospace') ||
+                sansWidth !== getWidth(font + ',sans-serif') ||
+                serifWidth !== getWidth(font + ',serif');
+        };
+
+        function updateFontPreview(value) {
+            iina.log('Update Preview Font: ' + value);
+            let item = document.getElementById('dmFontPreview')
+            if (isFontAvailable(value)) {
+                item.textContent = defaultFPText;
+                item.face = value;
+            } else {
+                item.textContent = wrongFPText;
+            };
+        };
+
+        Array.prototype.forEach.call(inputs, input => {
+            const key = input.dataset.prefKey;
+            preferences.get(key, (value) => {
+                if (value == null) {
+                    value = defaultPreferences[key];
+                };
+
+                iina.log('pref key: ' + key + ', value: ' + value);
+                if (input.type == 'checkbox') {
+                    input.checked = value;
+                } else {
+                    input.value = value;
+                };
+
+                if (input.id == 'dmFont') {
+                    updateFontPreview(value);
+                };
+            });
+            input.addEventListener("change", () => {
+                let value = input.value;
+
+                if (input.type == 'checkbox') {
+                    value = input.checked ? 1 : 0;
+                };
+
+                switch (input.dataset.type) {
+                    case "int": value = parseInt(value); break;
+                    case "float": value = parseFloat(value); break;
+                }
+                if (!input.checkValidity()) {
+                    input.reportValidity();
+                    return;
+                }
+                preferences.set(key, value);
+
+                if (input.id == 'dmFont') {
+                    updateFontPreview(value);
+                };
+            });
+        });
+    </script>
+</body>
+
+</html>

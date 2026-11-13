@@ -1408,7 +1408,8 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         guard work == nil, choice.item.kind != .local,
               decoder.registry.descriptor(for: choice.item.sourceID)?.capabilities.contains(.information) == true else { return }
         do {
-            let page = (choice.episode ?? choice.item).pageURL
+            let page = decoder.registry.source(for: choice.item.sourceID)?.version == 4
+                ? choice.item.pageURL : (choice.episode ?? choice.item).pageURL
             let info = try await decoder.accounts.withSource(sourceID: choice.item.sourceID,
                 accountID: choice.accountID, useDefaultAccount: false) {
                     try await decoder.liveInfo(page, false)
@@ -1452,7 +1453,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                 appendCatalog(catalog.nodes, prefix: "")
                 if isDirectBilibiliVideo(choice) {
                     guard leaves.indices.contains(catalog.current) else { throw VideoGetError.notFountData }
-                    selection?.episode = try decoder.registry.item(for: leaves[catalog.current].selectionURL)
+                    selection?.episode = try decoder.registry.item(for: leaves[catalog.current].selectionURL, expectedKind: .episode)
                 }
                 // Keep the caller's pinned account/quality/line; catalog never chooses a different account.
                 if choice.episode == nil, choice.item.kind == .work, !leaves.isEmpty {
@@ -3177,7 +3178,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
         guard !previewOnly, !hasPinnedAnimeEpisode, let url = sender.identifier?.rawValue, leaves.contains(where: { $0.selectionURL == url }), let base = selection else { return }
         do {
             var choice = base
-            choice.episode = try services.decoder.registry.item(for: url)
+            choice.episode = try services.decoder.registry.item(for: url, expectedKind: .episode)
             choice.qualityID = nil; choice.lineID = nil
             let autoOpen = autoOpenAfterSelection && !(NSApp.currentEvent?.modifierFlags.contains(.option) ?? false)
             loadSelection(choice, loadCatalog: false, autoOpen: autoOpen)
@@ -3231,7 +3232,7 @@ final class WorkspaceDetailController: NSViewController, NSWindowDelegate, NSPop
                     if let catalog { self.appendCatalog(catalog.nodes, prefix: "") }
                     if let leaf = try self.leaves.first(where: { try update.newIdentities.contains(self.services.decoder.episodeIdentity($0)) }) {
                         var exact = base
-                        exact.episode = try self.services.decoder.registry.item(for: leaf.selectionURL)
+                        exact.episode = try self.services.decoder.registry.item(for: leaf.selectionURL, expectedKind: .episode)
                         self.updating = true
                         if let index = self.links.firstIndex(where: { $0.id == link.id }) { self.sources.selectItem(at: index + 1) }
                         self.rebuildCatalogButtons()

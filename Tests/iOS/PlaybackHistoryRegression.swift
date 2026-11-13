@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 
 @main struct MobilePlaybackHistoryRegression {
@@ -19,7 +20,7 @@ import Foundation
         precondition(history.isReadable && history.entries.isEmpty)
         let firstID = PlaybackLoadIdentity(sessionID: UUID())
         let first = history.begin(context: context, localReference: nil, title: "Fixture · Episode 2",
-            configuration: configuration, identity: firstID)!
+            source: .configured(configuration), identity: firstID)!
         var sequence: UInt64 = 0
         @MainActor func send(_ recorder: MobilePlaybackHistoryRecorder, _ identity: PlaybackLoadIdentity, _ kind: PlaybackEvent.Kind,
                   at time: Date = Date(timeIntervalSince1970: 100)) -> Bool {
@@ -36,7 +37,7 @@ import Foundation
 
         let loadedID = PlaybackLoadIdentity(sessionID: UUID())
         let loaded = history.begin(context: context, localReference: nil, title: "Fixture · Episode 2",
-            configuration: configuration, identity: loadedID)!
+            source: .configured(configuration), identity: loadedID)!
         _ = send(loaded, loadedID, .resolved)
         _ = send(loaded, loadedID, .loading)
         _ = send(loaded, loadedID, .loaded)
@@ -58,7 +59,7 @@ import Foundation
         // A resume cannot overwrite the saved position with time-pos=0 or queued pre-seek facts.
         let resumeID = PlaybackLoadIdentity(sessionID: UUID())
         let resumed = history.begin(context: context, localReference: nil, title: saved.title,
-            configuration: configuration, identity: resumeID, resumePosition: saved.position)!
+            source: .configured(configuration), identity: resumeID, resumePosition: saved.position)!
         _ = send(resumed, resumeID, .resolved)
         _ = send(resumed, resumeID, .loading)
         precondition(send(resumed, resumeID, .loaded))
@@ -72,7 +73,7 @@ import Foundation
 
         let currentID = PlaybackLoadIdentity(sessionID: UUID())
         let current = history.begin(context: context, localReference: nil, title: saved.title,
-            configuration: configuration, identity: currentID, resumePosition: saved.position)!
+            source: .configured(configuration), identity: currentID, resumePosition: saved.position)!
         _ = send(current, currentID, .resolved)
         _ = send(current, currentID, .loading)
         precondition(send(current, currentID, .loaded))
@@ -118,7 +119,7 @@ import Foundation
         current.flush()
         precondition(history.entries.isEmpty && MobilePlaybackHistory(file: file).entries.isEmpty)
         precondition(history.begin(context: nil, localReference: nil, title: "https://media.example.test/raw.mp4?token=secret",
-            configuration: nil, identity: PlaybackLoadIdentity(sessionID: UUID())) == nil)
+            source: nil, identity: PlaybackLoadIdentity(sessionID: UUID())) == nil)
         precondition(!history.storageError && history.entries.isEmpty)
 
         for invalid in [Data("broken json".utf8), Data("{\"version\":999,\"entries\":[]}".utf8)] {
@@ -127,7 +128,7 @@ import Foundation
             precondition(!blocked.isReadable && blocked.storageError)
             blocked.remove(saved)
             precondition(blocked.begin(context: context, localReference: nil, title: saved.title,
-                configuration: configuration, identity: PlaybackLoadIdentity(sessionID: UUID())) == nil)
+                source: .configured(configuration), identity: PlaybackLoadIdentity(sessionID: UUID())) == nil)
             let protectedBytes = try Data(contentsOf: file)
             precondition(protectedBytes == invalid)
         }
@@ -143,7 +144,7 @@ import Foundation
             configurationRevision: archiveConfig.configurationRevision)
         let archiveID = PlaybackLoadIdentity(sessionID: UUID())
         let archiveRecorder = history.begin(context: archiveContext, localReference: nil, title: "Archive",
-            configuration: archiveConfig, identity: archiveID)!
+            source: .configured(archiveConfig), identity: archiveID)!
         _ = send(archiveRecorder, archiveID, .resolved)
         _ = send(archiveRecorder, archiveID, .loading)
         _ = send(archiveRecorder, archiveID, .loaded)
@@ -151,7 +152,7 @@ import Foundation
         let archiveEntry = history.entries.first { $0.context?.work == archiveContext.work }!
         precondition(archiveEntry.context?.selection.episode?.pageURL == "https://archive.org/details/fixture?file=movie.mp4")
         precondition(history.begin(context: archiveContext, localReference: nil, title: "Wrong config",
-            configuration: configuration, identity: PlaybackLoadIdentity(sessionID: UUID())) == nil)
+            source: .configured(configuration), identity: PlaybackLoadIdentity(sessionID: UUID())) == nil)
         try await localFiles(in: temporary, history: history, file: file)
         try shortResumesAndLatestWork(in: temporary, context: context, configuration: configuration)
         print("PASS: mobile durable history, actual progress, resume/session/delete guards, fail-closed archives, configured identities and local content authorization")
@@ -163,7 +164,7 @@ import Foundation
         let history = MobilePlaybackHistory(file: file)
         let initialID = PlaybackLoadIdentity(sessionID: UUID())
         let initial = history.begin(context: context, localReference: nil, title: "Short resume",
-            configuration: configuration, identity: initialID)!
+            source: .configured(configuration), identity: initialID)!
         for (offset, kind) in [PlaybackEvent.Kind.resolved, .loading, .loaded, .progress(.init(position: 1.1, duration: 100))].enumerated() {
             initial.receive(PlaybackEvent(identity: initialID, sequence: UInt64(offset + 1), kind: kind))
         }
@@ -172,7 +173,7 @@ import Foundation
         for terminal in [PlaybackEvent.Kind.failed(.mediaPlayback), .stopped, .cancelled] {
             let identity = PlaybackLoadIdentity(sessionID: UUID())
             let recorder = history.begin(context: context, localReference: nil, title: "Short resume",
-                configuration: configuration, identity: identity, resumePosition: 1.1)!
+                source: .configured(configuration), identity: identity, resumePosition: 1.1)!
             // A confirmation before loading, or for a retired load, cannot open the gate.
             recorder.confirmResume(identity)
             let events: [PlaybackEvent.Kind] = [
@@ -191,7 +192,7 @@ import Foundation
         }
         let identity = PlaybackLoadIdentity(sessionID: UUID())
         let recorder = history.begin(context: context, localReference: nil, title: "Short resume",
-            configuration: configuration, identity: identity, resumePosition: 1.1)!
+            source: .configured(configuration), identity: identity, resumePosition: 1.1)!
         for (offset, kind) in [PlaybackEvent.Kind.resolved, .loading, .loaded].enumerated() {
             recorder.receive(PlaybackEvent(identity: identity, sequence: UInt64(offset + 1), kind: kind))
         }
@@ -211,7 +212,7 @@ import Foundation
             selection: selection, configurationRevision: context.configurationRevision)
         let nextID = PlaybackLoadIdentity(sessionID: UUID())
         let next = history.begin(context: nextContext, localReference: nil, title: "Next episode",
-            configuration: configuration, identity: nextID)!
+            source: .configured(configuration), identity: nextID)!
         let later = Date.now.addingTimeInterval(10)
         for (offset, kind) in [PlaybackEvent.Kind.resolved, .loading, .loaded, .progress(.init(position: 8, duration: 100))].enumerated() {
             next.receive(PlaybackEvent(identity: nextID, sequence: UInt64(offset + 1), kind: kind), now: later)
@@ -288,7 +289,7 @@ import Foundation
         let identity = authorization.reference.identity
         let load = PlaybackLoadIdentity(sessionID: UUID())
         let recorder = history.begin(context: nil, localReference: authorization.reference, title: "Local fixture",
-            configuration: nil, identity: load)!
+            source: nil, identity: load)!
         for (offset, kind) in [PlaybackEvent.Kind.resolved, .loading, .loaded, .progress(.init(position: 17, duration: 60))].enumerated() {
             recorder.receive(PlaybackEvent(identity: load, sequence: UInt64(offset + 1), kind: kind))
         }

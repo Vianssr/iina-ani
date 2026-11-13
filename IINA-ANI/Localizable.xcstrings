@@ -1,6 +1,696 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+  "來源訂閱\n輸入公開 HTTPS 網址，先預覽再套用；新來源需手動啟用。配置匯入成功不代表站點目前可播放。": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Source subscription\nEnter a public HTTPS URL, then preview and apply. Enable new sources manually. Importing a configuration does not confirm that the site can currently play media."
+        }
+      },
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "来源订阅\n输入公开 HTTPS 网址，先预览再应用；新来源需手动启用。配置导入成功不代表站点目前可播放。"
+        }
+      },
+      "zh-Hant": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "來源訂閱\n輸入公開 HTTPS 網址，先預覽再套用；新來源需手動啟用。配置匯入成功不代表站點目前可播放。"
+        }
+      }
+    }
+  },
+  "輸入訂閱網址，預覽並匯入來源配置。": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Enter a subscription URL to preview and import source configurations."
+        }
+      },
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "输入订阅网址，预览并导入来源配置。"
+        }
+      },
+      "zh-Hant": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "輸入訂閱網址，預覽並匯入來源配置。"
+        }
+      }
+    }
+  },
+    "新增靜態來源保持停用；請到來源管理啟用後，明確選擇作品及集數驗證播放。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "New static sources stay disabled. Enable them in source management, then select a work and episode to verify playback."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增静态来源保持停用；请到来源管理启用后，明确选择作品及集数验证播放。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新增靜態來源保持停用；請到來源管理啟用後，明確選擇作品及集數驗證播放。"
+          }
+        }
+      }
+    },
+    "請輸入不含登入資訊的公開 HTTPS 訂閱網址。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a public HTTPS subscription URL without login information."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入不含登录信息的公开 HTTPS 订阅网址。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請輸入不含登入資訊的公開 HTTPS 訂閱網址。"
+          }
+        }
+      }
+    },
+    "訂閱網址": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscription URL"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅网址"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱網址"
+          }
+        }
+      }
+    },
+    "訂閱網址已變更；請重新檢查。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The subscription URL changed. Check it again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅网址已更改；请重新检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱網址已變更；請重新檢查。"
+          }
+        }
+      }
+    },
+    "待匯入靜態來源": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Static source ready to import"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待导入静态来源"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待匯入靜態來源"
+          }
+        }
+      }
+    },
+    "提供搜尋、選集與靜態直連解析；需明確套用及啟用。未驗證網站即時可用性，不執行遠端腳本或匯入登入資訊。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supports search, episode lists and static media links. Apply and enable explicitly. Live site availability is untested; remote scripts and login information are not imported."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提供搜索、选集与静态直连解析；需明确应用及启用。未验证网站即时可用性，不执行远程脚本或导入登录信息。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提供搜尋、選集與靜態直連解析；需明確套用及啟用。未驗證網站即時可用性，不執行遠端腳本或匯入登入資訊。"
+          }
+        }
+      }
+    },
+    "無法轉換為靜態來源：需公開 HTTPS 網址、有效搜尋與集數選擇器；原有設定保留。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot convert to a static source: a public HTTPS URL and valid search and episode selectors are required. Existing settings were preserved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法转换为静态来源：需要公开 HTTPS 网址、有效搜索与集数选择器；保留原有设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法轉換為靜態來源：需公開 HTTPS 網址、有效搜尋與集數選擇器；原有設定保留。"
+          }
+        }
+      }
+    },
+    "Subscriptions update search rules and can import static page sources. Review the entries before applying; new sources remain disabled.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscriptions update search rules and can import static page sources. Review the entries before applying; new sources remain disabled."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅可更新搜索规则并导入静态页面来源。请预览后应用；新来源保持停用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱可更新搜尋規則並匯入靜態頁面來源。請預覽後套用；新來源保持停用。"
+          }
+        }
+      }
+    },
+    "Apply subscription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply subscription"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用订阅"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "套用訂閱"
+          }
+        }
+      }
+    },
+    "Review source subscription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review source subscription"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览来源订阅"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預覽來源訂閱"
+          }
+        }
+      }
+    },
+    "彈幕與 IINA 控制列層級": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku and IINA control layering"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕与 IINA 控制栏层级"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕與 IINA 控制列層級"
+          }
+        }
+      }
+    },
+    "現有 IINA 插件 API 無法將彈幕移至原生控制列下方；本專案不修改 IINA 本體。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current IINA plugin API cannot place danmaku below native controls. This project does not modify IINA itself."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "现有 IINA 插件 API 无法将弹幕移至原生控制栏下方；本项目不修改 IINA 本体。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現有 IINA 插件 API 無法將彈幕移至原生控制列下方；本專案不修改 IINA 本體。"
+          }
+        }
+      }
+    },
+    "無法修復（IINA 插件 API 限制）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not fixable (IINA plugin API limitation)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法修复（IINA 插件 API 限制）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法修復（IINA 插件 API 限制）"
+          }
+        }
+      }
+    },
+    "設定會保存，並即時套用至已連線的新版 IINA 彈幕外掛與內建播放器。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings are saved and applied immediately to connected updated IINA danmaku plugins and the built-in player."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置会保存，并即时应用至已连接的新版 IINA 弹幕插件与内置播放器。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定會保存，並即時套用至已連線的新版 IINA 彈幕外掛與內建播放器。"
+          }
+        }
+      }
+    },
+    "字重名稱，例如 Regular／Bold。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Font weight name, such as Regular or Bold."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字重名称，例如 Regular／Bold。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字重名稱，例如 Regular／Bold。"
+          }
+        }
+      }
+    },
+    "彈幕字級": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku font size"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕字号"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕字級"
+          }
+        }
+      }
+    },
+    "12–72；設定會保存並即時套用。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12–72; saved and applied immediately."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12–72；设置会保存并即时应用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "12–72；設定會保存並即時套用。"
+          }
+        }
+      }
+    },
+    "0 為完全透明，1 為完全不透明；設定會保存並即時套用。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 is fully transparent and 1 is fully opaque; saved and applied immediately."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 为完全透明，1 为完全不透明；设置会保存并即时应用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "0 為完全透明，1 為完全不透明；設定會保存並即時套用。"
+          }
+        }
+      }
+    },
+    "保留彈幕原色": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preserve danmaku colors"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留弹幕原色"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留彈幕原色"
+          }
+        }
+      }
+    },
+    "關閉後統一顯示白色；來源未提供顏色時使用白色。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn off to display all comments in white. Comments without a source color use white."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭后统一显示白色；来源未提供颜色时使用白色。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "關閉後統一顯示白色；來源未提供顏色時使用白色。"
+          }
+        }
+      }
+    },
+    "顯示滾動彈幕": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show scrolling comments"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示滚动弹幕"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示滾動彈幕"
+          }
+        }
+      }
+    },
+    "顯示頂部固定彈幕": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show fixed top comments"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示顶部固定弹幕"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示頂部固定彈幕"
+          }
+        }
+      }
+    },
+    "顯示底部固定彈幕": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show fixed bottom comments"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示底部固定弹幕"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示底部固定彈幕"
+          }
+        }
+      }
+    },
+    "懸停暫停單條彈幕": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pause individual comments on hover"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "悬停暂停单条弹幕"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "懸停暫停單條彈幕"
+          }
+        }
+      }
+    },
+    "滑鼠移上彈幕時只暫停該條，移開後繼續；不暫停影片或其他彈幕。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hover to pause that comment and move away to resume. Video and other comments keep playing."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "鼠标移上弹幕时只暂停该条，移开后继续；不暂停视频或其他弹幕。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "滑鼠移上彈幕時只暫停該條，移開後繼續；不暫停影片或其他彈幕。"
+          }
+        }
+      }
+    },
+    "來源訂閱格式無效，應包含 mediaSources 或 exportedMediaSourceDataList.mediaSources。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid source subscription format: expected mediaSources or exportedMediaSourceDataList.mediaSources."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源订阅格式无效，应包含 mediaSources 或 exportedMediaSourceDataList.mediaSources。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源訂閱格式無效，應包含 mediaSources 或 exportedMediaSourceDataList.mediaSources。"
+          }
+        }
+      }
+    },
+    "找不到本機來源搜尋基線：%@。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local source search baseline could not be found: %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到本地来源搜索基线：%@。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到本機來源搜尋基線：%@。"
+          }
+        }
+      }
+    },
+    "本機來源搜尋基線格式無效。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local source search baseline format is invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地来源搜索基线格式无效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機來源搜尋基線格式無效。"
+          }
+        }
+      }
+    },
     "This line is restricted to the source's own app. Select the website line." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -1872,29 +2562,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "✓ 已下載 · %@"
-          }
-        }
-      }
-    },
-    "0–1；沿用既有 dmOpacity。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "0–1; uses the existing dmOpacity preference."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "0–1；使用现有 dmOpacity。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "0–1；沿用既有 dmOpacity。"
           }
         }
       }
@@ -27083,29 +27750,6 @@
         }
       }
     },
-    "既有字重名称，例如 Regular／Bold；不改字級固定的原行為。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Existing font weight name, such as Regular or Bold; fixed font-size behavior is unchanged."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "现有字重名称，例如 Regular／Bold；不改变固定字号行为。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "既有字重名称，例如 Regular／Bold；不改字級固定的原行為。"
-          }
-        }
-      }
-    },
     "既有彈幕偏好；不把隱藏組件誤當停用業務服務。外部播放器的既有活動生命週期保持不變。" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -27125,29 +27769,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "既有彈幕偏好；不把隱藏組件誤當停用業務服務。外部播放器的既有活動生命週期保持不變。"
-          }
-        }
-      }
-    },
-    "既有彈幕字型偏好；套用時機沿用播放端。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uses the existing danmaku font preference and player-side application timing."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用现有弹幕字体偏好，生效时机由播放端决定。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "既有彈幕字型偏好；套用時機沿用播放端。"
           }
         }
       }
@@ -29862,29 +30483,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "沿用既有 Bilibili HTML decoder 偏好。"
-          }
-        }
-      }
-    },
-    "沿用既有 dmSpeed。" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Uses the existing dmSpeed preference."
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "使用现有 dmSpeed。"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "沿用既有 dmSpeed。"
           }
         }
       }

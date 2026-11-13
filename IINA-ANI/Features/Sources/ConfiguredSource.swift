@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 import SwiftSoup
 
@@ -46,18 +47,25 @@ actor ConfiguredSource: SupportSiteProtocol {
     nonisolated let configuration: SourceConfiguration
     private let site: SupportSites
     private let requestConfiguration: URLSessionConfiguration
+    private let staticFetch: SourceHTTPTransport.Fetch?
 
     init(configuration: SourceConfiguration, site: SupportSites,
-         requestConfiguration: sending URLSessionConfiguration = .ephemeral) {
+         requestConfiguration: sending URLSessionConfiguration = .ephemeral,
+         staticFetch: SourceHTTPTransport.Fetch? = nil) {
         self.configuration = configuration
         self.site = site
         requestConfiguration.httpCookieStorage = nil
         requestConfiguration.httpShouldSetCookies = false
         requestConfiguration.urlCache = nil
         self.requestConfiguration = requestConfiguration
+        self.staticFetch = staticFetch
     }
 
     func liveInfo(_ url: String) async throws -> LiveInfo {
+        if configuration.version == 4 {
+            let catalog = try await staticCatalog(url)
+            return ConfiguredSourceInfo(title: catalog.work.title, cover: "", isLiving: !catalog.lines.isEmpty, site: site)
+        }
         let p = try configuration.parts(url)
         let catalog = try await loadCatalog(id: p.id)
         let available = p.episodeIdentity == nil || catalog.lines.contains { line in
@@ -67,6 +75,16 @@ actor ConfiguredSource: SupportSiteProtocol {
     }
 
     func episodeList(_ url: String) async throws -> (nodes: [VideoTreeNode], current: Int) {
+        if configuration.version == 4 {
+            let catalog = try await staticCatalog(url)
+            let nodes = catalog.lines.map { line in
+                VideoTreeNode(title: line.title, children: line.episodes.map { episode in
+                    VideoTreeNode(site: site, index: episode.number, title: episode.title,
+                                  id: episode.item.pageURL, url: episode.item.pageURL)
+                })
+            }
+            return (nodes, 0)
+        }
         let p = try configuration.parts(url)
         let catalog = try await loadCatalog(id: p.id)
         var current = 0
@@ -88,6 +106,9 @@ actor ConfiguredSource: SupportSiteProtocol {
     }
 
     func decodeUrl(_ url: String) async throws -> YouGetJSON {
+        // Static pages have no inferred work/episode route. Resolution requires the exact
+        // work plus a catalog-selected episode through resolveSelection(_:).
+        guard configuration.version != 4 else { throw PlaybackFailure.missingEpisode }
         let p = try configuration.parts(url)
         let catalog = try await loadCatalog(id: p.id)
         guard let line = p.line == nil ? catalog.lines.first : catalog.lines.first(where: { $0.number == p.line }),
@@ -108,6 +129,9 @@ actor ConfiguredSource: SupportSiteProtocol {
     }
 
     func search(query: String, page: Int) async throws -> SourceSearchPage {
+        if configuration.version == 4 {
+            return try await StaticWebSourceClient(configuration: configuration, fetch: staticFetch).search(query: query, page: page)
+        }
         guard let spec = configuration.search,
               configuration.capabilities.contains(.search) else { throw SourceConfiguration.ConfigurationError.unsupportedCapability }
         let url = try SourceSearchExecutor.requestURL(spec, query: query, page: page,
@@ -118,6 +142,41 @@ actor ConfiguredSource: SupportSiteProtocol {
                                              classification: { _ in configuration.classification }) {
             try? configuration.item($0)
         }
+    }
+
+    private func staticCatalog(_ url: String) async throws -> RuntimeCatalog {
+        let item = try configuration.webItem(url, kind: .work)
+        return try await StaticWebSourceClient(configuration: configuration, fetch: staticFetch)
+            .catalog(RuntimeWork(item: item, title: configuration.name))
+    }
+
+    /// Reload the selected work, require an exact member, and never turn an arbitrary
+    /// episode page into a work or select the first catalog entry as a fallback.
+    func resolveSelection(_ selection: PlayableSelection) async throws -> YouGetJSON {
+        guard configuration.version == 4, selection.accountID == nil,
+              selection.lineID == nil || selection.lineID == "0" else { throw PlaybackFailure.missingEpisode }
+        var exact = try configuration.mappingSelection(selection)
+        guard let selected = exact.episode else { throw PlaybackFailure.missingEpisode }
+        let catalog = try await staticCatalog(exact.item.pageURL)
+        let candidates = catalog.lines.flatMap { line in
+            line.episodes.filter { episode in
+                episode.item == selected && (exact.qualityID == nil || exact.qualityID == "Line \(line.id)")
+            }
+        }
+        guard candidates.count == 1, let episode = candidates.first else { throw PlaybackFailure.missingEpisode }
+        let client = StaticWebSourceClient(configuration: configuration, fetch: staticFetch)
+        let media = try await client.resolve(episode, in: catalog)
+        try Task.checkCancellation()
+        let key = "Line \(episode.line)"
+        var result = YouGetJSON(rawUrl: selected.pageURL)
+        result.title = "\(catalog.work.title) - \(episode.title)"
+        var stream = Stream(url: media.absoluteString)
+        stream.qualityIndex = episode.line
+        result.streams[key] = stream
+        result.site = site
+        exact.qualityID = key
+        result.selection = exact
+        return result
     }
 
     private struct CatalogEpisode: Sendable { let number: Int; let identity: String; let title: String; let url: String }

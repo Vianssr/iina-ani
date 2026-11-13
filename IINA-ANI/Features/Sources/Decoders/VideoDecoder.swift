@@ -7,6 +7,7 @@
 //
 
 import SourceCore
+import SourceRuntime
 import Cocoa
 import Alamofire
 import Marshal
@@ -271,13 +272,17 @@ actor VideoDecoder {
 
 
     /// Public anime workflows never inherit a caller account or consult source defaults.
-    func guestSelection(for url: String) async throws -> PlayableSelection {
+    func guestSelection(for url: String, expectedKind: SourceItemRef.Kind? = nil) async throws -> PlayableSelection {
         try Task.checkCancellation()
         let site = registry.matchingSite(url)
         guard site != .unsupported else { throw VideoGetError.notSupported }
         return try await AccountHTTP.$context.withValue(nil) {
             try await self.accounts.withSource(sourceID: site.sourceID, useDefaultAccount: false) {
-                try await self.selection(for: url)
+                var selection = try await self.selection(for: url)
+                if let expectedKind, self.registry.source(for: site.sourceID)?.version == 4 {
+                    selection.item = try self.registry.item(for: selection.item.pageURL, expectedKind: expectedKind)
+                }
+                return selection
             }
         }
     }
@@ -306,7 +311,9 @@ actor VideoDecoder {
         let site = registry.matchingSite(item.pageURL)
         guard sourceEnabledPolicy(item.sourceID) else { throw SiteAccountError.disabled }
         let accountID: UUID?
-        if let context = AccountHTTP.context,
+        if registry.source(for: item.sourceID)?.version == 4 {
+            accountID = nil
+        } else if let context = AccountHTTP.context,
            SiteAccounts.canonicalSource(context.sourceID) == SiteAccounts.canonicalSource(site.sourceID) {
             accountID = context.accountID
         } else {
@@ -352,6 +359,16 @@ actor VideoDecoder {
     private func resolveInScope(_ selection: PlayableSelection) async throws -> YouGetJSON {
         try Task.checkCancellation()
         let ref = selection.episode ?? selection.item
+        if let configuration = registry.source(for: selection.item.sourceID), configuration.version == 4 {
+            guard registry.loadError == nil else { throw PlaybackFailure.configurationChanged }
+            let result = try await configuredAdapter(configuration.id).resolveSelection(selection)
+            try Task.checkCancellation()
+            guard sourceEnabledPolicy(configuration.id),
+                  registry.source(for: configuration.id)?.configurationRevision == configuration.configurationRevision else {
+                throw PlaybackFailure.configurationChanged
+            }
+            return result
+        }
         let normalized = try await self.selection(for: ref.pageURL)
         guard normalized.item.sourceID == ref.sourceID,
               ref.sourceID == selection.item.sourceID else { throw VideoGetError.invalidLink }
@@ -407,7 +424,7 @@ actor VideoDecoder {
             if leaves.count > 1 { return .selection(catalog) }
             if registry.matchingSite(choice.item.pageURL) != .cc163,
                let leaf = leaves.first, !leaf.selectionURL.isEmpty {
-                choice.episode = try await self.selection(for: leaf.selectionURL).item
+                choice.episode = try registry.item(for: leaf.selectionURL, expectedKind: .episode)
             } else {
                 choice = catalog.selection
             }
@@ -415,7 +432,8 @@ actor VideoDecoder {
         try Task.checkCancellation()
         let page = (choice.episode ?? choice.item).pageURL
         if choice.item.kind != .local {
-            let info = try await liveInfo(page, false)
+            let infoPage = registry.source(for: choice.item.sourceID)?.version == 4 ? choice.item.pageURL : page
+            let info = try await liveInfo(infoPage, false)
             try Task.checkCancellation()
             guard info.isLiving else { throw VideoGetError.isNotLiving }
         }

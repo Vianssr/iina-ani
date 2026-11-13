@@ -269,15 +269,19 @@ public struct ConfirmedSourceMapping: Codable, Hashable, Sendable {
         context.work == work && context.episode == episode
     }
 
-    /// The iOS configured-source library boundary also checks callers that bypass
-    /// canonicalization. Native desktop adapters retain their own identity validation.
+    /// The shared source-library boundary checks callers that bypass canonicalization.
+    /// Runtime adapters remain responsible for their exact route and selected stream.
     /// Current configuration authority is deliberately not checked here: invalidated records
     /// remain durable until the user explicitly reconfirms or removes them.
     public func validateForPersistence() throws {
         let selection = context.selection
+        let standaloneVideo = selection.item.sourceID == "hanime1" &&
+            selection.item.kind == .video && selection.episode == selection.item &&
+            selection.lineID == "0" && selection.qualityID.map(Self.safeLabel) == true
         guard confirmedAt.timeIntervalSinceReferenceDate.isFinite,
               !sourceTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              selection.item.kind == .work, let episode = selection.episode, episode.kind == .episode,
+              let episode = selection.episode,
+              (selection.item.kind == .work && episode.kind == .episode) || standaloneVideo,
               selection.item.sourceID == episode.sourceID,
               !selection.item.sourceID.isEmpty,
               selection.item.sourceID.utf8.count <= 64,

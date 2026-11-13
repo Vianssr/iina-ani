@@ -1,0 +1,56 @@
+{
+  "id": "fqdm",
+  "name": "Tomato Anime",
+  "version": 1,
+  "contentKind": "anime",
+  "hosts": ["fqdm.cc", "www.fqdm.cc"],
+  "mediaHosts": [],
+  "anonymousExternalHTTPSMedia": true,
+  "credentialHosts": [],
+  "capabilities": ["information", "resolve", "episodes", "lines", "iina", "mpv", "download", "search"],
+  "route": {
+    "pattern": "^/index\\.php/vod/(?:detail/id/|play/id/)([0-9]+)(?:\\.html|/sid/([0-9]+)/nid/([0-9]+)\\.html)$",
+    "idGroup": 1,
+    "lineGroup": 2,
+    "episodeGroup": 3,
+    "idIsPositiveInteger": true,
+    "detailTemplate": "https://www.fqdm.cc/index.php/vod/detail/id/{id}.html"
+  },
+  "catalog": {
+    "url": "https://www.fqdm.cc/index.php/vod/detail/id/{id}.html",
+    "format": "html",
+    "titleSelector": ".module-info-heading h1",
+    "coverSelector": ".module-info-poster img",
+    "coverAttribute": "data-original",
+    "panelSelector": ".module-play-list",
+    "lineTitleSelector": ".module-tab-item.tab-item span",
+    "episodeSelector": ".module-play-list-link[href]",
+    "episodeTitleSelector": "self",
+    "episodeURLAttribute": "href"
+  },
+  "player": {
+    "format": "html",
+    "payloadPattern": "var\\s+player_aaaa\\s*=\\s*(\\{.*?\\})\\s*;?\\s*</script>",
+    "idKey": "id",
+    "lineKey": "sid",
+    "episodeKey": "nid",
+    "paidKey": "points",
+    "previewKey": "trysee",
+    "encodingKey": "encrypt",
+    "urlKey": "url",
+    "idIsString": true,
+    "allowedExtensions": ["m3u8", "mp4"],
+    "rejectSelectors": []
+  },
+  "search": {
+    "url": "https://www.fqdm.cc/index.php/vod/search.html?wd={query}",
+    "format": "html",
+    "queryParameter": "wd",
+    "pageParameter": "page",
+    "rowsPerPage": 24,
+    "nextPageSelector": "a[rel=next], a:contains(下一页), a:contains(下一頁)",
+    "resultsSelector": "div.module-card-item-info > div.module-card-item-title > a",
+    "titleSelector": "self",
+    "hrefAttribute": "href"
+  }
+}

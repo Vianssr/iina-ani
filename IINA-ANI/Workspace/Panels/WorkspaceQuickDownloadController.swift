@@ -508,7 +508,7 @@ final class WorkspaceQuickDownloadController: NSViewController, WorkspaceDetacha
                     if selection.classification.kind != .unknown { base.classification = selection.classification }
                     for (leaf, label) in Self.leaves(catalog.nodes) {
                         do {
-                            let ref = try self.services.decoder.registry.item(for: leaf.selectionURL)
+                            let ref = try self.services.decoder.registry.item(for: leaf.selectionURL, expectedKind: .episode)
                             guard ref.sourceID == base.item.sourceID, [.episode, .video].contains(ref.kind) else { throw DownloadFailure.invalidSelection }
                             var exact = base
                             exact.episode = ref

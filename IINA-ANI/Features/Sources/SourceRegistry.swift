@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 
 /// Immutable snapshots keep URL classification synchronous for bookmarks and legacy entry points.
@@ -322,8 +323,9 @@ final class SourceRegistry: @unchecked Sendable {
         let base = snapshot
         var overrides = base.subscription?.overrides ?? [:]
         overrides.merge(plan.overrides) { _, new in new }
+        let configurations = (base.subscription?.configurations ?? [:]).merging(plan.configurations) { _, new in new }
         let merged = SourceSubscriptionPlan(fingerprint: plan.fingerprint, checkedAt: plan.checkedAt,
-            overrides: overrides, entries: plan.entries)
+            overrides: overrides, entries: plan.entries, configurations: configurations)
         let next = try applying(merged, to: base)
         let data = try JSONEncoder().encode(merged)
         guard data.count <= 2_000_000 else { throw SourceSearchError.invalidConfiguration }
@@ -336,37 +338,47 @@ final class SourceRegistry: @unchecked Sendable {
     }
 
     private func applying(_ plan: SourceSubscriptionPlan, to base: Snapshot) throws -> Snapshot {
+        guard plan.overrides.count <= 100, plan.configurations.count <= 100,
+              plan.configurations.values.reduce(0, { $0 + $1.count }) <= 2 * 1024 * 1024 else {
+            throw SourceSearchError.invalidConfiguration
+        }
+        let previousIDs = Set(base.subscription?.configurations.keys.map { $0 } ?? [])
+        var configurations = base.configurations.filter { !previousIDs.contains($0.key) }
+        let nativeIDs = Set(base.descriptors.filter { base.configurations[$0.id] == nil }.map(\.id))
+        var occupiedHosts = Set(SupportSites.nativeSites.flatMap(\.hosts))
+            .union(["youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"])
+        occupiedHosts.formUnion(configurations.values.flatMap(\.hosts))
+        for id in plan.configurations.keys.sorted() {
+            guard let data = plan.configurations[id], data.count <= 1_048_576,
+                  id.hasPrefix("web-"), !nativeIDs.contains(id), configurations[id] == nil else {
+                throw SourceSearchError.invalidConfiguration
+            }
+            let configuration = try SourceConfiguration.load(data: data)
+            guard configuration.id == id, configuration.version == 4, configuration.webSelector != nil else {
+                throw SourceSearchError.invalidConfiguration
+            }
+            for host in configuration.hosts {
+                guard occupiedHosts.insert(host).inserted else { throw RegistryError.hostConflict(host) }
+            }
+            configurations[id] = configuration
+        }
         var overlays: [String: NativeSearchSource] = [:]
-        guard plan.overrides.count <= 32 else { throw SourceSearchError.invalidConfiguration }
         for (id, data) in plan.overrides {
-            guard SourceSubscriptionConverter.managedSourceIDs.contains(id), data.count <= 64_000 else {
-                throw SourceSearchError.invalidConfiguration
-            }
+            guard (SourceSubscriptionConverter.managedSourceIDs.contains(id) || configurations[id] != nil),
+                  data.count <= 64_000 else { throw SourceSearchError.invalidConfiguration }
             let source = try JSONDecoder().decode(NativeSearchSource.self, from: data)
-            let allowed = Set(base.configurations[id]?.hosts ?? SupportSites.nativeSites.first(where: { $0.sourceID == id })?.hosts ?? [])
-            guard !source.hosts.isEmpty, Set(source.hosts).isSubset(of: allowed),
-                  source.search.rowsPerPage > 0, source.search.rowsPerPage <= 100 else { throw SourceSearchError.invalidConfiguration }
-            if id == "mutedm" {
-                guard let baseline = base.nativeSearch[id], source.search.format == "json",
-                      source.resultURLTemplate == baseline.resultURLTemplate,
-                      source.search.jsonResultsPath == "list", source.search.jsonTitlePath == "name",
-                      source.search.jsonIdentifierPath == "id", source.search.jsonCoverPath == "pic",
-                      source.search.jsonTotalPath == "total" else { throw SourceSearchError.invalidConfiguration }
-            } else {
-                guard source.resultURLTemplate == nil, source.search.format == "html",
-                      let rows = source.search.resultsSelector, !rows.isEmpty, rows.utf8.count <= 4096,
-                      let title = source.search.titleSelector, !title.isEmpty, title.utf8.count <= 4096,
-                      source.search.hrefAttribute == "href" else { throw SourceSearchError.invalidConfiguration }
-            }
-            _ = try SourceSearchExecutor.requestURL(source.search, query: "boundary", page: 1, allowedHosts: Set(source.hosts))
-            let sensitive: Set<String> = ["cookie", "token", "access_token", "authorization", "auth", "api_key"]
-            guard !(URLComponents(string: source.search.url)?.queryItems ?? []).contains(where: { sensitive.contains($0.name.lowercased()) }) else {
-                throw SourceSearchError.invalidConfiguration
-            }
+            let allowed = Set(configurations[id]?.hosts ?? SupportSites.nativeSites.first(where: { $0.sourceID == id })?.hosts ?? [])
+            guard !source.hosts.isEmpty, Set(source.hosts).count == source.hosts.count,
+                  Set(source.hosts).isSubset(of: allowed) else { throw SourceSearchError.invalidConfiguration }
+            try SourceRuntime.SourceSearchExecutor.validate(source.search, allowedHosts: Set(source.hosts),
+                                                            resultURLTemplate: source.resultURLTemplate)
             overlays[id] = source
         }
-        return Snapshot(configurations: base.configurations, nativeSearch: base.nativeSearch, matchers: base.matchers,
-            descriptors: subscriptionDescriptors(base.descriptors, active: Set(overlays.keys)),
+        let descriptors = (base.descriptors.filter { base.configurations[$0.id] == nil } +
+            configurations.values.map { $0.descriptor(on: .macOS) }).sorted { $0.id < $1.id }
+        return Snapshot(configurations: configurations, nativeSearch: base.nativeSearch,
+            matchers: configurations.values.sorted { $0.id < $1.id },
+            descriptors: subscriptionDescriptors(descriptors, active: Set(overlays.keys)),
             loadError: nil, subscription: plan, subscriptionSearch: overlays)
     }
 
@@ -433,7 +445,7 @@ final class SourceRegistry: @unchecked Sendable {
     }
 
     /// Source-owned, offline page identity shared by playback and favorites.
-    func item(for raw: String) throws -> SourceItemRef {
+    func item(for raw: String, expectedKind: SourceItemRef.Kind? = nil) throws -> SourceItemRef {
         if let url = URL(string: raw), url.scheme?.lowercased() == "iina-torrent" {
             guard let selection = TorrentSelection(identityURL: url) else { throw VideoGetError.invalidLink }
             return SourceItemRef(sourceID: "torrent", pageURL: selection.identityURL.absoluteString, kind: .video)
@@ -457,6 +469,9 @@ final class SourceRegistry: @unchecked Sendable {
         guard site != .unsupported else { throw VideoGetError.notSupported }
         if case .configured(let id) = site {
             guard let configuration = source(for: id) else { throw VideoGetError.notSupported }
+            if configuration.version == 4 {
+                return try configuration.webItem(page, kind: expectedKind ?? .work)
+            }
             return try configuration.item(page)
         }
         let canonical: String
@@ -492,8 +507,9 @@ final class SourceRegistry: @unchecked Sendable {
 
     /// Canonical episode identity owned by the source layer for Discovery baselines.
     func episodeIdentity(for leaf: VideoTreeNode) throws -> String {
-        let item = try self.item(for: leaf.selectionURL)
+        let item = try self.item(for: leaf.selectionURL, expectedKind: .episode)
         if let configuration = source(for: item.sourceID) {
+            if configuration.version == 4 { return "\(item.sourceID):episode:\(item.pageURL)" }
             let parts = try configuration.parts(item.pageURL)
             guard let episode = parts.episodeIdentity else { throw VideoGetError.invalidLink }
             return "\(item.sourceID):\(parts.id):\(episode)"

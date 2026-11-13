@@ -2,7 +2,6 @@ $ = function(a) {
     return document.getElementById(a);
 };
 var isLiving = true;
-var defWidth = 680;
 var uuid = '';
 
 var player;
@@ -186,9 +185,6 @@ window.dmMessage = function(event) {
     case 'resize':
         window.resize();
         break;
-    case 'customFont':
-        window.customFont(event.text);
-        break;
     case 'loadDM':
         if (event.text == 'acfun') {
             loadDM('/danmaku/iina-plus-danmaku.json', 'acfun');
@@ -200,92 +196,43 @@ window.dmMessage = function(event) {
         isLiving = false;
         break;
     case 'sendDM':
-        if (document.visibilityState != 'visible') {
-            return;
-        }
-            
-        event.dms.forEach(function(element, index) {
-            setTimeout(function () {
-                var comment = {
-                    'text': element.text,
-                    'stime': 0,
-                    'mode': 1,
-                    'color': 0xffffff,
-                    'border': false,
-                    'imageSrc': element.imageSrc,
-                    'imageWidth': element.imageWidth
-                };
-                window.cm.send(comment);
-            }, index * 150);
-        });
+        window.dmSettings.send(event.dms);
         break;
     case 'liveDMServer':
         updateStatus(event.text);
         break
-    case 'dmSpeed':
-        defWidth = event.text;
-        window.resize();
-        break
-    case 'dmOpacity':
-        window.cm.options.global.opacity = event.text;
-        break
-    case 'dmFontSize':
-        // updateStatus(event.text);
-        break
-    case 'dmBlockList':
-        let t = event.text;
-        if (t.includes('List')) {
+    case 'dmSettings':
+        window.dmSettings.apply(JSON.parse(event.text));
+        if (window.dmSettings.settings.blockTypes.includes('List')) {
             window.loadFilter('/danmaku/iina-plus-blockList.xml');
+        } else {
+            window._filterVersion = (window._filterVersion || 0) + 1;
+            cm.filter.rules = [];
         }
-        if (t.includes('Top')) {
-            cm.filter.allowTypes[5] = false;
-        }
-        if (t.includes('Bottom')) {
-            cm.filter.allowTypes[4] = false;
-        }
-        if (t.includes('Scroll')) {
-            cm.filter.allowTypes[1] = false;
-            cm.filter.allowTypes[2] = false;
-        }
-        if (t.includes('Color')) {
-            cm.filter.addRule({
-                subject: 'color',
-                op: '=',
-                value: 16777215,
-                mode: 'accept'
-            });
-        }
-        if (t.includes('Advanced')) {
-            cm.filter.allowTypes[7] = false;
-            cm.filter.allowTypes[8] = false;
-        }
-        break
+        break;
     default:
         break;
     };
 };
 
 function bind() {
+    if (window.dmSettings) window.dmSettings.dispose();
+    if (window.cm) window.cm.destroy();
+    if (window.dmVisibilityListener) {
+        document.removeEventListener('visibilitychange', window.dmVisibilityListener);
+    }
     window.cm = new CommentManager($('commentCanvas'));
     cm.init();
+    window.dmSettings = new DanmakuSettingsController(cm);
     window.resize = function () {
-        var scale = $("player").offsetWidth / defWidth;
-        window.cm.options.scroll.scale = scale;
         cm.setBounds();
     };
 
-    document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState == 'visible') {
-            console.log('visible');
-            cm.start();
-            cm.clear();
-        } else {
-            console.log('hidden');
-            cm.stop();
-            cm.clear();
-        };
+    window.dmVisibilityListener = function () {
+        cm.setHidden(document.visibilityState !== 'visible');
         resize();
-    });
+    };
+    document.addEventListener('visibilitychange', window.dmVisibilityListener);
 
     window.initDM = function() {
         if (window._provider && window._provider instanceof CommentProvider) {
@@ -299,18 +246,6 @@ function bind() {
         cm.start();
     };
 
-    window.customFont = function(fontStyle) {
-        var element = document.getElementsByTagName("style"), index;
-        for (index = element.length - 1; index >= 0; index--) {
-        element[index].parentNode.removeChild(element[index]);
-        }
-
-        var style = document.createElement('style');
-        style.type = 'text/css';
-        style.innerHTML = fontStyle;
-        document.getElementsByTagName('head')[0].appendChild(style);
-        window.cm.options.global.className = 'customFont'
-    };
     
     /** Load **/
     window.loadDM = function(dmf, provider) {
@@ -360,11 +295,13 @@ function bind() {
     };
 
     window.loadFilter = function(ff) {
+        var version = window._filterVersion = (window._filterVersion || 0) + 1;
         cm.filter.rules = [];
         CommentProvider.XMLProvider("GET", ff)
         .then(result => result.getElementsByTagName("item"))
         .then(items => [...items].map(r => r.textContent).filter(r => r.startsWith('r=')).map(r => r.replace('r=', '')))
         .then(function(values) {
+            if (version !== window._filterVersion) return;
             values.forEach(v =>
                 cm.filter.addRule({
                     "subject": "text",

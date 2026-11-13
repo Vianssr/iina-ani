@@ -35,54 +35,112 @@ final class ANIUITests: XCTestCase {
     @MainActor func testConfigurationOnlyURLImport() throws {
         let app = XCUIApplication()
         app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US",
-                               "-catalog-ui-fixture", "-empty-sources-ui-fixture", "-source-import-ui-fixture"]
+                               "-catalog-ui-fixture", "-native-sources-ui-fixture", "-source-import-ui-fixture"]
         app.launch()
         app.buttons["source-settings"].tap()
-        XCTAssertTrue(app.staticTexts["source-settings-empty"].waitForExistence(timeout: 5))
-        XCTAssertFalse(app.descendants(matching: .any)["source-default-status"].exists)
+        let source = app.switches["source-settings-enabled-fqdm"]
+        for _ in 0..<10 where !source.isHittable { app.swipeUp() }
+        XCTAssertTrue(source.waitForExistence(timeout: 5))
+        setSwitch(source, on: false)
+        for _ in 0..<10 where !app.buttons["source-settings-import"].isHittable { app.swipeDown() }
         app.buttons["source-settings-import"].tap()
         let field = app.descendants(matching: .any)["source-import-url"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
-        XCTAssertFalse((field.value as? String ?? "").contains("creamycake"))
-        XCTAssertFalse(app.buttons["source-import-download"].isEnabled)
-        field.tap(); field.typeText("https://mirror.example/rules.json?version=2")
+        attachPlayerScreenshot("desktop-source-subscription-url")
         app.buttons["source-import-download"].tap()
-        XCTAssertTrue(app.navigationBars["Review sources"].waitForExistence(timeout: 8))
-        XCTAssertTrue(app.staticTexts["Mirrored CSS1 fixture"].exists)
-        let apply = app.buttons["source-import-batch-apply"]
-        for _ in 0..<6 where !apply.isHittable { app.swipeUp() }
-        XCTAssertTrue(apply.isHittable); apply.tap()
+        XCTAssertTrue(app.navigationBars["Review source subscription"].waitForExistence(timeout: 10))
+        attachPlayerScreenshot("desktop-search-only-subscription-preview")
+        let applyRules = app.buttons["source-subscription-apply"]
+        for _ in 0..<30 where !applyRules.isHittable { app.swipeUp() }
+        XCTAssertTrue(applyRules.isHittable)
+        applyRules.tap()
         XCTAssertTrue(app.navigationBars["Source configuration"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.switches["source-settings-enabled-fixture-css1"].exists)
-        XCTAssertFalse(app.staticTexts["source-settings-empty"].exists)
-        attachPlayerScreenshot("configuration-only-css1-import")
+        for _ in 0..<10 where !source.isHittable { app.swipeUp() }
+        XCTAssertEqual(source.value as? String, "0", "Applying search rules must not enable a source")
+        XCTAssertFalse(app.switches["source-settings-enabled-fixture-css1"].exists)
+        attachPlayerScreenshot("desktop-source-subscription-applied")
+        for _ in 0..<10 where !app.buttons["source-settings-import"].isHittable { app.swipeDown() }
         app.buttons["source-settings-import"].tap()
         XCTAssertTrue(field.waitForExistence(timeout: 5))
+        app.buttons["source-import-clear"].tap()
         field.tap(); field.typeText("https://configuration.example/list.json")
         app.buttons["source-import-download"].tap()
         XCTAssertTrue(app.navigationBars["Review sources"].waitForExistence(timeout: 8))
         XCTAssertTrue(app.staticTexts["URL configuration fixture"].exists)
         XCTAssertTrue(app.staticTexts["List configuration fixture"].exists)
+        let apply = app.buttons["source-import-batch-apply"]
         for _ in 0..<6 where !apply.isHittable { app.swipeUp() }
         XCTAssertTrue(apply.isHittable); apply.tap()
         XCTAssertTrue(app.navigationBars["Source configuration"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.switches["source-settings-enabled-fixture-url-source"].exists)
+        let imported = app.switches["source-settings-enabled-fixture-url-source"]
+        for _ in 0..<10 where !imported.isHittable { app.swipeUp() }
+        XCTAssertTrue(imported.exists)
+        XCTAssertEqual(imported.value as? String, "0")
         XCTAssertTrue(app.switches["source-settings-enabled-fixture-list-source"].exists)
-        setSwitch(app.switches["source-settings-enabled-fixture-css1"], on: true)
-        app.navigationBars.buttons["BackButton"].tap()
+    }
+
+    @MainActor func testStaticSourceSubscriptionImport() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+                               "-catalog-ui-fixture", "-native-sources-ui-fixture", "-source-import-ui-fixture",
+                               "-mobile.sources.jibi.enabled", "NO"]
+        app.launch()
+        XCTAssertTrue(app.buttons["source-settings"].waitForExistence(timeout: 15))
+        app.buttons["source-settings"].tap()
+        app.buttons["source-settings-import"].tap()
+        let field = app.descendants(matching: .any)["source-import-url"].firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        app.buttons["source-import-clear"].tap()
+        field.tap(); field.typeText("https://configuration.example/static.json")
+        app.buttons["source-import-download"].tap()
+        XCTAssertTrue(app.navigationBars["Review source subscription"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.staticTexts["Static page fixture"].exists)
+        attachPlayerScreenshot("static-source-subscription-preview")
+        let apply = app.buttons["source-subscription-apply"]
+        for _ in 0..<30 where !apply.isHittable { app.swipeUp() }
+        XCTAssertTrue(apply.isEnabled && apply.isHittable)
+        apply.tap()
+        XCTAssertTrue(app.navigationBars["Source configuration"].waitForExistence(timeout: 5))
+        let imported = app.switches.matching(NSPredicate(format: "identifier BEGINSWITH %@ AND label CONTAINS %@",
+            "source-settings-enabled-web-", "Static page fixture")).firstMatch
+        for _ in 0..<20 where !imported.isHittable { app.swipeUp() }
+        XCTAssertTrue(imported.exists)
+        XCTAssertEqual(imported.value as? String, "0", "A new static subscription source must remain disabled")
+        attachPlayerScreenshot("static-source-subscription-disabled")
+        setSwitch(imported, on: true)
+        attachPlayerScreenshot("static-source-subscription-enabled")
+        let native = app.switches["source-settings-enabled-jibi"]
+        for _ in 0..<20 where !native.isHittable { app.swipeDown() }
+        XCTAssertTrue(native.exists)
+        XCTAssertEqual(native.value as? String, "0", "Importing and enabling a static source must preserve native enablement")
+        app.terminate()
+    }
+
+    @MainActor func testDesktopNativeSourcePlayback() throws {
+        let app = XCUIApplication()
+        app.launchArguments = ["-AppleLanguages", "(en)", "-AppleLocale", "en_US",
+                               "-native-playback-ui-fixture", "-mobile.sources.jibi.enabled", "YES",
+                               "-mobile.player.autoPlayNext", "NO"]
+        app.launch()
         reopenFixtureEpisode(app)
         if app.buttons["source-reconfirm"].exists { app.buttons["source-reconfirm"].tap() }
-        app.buttons["source-picker"].tap()
-        app.buttons["Mirrored CSS1 fixture"].tap()
-        app.buttons["Find sources"].tap()
-        let candidate = app.buttons["source-work"].firstMatch
-        XCTAssertTrue(candidate.waitForExistence(timeout: 5)); candidate.tap()
-        let episode = app.buttons["source-episode-1-2"]
-        XCTAssertTrue(episode.waitForExistence(timeout: 5)); episode.tap()
+        let openPage = app.buttons["Open source page"].firstMatch
+        for _ in 0..<6 where !openPage.isHittable { app.swipeUp() }
+        openPage.tap()
+        let address = app.textFields["source-page-url"]
+        XCTAssertTrue(address.waitForExistence(timeout: 5))
+        address.tap()
+        address.typeText("https://www.jibi.cc/index.php/vod/detail/id/42.html")
+        app.buttons["source-page-open"].tap()
+        let episode = app.buttons["source-episode-7-2"]
+        XCTAssertTrue(episode.waitForExistence(timeout: 10))
+        attachPlayerScreenshot("desktop-native-jibi-catalog")
+        episode.tap()
         XCTAssertTrue(app.buttons["playerTogglePause"].waitForExistence(timeout: 20))
         XCTAssertTrue(waitUntil { self.numericValue(app, "playerElapsedSeconds") > 1 })
-        attachPlayerScreenshot("css1-import-source-mpv-playback")
+        attachPlayerScreenshot("desktop-native-jibi-mpv-playback")
         app.buttons["playerClose"].tap()
+        XCTAssertTrue(app.buttons["source-play-saved"].waitForExistence(timeout: 5))
     }
 
     @MainActor func testMobileBrowseAndURLConfiguration() throws {
@@ -117,6 +175,7 @@ final class ANIUITests: XCTestCase {
         app.buttons["source-settings-import"].tap()
         let field = app.descendants(matching: .any)["source-import-url"].firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5))
+        app.buttons["source-import-clear"].tap()
         field.tap(); field.typeText("http://configuration.example/source.json")
         XCTAssertEqual(field.value as? String, "http://configuration.example/source.json")
         app.buttons["source-import-download"].tap()
@@ -124,6 +183,7 @@ final class ANIUITests: XCTestCase {
         app.buttons["source-import-cancel"].tap()
         app.buttons["source-settings-import"].tap()
         XCTAssertTrue(field.waitForExistence(timeout: 5))
+        app.buttons["source-import-clear"].tap()
         field.tap(); field.typeText("https://configuration.example/source.json")
         XCTAssertEqual(field.value as? String, "https://configuration.example/source.json")
         app.buttons["source-import-download"].tap()
@@ -348,8 +408,8 @@ final class ANIUITests: XCTestCase {
         add(detailAttachment)
         episode.tap()
         let sourcePicker = app.buttons["source-picker"]
-        XCTAssertTrue(sourcePicker.waitForExistence(timeout: 5))
         if app.buttons["source-reconfirm"].exists { app.buttons["source-reconfirm"].tap() }
+        XCTAssertTrue(sourcePicker.waitForExistence(timeout: 5))
         sourcePicker.tap()
         app.buttons["Tomato Anime"].tap()
         app.buttons["Find sources"].tap()
@@ -437,7 +497,7 @@ final class ANIUITests: XCTestCase {
         for _ in 0..<6 where !episode.isHittable { app.swipeUp() }
         XCTAssertTrue(episode.waitForExistence(timeout: 5))
         episode.tap()
-        XCTAssertTrue(app.buttons["source-picker"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["source-import"].waitForExistence(timeout: 5))
     }
 
     @MainActor func testLibraryPresentation() throws {
@@ -533,6 +593,14 @@ final class ANIUITests: XCTestCase {
         XCTAssertTrue(waitUntil { ["off", "-1"].contains(self.accessibilityValue(app, "playerSubtitles")) })
 
         // The fixture enters through the real XML parser; filters apply to parsed comments.
+        func assertFilteredCount(_ expected: Double) {
+            let count = app.descendants(matching: .any)["playerDanmakuFilteredCount"].firstMatch
+            for _ in 0..<5 where !count.isHittable { app.swipeUp() }
+            XCTAssertTrue(waitUntil { self.numericValue(app, "playerDanmakuFilteredCount") == expected })
+            // The long automatic-provider explanation can virtualize the count row.
+            // Return to the switches before the next interaction.
+            for _ in 0..<5 where !app.switches["danmaku-enabled"].isHittable { app.swipeDown() }
+        }
         app.buttons["playerDanmaku"].tap()
         XCTAssertTrue(waitUntil { self.numericValue(app, "playerDanmakuCount") == 6 })
         let danmaku = app.switches["danmaku-enabled"]
@@ -543,18 +611,18 @@ final class ANIUITests: XCTestCase {
             setSwitch(app.switches[identifier], on: false)
         }
         setSwitch(danmaku, on: false)
-        XCTAssertTrue(waitUntil { self.numericValue(app, "playerDanmakuFilteredCount") == 0 })
+        assertFilteredCount(0)
         setSwitch(danmaku, on: true)
-        XCTAssertTrue(waitUntil { self.numericValue(app, "playerDanmakuFilteredCount") == 6 })
+        assertFilteredCount(6)
         filter.tap()
         filter.typeText("spoiler")
         // Close and reopen to dismiss the keyboard before touching lower form controls.
         closePlayerSheet(app)
         app.buttons["playerDanmaku"].tap()
-        XCTAssertTrue(waitUntil { self.numericValue(app, "playerDanmakuFilteredCount") == 5 })
+        assertFilteredCount(5)
         let hideTop = app.switches["danmaku-hideTop"]
         setSwitch(hideTop, on: true)
-        XCTAssertTrue(waitUntil { self.numericValue(app, "playerDanmakuFilteredCount") == 4 })
+        assertFilteredCount(4)
         closePlayerSheet(app)
         app.buttons["playerDanmaku"].tap()
         XCTAssertEqual(app.descendants(matching: .any)["danmaku-filter"].firstMatch.value as? String, "spoiler")

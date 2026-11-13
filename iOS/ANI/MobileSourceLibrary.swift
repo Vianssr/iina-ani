@@ -1,11 +1,17 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 import Observation
 
-struct MobileSourceEntry: Identifiable {
-    let configuration: SourceConfiguration
+struct MobileSourceEntry: Identifiable, Sendable {
+    let source: RuntimeSource
     let imported: Bool
-    var id: String { configuration.id }
+    var search: NativeSearchSource?
+    var id: String { source.id }
+    var searchRevision: String {
+        guard let search else { return source.configurationRevision }
+        return (try? SourceSubscriptionBaselines.revision(of: search)) ?? "invalid-search-metadata"
+    }
 }
 
 struct MobileSourceDraft: Identifiable {
@@ -14,16 +20,16 @@ struct MobileSourceDraft: Identifiable {
     let data: Data
 }
 
-/// Explicit imports are authoritative; app startup never installs a source or subscription.
-/// Legacy single-file imports remain intact underneath atomic batch-import state.
+/// Desktop identities are available without installing user files; search remains opt-in.
+/// Explicit configured imports and incompatible saved bytes retain their own durable authority.
 @MainActor @Observable
 final class MobileSourceLibrary {
     private(set) var sources: [MobileSourceEntry] = []
     private(set) var issues: [String] = []
     private let directory: URL
-    private let bundled: () throws -> [SourceConfiguration]
+    private let bundled: () throws -> [RuntimeSource]
     private var directoryReadable = true
-    private(set) var subscriptionBaselines: [SourceConfiguration] = []
+    private(set) var subscriptionBaselines: [String: NativeSearchSource] = [:]
     private var subscriptionState: MobileSubscriptionState?
     private var subscriptionReadable = true
     private var importedConfigurations: [String: Data] = [:]
@@ -35,7 +41,7 @@ final class MobileSourceLibrary {
     private static let maximumStateBytes = 24 * 1024 * 1024
 
     init(directory: URL = URL.applicationSupportDirectory.appendingPathComponent("ANI/Sources", isDirectory: true),
-         bundled: @escaping () throws -> [SourceConfiguration] = { [] }) {
+         bundled: @escaping () throws -> [RuntimeSource] = { try RuntimeSource.builtins() }) {
         self.directory = directory
         self.bundled = bundled
         reload()
@@ -44,14 +50,22 @@ final class MobileSourceLibrary {
     static func forApp() -> MobileSourceLibrary {
         #if DEBUG
         let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("-native-playback-ui-fixture") {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("native-playback-test-" + UUID().uuidString)
+            return MobileSourceLibrary(directory: directory, bundled: { [.native("jibi")] })
+        }
         if arguments.contains("-empty-sources-ui-fixture") {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("empty-sources-test-" + UUID().uuidString)
-            let library = MobileSourceLibrary(directory: directory)
+            let library = MobileSourceLibrary(directory: directory, bundled: { [] })
             return library
+        }
+        if arguments.contains("-native-sources-ui-fixture") {
+            let directory = FileManager.default.temporaryDirectory.appendingPathComponent("native-sources-test-" + UUID().uuidString)
+            return MobileSourceLibrary(directory: directory)
         }
         if arguments.contains("-source-ui-fixture") || arguments.contains("-source-list-ui-fixture") {
             let directory = FileManager.default.temporaryDirectory.appendingPathComponent("source-list-test-" + UUID().uuidString)
-            let library = MobileSourceLibrary(directory: directory)
+            let library = MobileSourceLibrary(directory: directory, bundled: { [] })
             if let data = try? MobileSourceFixtures.configurationData(), let config = try? validate(data) {
                 _ = try? library.apply(MobileSourceDraft(configuration: config, data: data))
                 if arguments.contains("-source-list-ui-fixture"),
@@ -88,9 +102,23 @@ final class MobileSourceLibrary {
         return result
     }
 
+    private nonisolated static let nativeSources = Result {
+        try RuntimeSource.builtins().filter { if case .native = $0 { return true }; return false }
+    }
+
     nonisolated static func validate(_ data: Data) throws -> SourceConfiguration {
         guard !data.isEmpty, data.count <= 1024 * 1024 else { throw MobileSourceError.invalidResponse }
-        return try SourceConfiguration.load(data: data)
+        let configuration = try SourceConfiguration.load(data: data)
+        guard configuration.version != 3 else { throw MobileSourceError.inactiveWebSelector }
+        if configuration.version == 4, let search = configuration.search {
+            try SourceSearchExecutor.validate(search, allowedHosts: configuration.requestHosts)
+        }
+        let native = try nativeSources.get()
+        let hosts = Set(configuration.hosts.map { $0.lowercased() })
+        guard !native.contains(where: { $0.id == configuration.id || !hosts.isDisjoint(with: $0.hosts.map { $0.lowercased() }) }) else {
+            throw MobileSourceError.nativeConflict
+        }
+        return configuration
     }
 
     func prepare(_ url: URL) throws -> MobileSourceDraft {
@@ -112,6 +140,7 @@ final class MobileSourceLibrary {
         reload()
         guard directoryReadable else { throw MobileSourceError.unavailable }
         let validated = try Self.validatedDraft(draft)
+        try validateManualImportAgainstSubscription(validated)
         // Once an ID lives in the batch authority, all future updates must use that authority.
         if importedConfigurations[validated.id] != nil {
             return try apply(MobileSourceBatchDraft(drafts: [draft]))[0]
@@ -133,6 +162,7 @@ final class MobileSourceLibrary {
         var ids: [String] = []
         for draft in batch.drafts {
             let validated = try Self.validatedDraft(draft)
+            try validateManualImportAgainstSubscription(validated)
             guard updates[validated.id] == nil else { throw MobileSourceError.invalidSelection }
             updates[validated.id] = draft.data
             ids.append(validated.id)
@@ -162,7 +192,7 @@ final class MobileSourceLibrary {
     }
 
     private func requireSourceCapacity(adding ids: Set<String>) throws {
-        var existing = Set(subscriptionBaselines.map(\.id)).union(importedConfigurations.keys)
+        var existing = Set(sources.filter(\.imported).map(\.id)).union(importedConfigurations.keys)
         if FileManager.default.fileExists(atPath: directory.path) {
             let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil,
                                                                    options: [.skipsHiddenFiles])
@@ -181,13 +211,13 @@ final class MobileSourceLibrary {
         guard defaults.bool(forKey: "mobile.sources." + sourceID + ".enabled") else {
             throw PlaybackFailure.sourceDisabled
         }
-        return source.configuration.configurationRevision
+        return source.source.configurationRevision
     }
 
     func validateSubscriptionRevisions(_ expected: [String: String]) throws {
         reload()
         guard directoryReadable, subscriptionReadable,
-              Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.configuration.configurationRevision) }) == expected else {
+              try subscriptionRevisions() == expected else {
             throw MobileSubscriptionError.stale
         }
     }
@@ -198,19 +228,59 @@ final class MobileSourceLibrary {
         try validateSubscriptionRevisions(preview.revisions)
         var overrides = subscriptionState?.overrides ?? [:]
         for (id, value) in preview.state.overrides {
-            guard let baseline = subscriptionBaselines.first(where: { $0.id == id }),
-                  baseline.configurationRevision == value.baselineRevision else { throw MobileSubscriptionError.stale }
-            _ = try MobileSubscriptionConverter.replacingSearch(value.search, in: baseline)
+            guard let baseline = subscriptionBaselines[id],
+                  try SourceSubscriptionBaselines.revision(of: baseline) == value.baselineRevision else { throw MobileSubscriptionError.stale }
+            try SourceSearchExecutor.validate(value.search, allowedHosts: Set(baseline.hosts), resultURLTemplate: baseline.resultURLTemplate)
             overrides[id] = value
         }
+        let configurations = (subscriptionState?.configurations ?? [:]).merging(preview.state.configurations) { _, update in update }
+        let previousIDs = Set(subscriptionState?.configurations.keys.map { $0 } ?? [])
+        let base = sources.filter { !previousIDs.contains($0.id) }
+        _ = try Self.subscriptionConfigurations(configurations, alongside: base)
+        for id in configurations.keys {
+            guard importedConfigurations[id] == nil, !FileManager.default.fileExists(atPath: file(id).path) else {
+                throw MobileSubscriptionError.stale
+            }
+        }
         let next = MobileSubscriptionState(fingerprint: preview.state.fingerprint,
-            checkedAt: preview.state.checkedAt, overrides: overrides)
+            checkedAt: preview.state.checkedAt, overrides: overrides, configurations: configurations)
         let data = try JSONEncoder().encode(next)
         guard data.count <= 2 * 1024 * 1024 else { throw MobileSubscriptionError.malformed }
         let folder = directory.appendingPathComponent("SearchSubscription", isDirectory: true)
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         try data.write(to: folder.appendingPathComponent("state.json"), options: .atomic)
+        for id in configurations.keys where !previousIDs.contains(id) {
+            UserDefaults.standard.set(false, forKey: "mobile.sources." + id + ".enabled")
+        }
         reload()
+    }
+
+    private static func subscriptionConfigurations(_ values: [String: Data], alongside entries: [MobileSourceEntry]) throws -> [MobileSourceEntry] {
+        guard values.count + entries.filter(\.imported).count <= 100,
+              values.values.reduce(0, { $0 + $1.count }) <= maximumImportBytes else {
+            throw MobileSubscriptionError.malformed
+        }
+        var occupied = Set(entries.flatMap { $0.source.hosts })
+        var ids = Set(entries.map(\.id))
+        return try values.keys.sorted().map { id in
+            let configuration = try validate(values[id]!)
+            guard id.hasPrefix("web-"), configuration.version == 4, configuration.id == id,
+                  ids.insert(id).inserted, configuration.hosts.allSatisfy({ occupied.insert($0).inserted }) else {
+                throw MobileSubscriptionError.malformed
+            }
+            return MobileSourceEntry(source: .configured(configuration), imported: true,
+                search: configuration.search.map { NativeSearchSource(hosts: configuration.hosts, search: $0) })
+        }
+    }
+
+    private func validateManualImportAgainstSubscription(_ configuration: SourceConfiguration) throws {
+        guard let state = subscriptionState else { return }
+        for (id, data) in state.configurations {
+            let existing = try Self.validate(data)
+            guard id != configuration.id, Set(existing.hosts).isDisjoint(with: configuration.hosts) else {
+                throw MobileSourceError.invalidSelection
+            }
+        }
     }
 
     func reload() {
@@ -218,8 +288,9 @@ final class MobileSourceLibrary {
         var problems: [String] = []
         directoryReadable = true
         importedConfigurations = [:]
-        do { entries = try bundled().map { MobileSourceEntry(configuration: $0, imported: false) } }
-        catch { problems.append("source-list.json") }
+        do { entries = try bundled().map { MobileSourceEntry(source: $0, imported: false) } }
+        catch { problems.append(String(localized: "Built-in source catalog")) }
+        let builtinEntries = entries
         if FileManager.default.fileExists(atPath: directory.path) {
             do {
                 let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.fileSizeKey], options: [.skipsHiddenFiles])
@@ -229,13 +300,17 @@ final class MobileSourceLibrary {
                     do {
                         let draft = try prepare(url)
                         guard url.lastPathComponent == draft.configuration.id + ".json" else { throw MobileSourceError.invalidSelection }
-                        let entry = MobileSourceEntry(configuration: draft.configuration, imported: true)
+                        let entry = MobileSourceEntry(source: .configured(draft.configuration), imported: true)
                         if let index = entries.firstIndex(where: { $0.id == entry.id }) { entries[index] = entry }
                         else { entries.append(entry) }
                     } catch {
-                        // The filename reserves this source ID even when its replacement cannot be decoded.
-                        entries.removeAll { $0.id == url.deletingPathExtension().lastPathComponent }
-                        problems.append(url.lastPathComponent)
+                        let webSelector = Self.isWebSelectorFile(url)
+                        let inactive = webSelector || (error as? MobileSourceError) == .nativeConflict
+                        if !inactive { entries.removeAll { $0.id == url.deletingPathExtension().lastPathComponent } }
+                        let message = webSelector
+                            ? String(localized: "Saved webSelector configuration is inactive; original data retained.")
+                            : String(localized: "Source configuration conflicts with a built-in source; original data retained.")
+                        problems.append(url.lastPathComponent + (inactive ? " · " + message : ""))
                     }
                 }
             } catch { directoryReadable = false; entries = []; problems.append("Sources") }
@@ -253,14 +328,24 @@ final class MobileSourceLibrary {
                 }
                 var imports: [MobileSourceEntry] = []
                 for (id, data) in state.configurations {
-                    let config = try Self.validate(data)
-                    guard config.id == id else { throw MobileSourceError.invalidSelection }
-                    imports.append(MobileSourceEntry(configuration: config, imported: true))
+                    do {
+                        let config = try Self.validate(data)
+                        guard config.id == id else { throw MobileSourceError.invalidSelection }
+                        imports.append(MobileSourceEntry(source: .configured(config), imported: true))
+                    } catch MobileSourceError.inactiveWebSelector {
+                        problems.append(id + " · " + String(localized: "Saved webSelector configuration is inactive; original data retained."))
+                    } catch MobileSourceError.nativeConflict {
+                        problems.append(id + " · " + String(localized: "Source configuration conflicts with a built-in source; original data retained."))
+                    } catch {
+                        problems.append(id + " · " + String(localized: "Saved configuration is inactive; original data retained."))
+                    }
                 }
                 importedConfigurations = state.configurations
+                let inactiveIDs = Set(state.configurations.keys).subtracting(imports.map(\.id))
                 entries.removeAll { state.configurations[$0.id] != nil }
                 entries += imports
-                guard entries.count <= 100 else { throw MobileSourceError.invalidResponse }
+                entries += builtinEntries.filter { inactiveIDs.contains($0.id) }
+                guard entries.filter(\.imported).count <= 100 else { throw MobileSourceError.invalidResponse }
             } catch {
                 // Unknown or corrupt batch authority must never expose older shadowed configurations.
                 directoryReadable = false
@@ -270,7 +355,36 @@ final class MobileSourceLibrary {
             }
         }
         if !directoryReadable { entries = [] }
-        subscriptionBaselines = entries.map(\.configuration)
+        do {
+            let desktop = try SourceSubscriptionBaselines.load()
+            subscriptionBaselines = desktop.filter { id, baseline in
+                entries.contains { entry in
+                    guard entry.id == id else { return false }
+                    if !entry.imported { return true }
+                    // Imported JSON keeps its own playback parser. Only the exact desktop
+                    // search baseline can participate; never bind by name or host.
+                    guard let spec = entry.source.search else { return false }
+                    let metadata = NativeSearchSource(hosts: entry.source.hosts, search: spec,
+                        resultURLTemplate: spec.format == "json" && entry.source.configured?.version != 4 ? entry.source.configured?.route.detailTemplate : nil)
+                    return (try? SourceSubscriptionBaselines.revision(of: metadata)) ==
+                        (try? SourceSubscriptionBaselines.revision(of: baseline))
+                }
+            }
+            for index in entries.indices {
+                let source = entries[index].source
+                if !entries[index].imported && desktop[source.id] != nil { continue }
+                if let spec = source.search {
+                    entries[index].search = NativeSearchSource(hosts: source.hosts, search: spec,
+                        resultURLTemplate: spec.format == "json" && source.configured?.version != 4 ? source.configured?.route.detailTemplate : nil)
+                    if !SourceSubscriptionConverter.managedSourceIDs.contains(source.id) {
+                        subscriptionBaselines[source.id] = entries[index].search
+                    }
+                }
+            }
+        } catch {
+            subscriptionBaselines = [:]
+            problems.append(String(localized: "Desktop search baselines"))
+        }
         subscriptionReadable = true
         subscriptionState = nil
         let stateFile = directory.appendingPathComponent("SearchSubscription/state.json")
@@ -281,12 +395,20 @@ final class MobileSourceLibrary {
                 let state = try JSONDecoder().decode(MobileSubscriptionState.self, from: data)
                 guard state.overrides.count <= 100 else { throw MobileSubscriptionError.malformed }
                 subscriptionState = state
+                let staticEntries = try Self.subscriptionConfigurations(state.configurations, alongside: entries)
+                entries += staticEntries
+                for entry in staticEntries { subscriptionBaselines[entry.id] = entry.search }
                 for index in entries.indices {
-                    let baseline = entries[index].configuration
-                    guard let override = state.overrides[baseline.id],
-                          override.baselineRevision == baseline.configurationRevision else { continue }
-                    let updated = try MobileSubscriptionConverter.replacingSearch(override.search, in: baseline)
-                    entries[index] = MobileSourceEntry(configuration: updated, imported: entries[index].imported)
+                    let baseline = entries[index].source
+                    guard let override = state.overrides[baseline.id] else { continue }
+                    guard let metadata = subscriptionBaselines[baseline.id],
+                          override.baselineRevision == (try SourceSubscriptionBaselines.revision(of: metadata)) else {
+                        problems.append(baseline.id + " · " + String(localized: "Saved search rules are inactive; original data retained."))
+                        continue
+                    }
+                    try SourceSearchExecutor.validate(override.search, allowedHosts: Set(metadata.hosts), resultURLTemplate: metadata.resultURLTemplate)
+                    entries[index].search = NativeSearchSource(hosts: metadata.hosts, search: override.search,
+                        resultURLTemplate: metadata.resultURLTemplate)
                 }
             } catch {
                 // A corrupt installed rule must not silently fall back to a different fingerprint.
@@ -296,9 +418,33 @@ final class MobileSourceLibrary {
         let ordered = entries.sorted { $0.id < $1.id }
         if sources.count != ordered.count || zip(sources, ordered).contains(where: {
             $0.0.id != $0.1.id || $0.0.imported != $0.1.imported ||
-                $0.0.configuration.configurationRevision != $0.1.configuration.configurationRevision
+                $0.0.source.configurationRevision != $0.1.source.configurationRevision ||
+                $0.0.searchRevision != $0.1.searchRevision
         }) { sources = ordered }
         if issues != problems { issues = problems }
+    }
+
+    func client(for source: RuntimeSource) -> MobileSourceClient {
+        .make(source: source, search: sources.first(where: { $0.id == source.id })?.search)
+    }
+
+    func searchRevision(for sourceID: String, defaults: UserDefaults = .standard) throws -> String {
+        _ = try configurationRevision(for: sourceID, defaults: defaults)
+        guard let entry = sources.first(where: { $0.id == sourceID }) else { throw PlaybackFailure.configurationChanged }
+        return entry.searchRevision
+    }
+
+    func subscriptionRevisions() throws -> [String: String] {
+        Dictionary(uniqueKeysWithValues: sources.map {
+            ($0.id, $0.source.configurationRevision + ":" + $0.searchRevision)
+        })
+    }
+
+
+    private static func isWebSelectorFile(_ url: URL) -> Bool {
+        guard let data = try? Data(contentsOf: url),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return false }
+        return object["webSelector"] != nil
     }
 
     private var importStateFile: URL { directory.appendingPathComponent("ConfigurationImports/state.json") }

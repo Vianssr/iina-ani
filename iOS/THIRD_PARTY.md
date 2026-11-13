@@ -14,9 +14,15 @@ iPhone／iPad 工程透過 Swift Package Manager 連結 [MPVKit](https://github.
 
 播放器關閉時先由同一序列佇列取消輪詢並銷毀 libmpv，再釋放 Metal layer 與檔案授權；`stop(onStopped:)` 的 callback 在銷毀之後呼叫。載入、跳轉、速度及字幕均操作實際 libmpv 屬性／命令；不使用 AVPlayer 代替播放。App 不將 libmpv 原始日誌、完整媒體 URL 或字幕 URL 寫入 console／觀看歷史。
 
-暫不提供背景播放、畫中畫、AirPlay 或 DRM。來源解析由完整宣告式配置驅動，內建番茄動漫並可匯入其他相容來源。進入背景、音訊中斷及耳機移除會暫停；回到前景由使用者繼續播放。
+暫不提供背景播放、畫中畫、AirPlay 或 DRM。來源解析使用 `SourceRuntime` 中從桌面移植的 16 個 CSS1 來源原生適配器及完整配置解析器，另內建番茄動漫配置。CSS1 訂閱只更新搜尋規則，不匯入遠端播放器程式碼。進入背景、音訊中斷及耳機移除會暫停；回到前景由使用者繼續播放。
 
 
 ## HTML 來源解析
 
 iOS 工程新增固定版本 [SwiftSoup 2.13.7](https://github.com/scinfu/SwiftSoup/tree/2.13.7)，與桌面目前鎖定版本一致。用於解析搜尋結果、線路與集數 HTML，不執行頁面 JavaScript。MIT 授權原文位於 [SwiftSoup-MIT.txt](../Native/licenses/SwiftSoup-MIT.txt)，隨 App 資源打包。
+
+## 來源解密
+
+`SourceRuntime` 固定使用 [CryptoSwift 1.9.0](https://github.com/krzyzanowskim/CryptoSwift/tree/1.9.0)，保留桌面原生來源所需的 AES／雜湊行為。授權原文隨 `SourceCore_SourceRuntime.bundle` 打包，位於 [CryptoSwift-LICENSE.txt](../SourceCore/Sources/SourceRuntime/Resources/CryptoSwift-LICENSE.txt)。未修改上游 CryptoSwift 原始碼。
+
+This product includes software developed by the "Marcin Krzyzanowski" (http://krzyzanowskim.com/).

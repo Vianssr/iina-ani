@@ -1,298 +1,281 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 
-private actor ConfigurationDownloadGate {
+private actor SourceImportGate {
     private var continuation: CheckedContinuation<Data, Never>?
-    private let data: Data
-    var waiting: Bool { continuation != nil }
+    let data: Data
     init(_ data: Data) { self.data = data }
+    var waiting: Bool { continuation != nil }
     func fetch() async -> Data { await withCheckedContinuation { continuation = $0 } }
     func release() { continuation?.resume(returning: data); continuation = nil }
 }
 
 @MainActor enum SourceURLImportRegression {
     static func run(root: URL) async throws {
-        for invalid in ["", "https://", "http://config.example/source.json", "file:///tmp/source.json",
-                        "javascript:alert(1)", "https://user:password@config.example/source.json",
-                        "https://config.example/source.json#fragment", "https://config.example/a b.json"] {
-            precondition(MobileSourceImportTransport.parse(invalid) == nil)
-        }
-        let url = MobileSourceImportTransport.parse(" \nhttps://config.example/source.json?version=1 \n")!
-        precondition(url.host == "config.example")
-        let request = MobileSourceImportTransport.anonymousRequest(url)
-        precondition(request.httpShouldHandleCookies == false)
-        precondition(request.value(forHTTPHeaderField: "Cookie") == nil)
-        precondition(request.value(forHTTPHeaderField: "Authorization") == nil)
-        precondition(request.value(forHTTPHeaderField: "Accept") == "application/json")
-
-        // Redirect requests are rebuilt, including redirects to a second HTTPS host.
-        let delegate = MobileSourceImportTransport()
-        let session = URLSession(configuration: .ephemeral)
-        defer { session.invalidateAndCancel() }
-        let task = session.dataTask(with: url)
-        let redirect = HTTPURLResponse(url: url, statusCode: 302, httpVersion: nil, headerFields: nil)!
-        var redirected = URLRequest(url: URL(string: "https://cdn.example/source.json")!)
-        redirected.setValue("secret", forHTTPHeaderField: "Cookie")
-        redirected.setValue("secret", forHTTPHeaderField: "Authorization")
-        redirected.setValue("secret", forHTTPHeaderField: "Proxy-Authorization")
-        delegate.urlSession(session, task: task, willPerformHTTPRedirection: redirect, newRequest: redirected) { cleaned in
-            precondition(cleaned?.url?.host == "cdn.example")
-            precondition(cleaned?.httpShouldHandleCookies == false)
-            for name in ["Cookie", "Authorization", "Proxy-Authorization"] {
-                precondition(cleaned?.value(forHTTPHeaderField: name) == nil)
+        let original = try Data(contentsOf: root.appendingPathComponent("IINA-ANI/Sources/fqdm.json"))
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("runtime-import-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = MobileSourceLibrary(directory: directory.appendingPathComponent("Sources"))
+        let expected: Set<String> = ["xifan", "girigiri", "didahd", "jibi", "eacg", "senfun", "kanba", "haixing", "yinghua", "dilidili", "youknow", "hanime1", "wedm", "fengche", "rebo", "mutedm", "fqdm"]
+        precondition(Set(library.sources.map(\.id)) == expected)
+        precondition(library.sources.allSatisfy { !$0.imported && $0.search == nil })
+        precondition(library.sources.allSatisfy { !library.client(for: $0.source).capabilities.contains(.search) })
+        precondition(!FileManager.default.fileExists(atPath: directory.path))
+        let keys = expected.union(["imported-json"]).map { "mobile.sources." + $0 + ".enabled" }
+        let prior = Dictionary(uniqueKeysWithValues: keys.map { ($0, UserDefaults.standard.object(forKey: $0) ?? NSNull()) })
+        defer {
+            for (key, value) in prior {
+                if value is NSNull { UserDefaults.standard.removeObject(forKey: key) }
+                else { UserDefaults.standard.set(value, forKey: key) }
             }
         }
-        for invalid in ["http://cdn.example/source.json", "https://user:secret@cdn.example/source.json"] {
-            delegate.urlSession(session, task: task, willPerformHTTPRedirection: redirect,
-                                newRequest: URLRequest(url: URL(string: invalid)!)) { precondition($0 == nil) }
+        for key in keys { UserDefaults.standard.removeObject(forKey: key) }
+        library.reload()
+        for entry in library.sources {
+            do { _ = try library.configurationRevision(for: entry.id); fatalError("New builtin enabled without consent") }
+            catch PlaybackFailure.sourceDisabled {}
         }
-
-        let data = try Data(contentsOf: root.appendingPathComponent("IINA-ANI/Sources/fqdm.json"))
-        let config = try MobileSourceLibrary.validate(data)
-        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
-        defer { try? FileManager.default.removeItem(at: directory) }
-        let library = MobileSourceLibrary(directory: directory, bundled: { [] })
-        let importer = MobileSourceURLImport { _ in data }
-        importer.load(url.absoluteString)
-        await idle(importer)
-        precondition(importer.failure == nil && importer.draft?.configuration.id == config.id)
-        precondition(library.sources.isEmpty && !FileManager.default.fileExists(atPath: directory.path))
-        let draft = importer.draft!
-        try library.apply(draft)
-        precondition(library.sources.map(\.id) == [config.id])
-        precondition(!UserDefaults.standard.bool(forKey: "mobile.sources." + config.id + ".enabled"))
-        precondition(MobileSourceLibrary(directory: directory, bundled: { [] }).replaces(draft))
-        let before = try Data(contentsOf: directory.appendingPathComponent(config.id + ".json"))
-
-        for bad in [Data("<html>not JSON</html>".utf8), Data(repeating: 32, count: MobileSourceImportTransport.maximumBytes + 1)] {
-            let invalid = MobileSourceURLImport { _ in bad }
-            invalid.load(url.absoluteString)
-            await idle(invalid)
-            precondition(invalid.draft == nil)
-            guard case .invalidConfiguration? = invalid.failure else { fatalError("Missing configuration validation failure") }
+        for invalid in ["http://configuration.example/source.json", "https://user:secret@configuration.example/source.json", "https://configuration.example/source.json#fragment", "file:///tmp/source.json", "https://localhost/source.json", "https://127.0.0.1/source.json", "https://192.168.1.1/source.json", "https://router.local/source.json", "https://configuration.example:8443/source.json"] {
+            precondition(MobileSourceImportTransport.parse(invalid) == nil)
         }
-        let failing = MobileSourceURLImport(fetch: { _ in throw URLError(.timedOut) })
-        failing.load(url.absoluteString)
-        await idle(failing)
-        guard case .download? = failing.failure else { fatalError("Missing retryable download failure") }
-        let unchanged = try Data(contentsOf: directory.appendingPathComponent(config.id + ".json"))
-        precondition(unchanged == before)
-
-        // Cancelling or entering a different URL invalidates even a transport ignoring cancellation.
-        for replace in [false, true] {
-            let gate = ConfigurationDownloadGate(data)
-            let pending = MobileSourceURLImport { _ in await gate.fetch() }
-            pending.load(url.absoluteString)
-            while !(await gate.waiting) { await Task.yield() }
-            if replace { pending.load("invalid") } else { pending.cancel() }
-            await gate.release()
-            for _ in 0..<100 { await Task.yield() }
-            precondition(!pending.busy && pending.draft == nil)
-            if replace {
-                guard case .invalidAddress? = pending.failure else { fatalError("Stale download replaced current error") }
-            } else { precondition(pending.failure == nil) }
-        }
-        try await formats(data: data, root: directory)
-        try await subscriptions(data: data, root: directory)
-        print("PASS: URL configuration review/commit separation, validation, anonymous HTTPS redirects, failure preservation and stale/cancelled downloads")
-    }
-
-    private static func formats(data: Data, root: URL) async throws {
-        let original = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        var second = original
-        second["id"] = "import-second"
-        let secondData = try JSONSerialization.data(withJSONObject: second)
-        let base = URL(string: "https://config.example/folder/list.json?revision=2")!
-        for body in [try JSONSerialization.data(withJSONObject: [original, second]),
-                     try JSONSerialization.data(withJSONObject: ["version": 1, "sources": [original, second]])] {
-            let importer = MobileSourceURLImport { _ in body }
-            importer.load(base.absoluteString)
-            await idle(importer)
-            precondition(importer.draft == nil && importer.subscriptionPreview == nil && importer.failure == nil,
-                         "List preview failed: \(String(describing: importer.failure)), root byte \(body.first ?? 0)")
-            precondition(importer.batch?.drafts.map(\.configuration.id) == ["fqdm", "import-second"])
-            importer.clearPreview()
-            precondition(importer.batch == nil)
-        }
-        var nativeWithExtra = original
-        nativeWithExtra["sources"] = ["https://never.example/source.json"]
-        let nativeBody = try JSONSerialization.data(withJSONObject: nativeWithExtra)
-        let single = MobileSourceURLImport { _ in nativeBody }
-        single.load(base.absoluteString)
+        let configurationURL = URL(string: "https://configuration.example/folder/source.json")!
+        let single = MobileSourceURLImport(fetch: { _ in original })
+        single.load(configurationURL.absoluteString, library: library)
         await idle(single)
-        precondition(single.draft == nil && single.batch == nil)
-        guard case .invalidConfiguration? = single.failure else { fatalError("Unknown native keys became a manifest") }
-
-        let manifest = try JSONSerialization.data(withJSONObject: ["version": 1,
-            "sources": ["first.json?version=3", "https://other.example/second.json"]])
-        let redirectedBase = URL(string: "https://cdn.example/export/list.json")!
-        let references = MobileSourceURLImport(fetchResponse: { url in
-            if url == base { return .init(data: manifest, url: redirectedBase) }
-            if url.absoluteString == "https://cdn.example/export/first.json?version=3" { return .init(data: data, url: url) }
-            if url.absoluteString == "https://other.example/second.json" { return .init(data: secondData, url: url) }
-            preconditionFailure("Relative reference did not use final response URL")
+        precondition(single.draft?.configuration.id == "fqdm" && single.failure == nil)
+        precondition(library.sources.first(where: { $0.id == "fqdm" })?.imported == false)
+        single.cancel()
+        precondition(single.draft == nil)
+        var object = try JSONSerialization.jsonObject(with: original) as! [String: Any]
+        object["id"] = "imported-json"
+        var hijack = object
+        hijack["id"] = "jibi"
+        do { _ = try MobileSourceLibrary.validate(JSONSerialization.data(withJSONObject: hijack)); fatalError("Native source ID hijacked") }
+        catch MobileSourceError.nativeConflict {}
+        let nativeHost = String(decoding: original, as: UTF8.self).replacingOccurrences(of: "fqdm.cc", with: "jibi.cc")
+        do { _ = try MobileSourceLibrary.validate(Data(nativeHost.utf8)); fatalError("Native source host hijacked") }
+        catch MobileSourceError.nativeConflict {}
+        object["name"] = "Explicit configured source"
+        let configured = try JSONSerialization.data(withJSONObject: object)
+        let list = try JSONSerialization.data(withJSONObject: ["version": 1, "sources": [object, "source.json"]])
+        let importer = MobileSourceURLImport(fetchResponse: { url in
+            if url.path.hasSuffix("list.json") { return .init(data: list, url: URL(string: "https://configuration.example/final/list.json")!) }
+            precondition(url.absoluteString == "https://configuration.example/final/source.json")
+            return .init(data: original, url: url)
         })
-        references.load(base.absoluteString)
-        await idle(references)
-        precondition(references.batch?.drafts.count == 2)
-
-        let rejected: [Any] = [[], [original, original], [original, "http://other.example/source.json"],
-            [original, "https://user:secret@other.example/source.json"], [original, 7],
-            ["version": 2, "sources": [original]], ["version": true, "sources": [original]],
-            ["sources": [original]], ["version": 1, "sources": Array(repeating: original, count: 101)]]
-        for object in rejected {
-            let body = try JSONSerialization.data(withJSONObject: object)
-            let importer = MobileSourceURLImport { _ in body }
-            importer.load(base.absoluteString)
-            await idle(importer)
-            precondition(importer.draft == nil && importer.batch == nil && importer.subscriptionPreview == nil)
-            guard case .invalidConfiguration? = importer.failure else { fatalError("Malformed list accepted") }
-        }
-        let partialBody = try JSONSerialization.data(withJSONObject: [original, "https://other.example/missing.json"])
-        let partial = MobileSourceURLImport { url in
-            if url == base { return partialBody }
-            throw URLError(.fileDoesNotExist)
-        }
-        partial.load(base.absoluteString)
-        await idle(partial)
-        precondition(partial.batch == nil && partial.draft == nil)
-        guard case .download? = partial.failure else { fatalError("Partial download exposed a preview") }
-
-        let gate = ConfigurationDownloadGate(secondData)
-        let pending = MobileSourceURLImport { url in
-            if url == base { return partialBody }
-            return await gate.fetch()
-        }
-        pending.load(base.absoluteString)
-        while !(await gate.waiting) { await Task.yield() }
-        pending.cancel()
-        await gate.release()
-        for _ in 0..<100 { await Task.yield() }
-        precondition(pending.batch == nil && pending.draft == nil && pending.failure == nil)
-
-        var oversized = original
-        oversized["name"] = String(repeating: "x", count: 1024 * 1024)
-        let oversizedData = try JSONSerialization.data(withJSONObject: oversized)
-        precondition(oversizedData.count < MobileSourceImportTransport.maximumBytes)
-        let tooLarge = MobileSourceURLImport { _ in oversizedData }
-        tooLarge.load(base.absoluteString)
-        await idle(tooLarge)
-        guard case .invalidConfiguration? = tooLarge.failure else { fatalError("Native config exceeded 1 MiB") }
-
-        var padded: [String: Data] = [:]
-        for index in 0..<20 {
-            var entry = original
-            entry["id"] = "limit-\(index)"
-            entry["name"] = String(repeating: "x", count: 900_000)
-            padded["https://config.example/\(index).json"] = try JSONSerialization.data(withJSONObject: entry)
-        }
-        let payloads = padded
-        let many = try JSONSerialization.data(withJSONObject: payloads.keys.sorted())
-        let total = MobileSourceURLImport { url in url == base ? many : payloads[url.absoluteString]! }
-        total.load(base.absoluteString)
-        await idle(total)
-        precondition(total.batch == nil)
-        guard case .invalidConfiguration? = total.failure else { fatalError("Aggregate download limit was ignored") }
-        print("PASS: native single/list formats, final-URL relative references, duplicates/limits and no partial or cancelled batch preview")
-    }
-
-    private static func subscriptions(data: Data, root: URL) async throws {
-        var custom = try JSONSerialization.jsonObject(with: data) as! [String: Any]
-        custom["id"] = "custom-source"
-        let replaced = String(decoding: try JSONSerialization.data(withJSONObject: custom), as: UTF8.self)
-            .replacingOccurrences(of: "fqdm.cc", with: "custom.example")
-        let baseline = try MobileSourceLibrary.validate(Data(replaced.utf8))
-        let library = MobileSourceLibrary(directory: root.appendingPathComponent("custom"), bundled: { [baseline] })
-        let search = baseline.search!
-        func item(_ selector: String, url: String? = nil, format: String = "a") -> [String: Any] {
-            ["factoryId": "web-selector", "version": 2, "arguments": ["name": "Custom source", "searchConfig": [
-                "searchUrl": url ?? search.url.replacingOccurrences(of: "{query}", with: "{keyword}"),
-                "subjectFormatId": format, "selectorSubjectFormatA": ["selectLists": selector],
-                "selectorSubjectFormatIndexed": ["selectNames": "a", "selectLinks": "a"],
-                "channelFormatId": "no-channel", "selectorChannelFormatNoChannel": ["selectEpisodes": "a.episode"]]]]
-        }
-        let currentItem = item("a.current")
-        let oldItem = item("a.old")
-        let both = try JSONSerialization.data(withJSONObject: ["mediaSources": [currentItem],
-            "exportedMediaSourceDataList": ["mediaSources": [oldItem]]])
-        let mirror = "https://arbitrary.example/rules.json?token=opaque"
-        for body in [both, try JSONSerialization.data(withJSONObject: ["exportedMediaSourceDataList": ["mediaSources": [currentItem]]])] {
-            let importer = MobileSourceURLImport(probe: { _ in true }) { _ in body }
-            importer.load(mirror, library: library)
-            await idle(importer)
-            precondition(importer.draft == nil && importer.subscriptionPreview == nil && importer.failure == nil)
-            precondition(importer.batch?.drafts.count == 1)
-            precondition(importer.batch?.drafts.first?.configuration.webSelector?.searchNames == "a.current")
-            precondition(library.sources.first?.configuration.configurationRevision == baseline.configurationRevision)
-            importer.clearPreview()
-            precondition(importer.batch == nil)
-        }
-        let noSources = MobileSourceURLImport(probe: { _ in true }) { _ in both }
-        noSources.load(mirror)
-        await idle(noSources)
-        precondition(noSources.failure == nil && noSources.batch?.drafts.count == 1)
-
-        let unhealthy = MobileSourceURLImport(probe: { _ in false }) { _ in both }
-        unhealthy.load(mirror, library: library)
-        await idle(unhealthy)
-        precondition(unhealthy.failure == nil && unhealthy.batch?.drafts.isEmpty == true)
-        precondition(unhealthy.batch?.notices.count == 1)
-        precondition(library.sources.first?.configuration.configurationRevision == baseline.configurationRevision)
-        var goodItem = currentItem
-        goodItem["id"] = "healthy-source"
-        var args = goodItem["arguments"] as! [String: Any]
-        args["name"] = "Healthy source"
-        goodItem["arguments"] = args
-        let mixedData = try JSONSerialization.data(withJSONObject: ["mediaSources": [currentItem, goodItem]])
-        let mixedBatch = try MobileCSS1Configuration.convert(data: mixedData)
-        let checked = try await MobileSourceURLImport.verified(mixedBatch) { config in
-            if config.id == "healthy-source" { return true }
-            throw PlaybackFailure.authenticationRequired
-        }
-        precondition(checked.drafts.map(\.configuration.id) == ["healthy-source"])
-        precondition(checked.notices.count == 1 && checked.notices[0].contains("Custom source"))
-        for reason in [PlaybackFailure.unsupportedEncryption, .catalogStructure, .httpForbidden, .websiteVerification, .indirectMedia] {
-            let diagnosed = try await MobileSourceURLImport.verified(mixedBatch) { _ in throw reason }
-            precondition(diagnosed.drafts.isEmpty)
-            precondition(diagnosed.notices.count == 2 && diagnosed.notices.allSatisfy { $0.contains(reason.mobileMessage) })
-        }
-        let nativeDraft = MobileSourceDraft(configuration: baseline, data: try baseline.encodedData())
-        let nativeChecked = try await MobileSourceURLImport.verified(.init(drafts: [nativeDraft])) { _ in
-            preconditionFailure("Native configuration should not be sampled")
-        }
-        precondition(nativeChecked.drafts.count == 1 && nativeChecked.notices.isEmpty)
-
-        let checkGate = ConfigurationDownloadGate(Data())
-        let checking = MobileSourceURLImport(probe: { _ in _ = await checkGate.fetch(); return true }) { _ in both }
-        checking.load(mirror)
-        while !(await checkGate.waiting) { await Task.yield() }
-        checking.cancel()
-        await checkGate.release()
-        for _ in 0..<100 { await Task.yield() }
-        precondition(checking.batch == nil && !checking.busy && checking.failure == nil)
-
-        var duplicate = try JSONSerialization.jsonObject(with: baseline.encodedData()) as! [String: Any]
-        duplicate["id"] = "same-host-source"
-        let sameHost = try MobileSourceLibrary.validate(JSONSerialization.data(withJSONObject: duplicate))
-        let ambiguous = try MobileSubscriptionConverter.convert(both, baselines: [baseline, sameHost], current: [baseline, sameHost])
-        precondition(ambiguous.state.overrides.isEmpty)
-        for invalid in [item("a", url: "https://www.custom.example/another?wd={keyword}"),
-                        item("a", url: search.url.replacingOccurrences(of: "{query}", with: "{keyword}") + "&injected=value"),
-                        item("a", format: "indexed")] {
-            let body = try JSONSerialization.data(withJSONObject: ["mediaSources": [invalid]])
-            let rejected = try MobileSubscriptionConverter.convert(body, baselines: [baseline], current: [baseline])
-            precondition(rejected.state.overrides.isEmpty)
-        }
-
-        let gate = ConfigurationDownloadGate(both)
-        let cancelled = MobileSourceURLImport(probe: { _ in true }) { _ in await gate.fetch() }
-        cancelled.load(mirror, library: library)
+        importer.load("https://configuration.example/list.json", library: library)
+        await idle(importer)
+        let batch = importer.batch!
+        precondition(batch.drafts.map { $0.configuration.id } == ["imported-json", "fqdm"])
+        try library.apply(batch)
+        precondition(library.sources.first(where: { $0.id == "imported-json" })?.imported == true)
+        precondition(library.sources.first(where: { $0.id == "fqdm" })?.search != nil)
+        let duplicate = try JSONSerialization.data(withJSONObject: ["version": 1, "sources": [object, object]])
+        let duplicateImporter = MobileSourceURLImport(fetch: { _ in duplicate })
+        duplicateImporter.load(configurationURL.absoluteString, library: library)
+        await idle(duplicateImporter)
+        precondition(duplicateImporter.failure == .invalidConfiguration && duplicateImporter.batch == nil)
+        let gate = SourceImportGate(configured)
+        let cancelled = MobileSourceURLImport(fetch: { _ in await gate.fetch() })
+        cancelled.load(configurationURL.absoluteString, library: library)
         while !(await gate.waiting) { await Task.yield() }
         cancelled.cancel()
         await gate.release()
-        for _ in 0..<100 { await Task.yield() }
-        precondition(cancelled.batch == nil && cancelled.subscriptionPreview == nil && cancelled.failure == nil)
-        print("PASS: standalone arbitrary-URL CSS1, top-level precedence/legacy fallback, legacy custom-host restrictions and cancellation")
+        for _ in 0..<20 { await Task.yield() }
+        precondition(cancelled.draft == nil && cancelled.batch == nil && cancelled.subscriptionPreview == nil && !cancelled.busy)
+        try await customSubscription(original: original, directory: directory.appendingPathComponent("Subscription"))
+        try await staticSubscription(directory: directory.appendingPathComponent("StaticSubscription"))
+        try inactiveLegacy(original: original, directory: directory.appendingPathComponent("Legacy"))
+        print("PASS: exact seventeen managed sources, opt-in search, configured imports, custom subscription URLs, cancellation and inactive legacy byte preservation")
+    }
+
+    private static func staticSubscription(directory: URL) async throws {
+        let rules: [String: Any] = ["factoryId": "web-selector", "version": 2, "arguments": ["name": "Static fixture", "searchConfig": [
+            "searchUrl": "https://static.example/search/{keyword}?page={page}", "subjectFormatId": "indexed",
+            "selectorSubjectFormatIndexed": ["selectNames": ".row .title", "selectLinks": ".row a"],
+            "channelFormatId": "index-grouped", "selectorChannelFormatFlattened": [
+                "selectChannelNames": ".line", "selectEpisodeLists": ".episodes", "selectEpisodesFromList": "a"]]]]
+        let data = try JSONSerialization.data(withJSONObject: ["mediaSources": [rules]])
+        let configuration = try SourceWebConfigurationConverter.configuration(rules)
+        let key = "mobile.sources." + configuration.id + ".enabled"
+        let old = UserDefaults.standard.object(forKey: key)
+        defer {
+            if let old { UserDefaults.standard.set(old, forKey: key) }
+            else { UserDefaults.standard.removeObject(forKey: key) }
+        }
+        UserDefaults.standard.removeObject(forKey: key)
+        let library = MobileSourceLibrary(directory: directory)
+        let importer = MobileSourceURLImport(fetch: { _ in data })
+        importer.load("https://mirror.example/static.json", library: library)
+        await idle(importer)
+        guard let preview = importer.subscriptionPreview else { fatalError("Static subscription preview missing") }
+        precondition(preview.state.configurations.keys.sorted() == [configuration.id])
+        precondition(!library.sources.contains { $0.id == configuration.id })
+        try library.applySubscription(preview)
+        precondition(!UserDefaults.standard.bool(forKey: key))
+        let reopened = MobileSourceLibrary(directory: directory)
+        guard let entry = reopened.sources.first(where: { $0.id == configuration.id }) else { fatalError("Static source not reloaded") }
+        precondition(entry.source.configurationRevision == configuration.configurationRevision)
+        let client = MobileSourceClient(source: entry.source, search: entry.search, fetch: { request in
+            let html: String
+            switch request.url!.path {
+            case let path where path.hasPrefix("/search/"):
+                html = "<div class='row'><span class='title'>Fixture</span><a href='/work/alpha'>Open</a></div>"
+            case "/work/alpha":
+                html = "<h2 class='line'>Line A</h2><div class='episodes'><a href='/watch/alpha-one'>第1集</a><a href='/watch/alpha-two'>第2集</a></div>"
+            case "/watch/alpha-two": html = "<video src='https://media.example/alpha-two.mp4'></video>"
+            default: throw MobileSourceError.invalidSelection
+            }
+            return SourceHTTPResponse(data: Data(html.utf8), url: request.url!, statusCode: 200)
+        })
+        let page = try await client.search("Fixture")
+        precondition(page.works.count == 1)
+        let catalog = try await client.catalog(page.works[0])
+        let episode = catalog.lines[0].episodes[1]
+        let context = try client.playbackContext(episode, in: catalog, requestedWork: nil, requestedEpisode: nil)
+        precondition(context.selection.episode?.kind == .episode)
+        let restored = try client.episode(matching: context.selection, in: catalog)
+        precondition(restored == episode)
+        let media = try await client.resolve(episode, in: catalog)
+        precondition(media.path == "/alpha-two.mp4")
+        // A preview is bound to both configured and search revisions, even for new sources.
+        do { try library.applySubscription(preview); fatalError("Stale static preview accepted") }
+        catch MobileSubscriptionError.stale {}
+    }
+
+    private static func customSubscription(original: Data, directory: URL) async throws {
+        let library = MobileSourceLibrary(directory: directory)
+        let baselines = try SourceSubscriptionBaselines.load()
+        let baseline = baselines["fqdm"]!
+        let item: [String: Any] = ["factoryId": "web-selector", "version": 2, "arguments": ["name": "Tomato rules", "searchConfig": [
+            "searchUrl": baseline.search.url.replacingOccurrences(of: "{query}", with: "{keyword}"), "subjectFormatId": "a",
+            "selectorSubjectFormatA": ["selectLists": "a.subscription-result"]]]]
+        let data = try JSONSerialization.data(withJSONObject: ["mediaSources": [item]])
+        let fetch: SourceHTTPTransport.Fetch = { request in
+            SourceHTTPResponse(data: Data("<a class='subscription-result' href='/index.php/vod/detail/id/42.html'>Fixture</a>".utf8), url: request.url!, statusCode: 200)
+        }
+        let importer = MobileSourceURLImport(searchFetch: fetch, fetch: { _ in data })
+        importer.load("https://mirror.example/rules.json", library: library)
+        await idle(importer)
+        precondition(importer.failure == nil && importer.subscriptionPreview?.state.overrides.keys.sorted() == ["fqdm"])
+        precondition(library.sources.first(where: { $0.id == "fqdm" })?.search == nil, "Downloading a custom feed must not apply it")
+        importer.cancel()
+        precondition(importer.subscriptionPreview == nil)
+        let nested = try JSONSerialization.data(withJSONObject: ["exportedMediaSourceDataList": ["mediaSources": [item]]])
+        let mirror = MobileSourceURLImport(searchFetch: fetch, fetchResponse: { _ in
+            .init(data: nested, url: URL(string: "https://raw.githubusercontent.com/fixture/sources/main/online.json")!)
+        })
+        mirror.load("https://mirror.example/online.json", library: library)
+        await idle(mirror)
+        precondition(mirror.failure == nil && mirror.subscriptionPreview?.state.overrides.keys.sorted() == ["fqdm"], "Redirected nested subscriptions must use the same preview flow")
+        mirror.cancel()
+        let rejected = MobileSourceURLImport(fetchResponse: { _ in
+            .init(data: data, url: URL(string: "https://127.0.0.1/rules.json")!)
+        })
+        rejected.load("https://mirror.example/rules.json", library: library)
+        await idle(rejected)
+        precondition(rejected.failure == .invalidConfiguration && rejected.subscriptionPreview == nil)
+        let revision = library.sources.first(where: { $0.id == "fqdm" })!.source.configurationRevision
+        importer.load(SourceSubscriptionTransport.endpoint.absoluteString, library: library)
+        await idle(importer)
+        precondition(importer.failure == nil && importer.draft == nil && importer.batch == nil)
+        let preview = importer.subscriptionPreview!
+        precondition(preview.state.overrides.keys.sorted() == ["fqdm"])
+        try library.applySubscription(preview)
+        let source = library.sources.first(where: { $0.id == "fqdm" })!
+        precondition(source.source.configurationRevision == revision && source.search != nil && !source.imported)
+        precondition(!UserDefaults.standard.bool(forKey: "mobile.sources.fqdm.enabled"))
+        precondition(library.client(for: source.source).capabilities.contains(.search))
+        precondition(library.sources.count == 17)
+    }
+
+    private static func inactiveLegacy(original: Data, directory: URL) throws {
+        let id = "jibi"
+        let legacy: [String: Any] = ["id": id, "name": "Saved user selector", "version": 3,
+            "hosts": ["legacy.example"], "mediaHosts": [], "anonymousExternalHTTPSMedia": true, "credentialHosts": [],
+            "capabilities": ["information", "resolve", "episodes", "lines", "mpv", "search"],
+            "route": ["pattern": "^/(.*)$", "idGroup": 1, "detailTemplate": "https://legacy.example/{id}"],
+            "catalog": ["url": "https://legacy.example/{id}", "format": "web-selector"],
+            "player": ["format": "web-selector", "allowedExtensions": ["m3u8", "mp4"]],
+            "search": ["url": "https://legacy.example/search?q={query}", "format": "web-selector", "queryParameter": "", "pageParameter": "", "rowsPerPage": 100],
+            "webSelector": ["baseURL": "https://legacy.example", "relativeLinksUseSearchURL": true, "subjectFormat": "a", "searchNames": "a.result", "searchLinks": "a.result", "channelFormat": "no-channel", "episodeNames": "a.episode"]]
+        let data = try JSONSerialization.data(withJSONObject: legacy, options: [.prettyPrinted, .sortedKeys])
+        let old = try SourceConfiguration.load(data: data)
+        do { _ = try MobileSourceLibrary.validate(data); fatalError("New selector import accepted") }
+        catch MobileSourceError.inactiveWebSelector {}
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let legacyFile = directory.appendingPathComponent(id + ".json")
+        try data.write(to: legacyFile)
+        let key = "mobile.sources." + id + ".enabled"
+        UserDefaults.standard.set(true, forKey: key)
+        let collectionFile = directory.appendingPathComponent("Library/library.json")
+        let collection = MobileLibrary(file: directory.appendingPathComponent("Library/favorites.json"), libraryFile: collectionFile)
+        let work = PlaybackWorkIdentity.bangumi(141)
+        let episode = PlaybackEpisodeIdentity.bangumi(142, type: 0, sort: 1)
+        let mapping = ConfirmedSourceMapping(context: PlaybackContext(work: work, episode: episode,
+            selection: PlayableSelection(item: .init(sourceID: id, pageURL: "https://legacy.example/show?id=1", kind: .work),
+                episode: .init(sourceID: id, pageURL: "https://legacy.example/watch?id=1", kind: .episode), lineID: "1"),
+            configurationRevision: old.configurationRevision), sourceTitle: "Saved title")
+        try collection.saveMapping(mapping)
+        let collectionBytes = try Data(contentsOf: collectionFile)
+        let library = MobileSourceLibrary(directory: directory)
+        let reviewed = library.sources.first { $0.id == id }!
+        precondition(!reviewed.imported && reviewed.source.configured == nil)
+        precondition(reviewed.source.configurationRevision != mapping.context.configurationRevision)
+        let stale = MobileSourceFlow(client: library.client(for: reviewed.source), requestedWork: work,
+            requestedEpisode: episode, authority: { reviewed.source.configurationRevision }, resumeMapping: mapping)
+        stale.updateAccess(enabled: true, configurationRevision: reviewed.source.configurationRevision)
+        precondition(stale.requiresReconfirmation && stale.failure == .configurationChanged)
+        precondition(library.issues.contains { $0.contains("webSelector") && $0.contains("retained") })
+        precondition(UserDefaults.standard.bool(forKey: key))
+        let legacyBytes = try Data(contentsOf: legacyFile)
+        precondition(legacyBytes == data)
+        let after = try Data(contentsOf: collectionFile)
+        precondition(after == collectionBytes && collection.storedMapping(for: work, episode: episode) == mapping)
+        // The batch authority reserves inactive IDs independently, without discarding healthy imports.
+        struct State: Codable { let version: Int; let configurations: [String: Data] }
+        var config = try JSONSerialization.jsonObject(with: original) as! [String: Any]
+        config["id"] = "healthy-configured"
+        let healthy = try JSONSerialization.data(withJSONObject: config)
+        var invalidLegacy = legacy
+        invalidLegacy["version"] = 2
+        let invalidData = try JSONSerialization.data(withJSONObject: invalidLegacy, options: [.prettyPrinted, .sortedKeys])
+        do { _ = try SourceConfiguration.load(data: invalidData); fatalError("Invalid legacy schema was accepted") }
+        catch SourceConfiguration.ConfigurationError.invalidConfiguration {}
+        let stateFile = directory.appendingPathComponent("ConfigurationImports/state.json")
+        try FileManager.default.createDirectory(at: stateFile.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let builtinIDs = Set(try RuntimeSource.builtins().map(\.id))
+        for inactiveData in [data, invalidData] {
+            let batchBytes = try JSONEncoder().encode(State(version: 1,
+                configurations: [id: inactiveData, "healthy-configured": healthy]))
+            try batchBytes.write(to: stateFile, options: .atomic)
+            library.reload()
+            precondition(Set(library.sources.map(\.id)) == builtinIDs.union(["healthy-configured"]),
+                         "One incompatible batch entry must not clear healthy imports or reviewed built-ins")
+            precondition(library.sources.contains { $0.id == id && !$0.imported && $0.source.configured == nil })
+            precondition(library.sources.contains {
+                $0.id == "healthy-configured" && $0.imported && $0.source.configured != nil
+            })
+            precondition(library.issues.contains { $0.hasPrefix(id + " · ") })
+            precondition(!library.issues.contains("ConfigurationImports/state.json"))
+            precondition(UserDefaults.standard.bool(forKey: key))
+            let retainedBatch = try Data(contentsOf: stateFile)
+            let retainedLegacy = try Data(contentsOf: legacyFile)
+            let retainedMapping = try Data(contentsOf: collectionFile)
+            precondition(retainedBatch == batchBytes && retainedLegacy == data && retainedMapping == collectionBytes)
+        }
+        // Entry-level isolation must not make unknown root schemas or versions recoverable.
+        for broken in [Data("[]".utf8), Data(#"{"version":1,"configurations":[]}"#.utf8),
+                       Data(#"{"version":2,"configurations":{}}"#.utf8)] {
+            try broken.write(to: stateFile, options: .atomic)
+            library.reload()
+            precondition(library.sources.isEmpty && library.issues.contains("ConfigurationImports/state.json"))
+            let retainedState = try Data(contentsOf: stateFile)
+            let retainedLegacy = try Data(contentsOf: legacyFile)
+            let retainedMapping = try Data(contentsOf: collectionFile)
+            precondition(retainedState == broken && retainedLegacy == data && retainedMapping == collectionBytes)
+        }
     }
 
     private static func idle(_ importer: MobileSourceURLImport) async {

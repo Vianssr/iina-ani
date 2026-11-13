@@ -262,14 +262,14 @@ final class PlaybackHistoryStore {
                 choice.episode = ref
                 return (try? configuration.mappingSelection(choice))?.episode
             }
-            return try? registry.item(for: ref.pageURL)
+            return try? registry.item(for: ref.pageURL, expectedKind: ref.kind)
         }
         guard let expected = canonical(target) else { throw PlaybackFailure.missingEpisode }
         func matches(_ nodes: [VideoTreeNode]) -> Int {
             nodes.reduce(0) { count, node in
                 guard node.isLeaf else { return count + matches(node.children) }
                 guard !node.isLiving, node.site.sourceID == target.sourceID,
-                      let ref = try? registry.item(for: node.selectionURL),
+                      let ref = try? registry.item(for: node.selectionURL, expectedKind: .episode),
                       canonical(ref) == expected else { return count }
                 return count + 1
             }
@@ -342,7 +342,7 @@ final class PlaybackHistoryStore {
                let url = URL(string: item.pageURL), url.isFileURL {
                 return SourceItemRef(sourceID: "local", pageURL: url.resolvingSymlinksInPath().absoluteString, kind: .local)
             }
-            guard let canonical = try? registry.item(for: item.pageURL),
+            guard let canonical = try? registry.item(for: item.pageURL, expectedKind: item.kind),
                   canonical.sourceID == item.sourceID else { return nil }
             return canonical
         }
@@ -391,17 +391,29 @@ final class PlaybackHistoryStore {
             guard registry.loadError == nil else { throw PlaybackFailure.configurationChanged }
             var choice = original
             if choice.episode == nil, choice.item.kind == .episode {
+                guard configuration.version != 4 else { throw PlaybackFailure.missingEpisode }
                 let parts = try configuration.parts(choice.item.pageURL)
                 choice.episode = choice.item
                 choice.item = try configuration.item(configuration.expanded(configuration.route.detailTemplate, values: ["id": parts.id]))
             }
             var selection = try configuration.mappingSelection(choice)
             if selection.classification.kind == .unknown { selection.classification = original.classification }
-            let work = try configuration.parts(selection.item.pageURL)
-            let episode = try configuration.parts(selection.episode!.pageURL)
-            guard let episodeID = episode.episodeIdentity else { throw PlaybackFailure.missingEpisode }
-            let context = PlaybackContext(work: .source(sourceID: configuration.id, workID: work.id),
-                episode: .source(sourceID: configuration.id, workID: work.id, episodeID: episodeID),
+            let workID: String
+            let episodeID: String
+            if configuration.version == 4 {
+                // Static pages have no route captures. Use the same canonical page
+                // hashes as iOS, preserving query-based work and episode identities.
+                workID = SHA256.hash(data: Data(selection.item.pageURL.utf8)).map { String(format: "%02x", $0) }.joined()
+                episodeID = SHA256.hash(data: Data(selection.episode!.pageURL.utf8)).map { String(format: "%02x", $0) }.joined()
+            } else {
+                let work = try configuration.parts(selection.item.pageURL)
+                let episode = try configuration.parts(selection.episode!.pageURL)
+                guard let identity = episode.episodeIdentity else { throw PlaybackFailure.missingEpisode }
+                workID = work.id
+                episodeID = identity
+            }
+            let context = PlaybackContext(work: .source(sourceID: configuration.id, workID: workID),
+                episode: .source(sourceID: configuration.id, workID: workID, episodeID: episodeID),
                 selection: selection, configurationRevision: configuration.configurationRevision)
             try ConfirmedSourceMapping(context: context, sourceTitle: configuration.name).validateForPersistence()
             return DurableSelection(selection: selection, context: context, localFile: nil)

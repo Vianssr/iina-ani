@@ -13,7 +13,7 @@ Skin 的匯入／預覽、個人覆寫、作者佈局、素材動效、匯出分
 - R7 集中結果／受阻報告已交付（見[工作記錄](history/WORK_LOG.md)），但不代表全部旅程通過。兩帳號、完整 VoiceOver／放大字級、遠端 HLS、Torrent 產品全鏈、最低系統／Intel／正式簽署 Sandbox／公證及 M2／M3／MT3／M4／W8.3 關卡仍未簽收；外部腳本匯入保持關閉。
 - 最新詳情／二級來源窗口流程見下方「搜尋與日常更新服務」；名稱模糊與雙編號尋源已完成建置、回歸及真網服務鏈驗證，使用者手動確認本輪修正可用並結案；不據此擴大為全站或所有播放器驗收通過。
 - ani-subs、完整追番管理與觀看進度雙向同步不是目前能力；站點能力宣告不代表已逐站實測。
-- 上游來源見 [README](../README.md)，工程架構見 [PROJECT.md](architecture/PROJECT.md)；逐次改動及驗證限制保留於 [WORK_LOG.md](history/WORK_LOG.md)。
+- 上游來源見 [中文版 README](README.zh-TW.md)，工程架構見 [PROJECT.md](architecture/PROJECT.md)；逐次改動及驗證限制保留於 [WORK_LOG.md](history/WORK_LOG.md)。
 
 > **僅作開發基線，尚未配置獨立發佈。** App 已使用 `com.LlS.iina-ani` Bundle ID；W10 已移除 Sparkle、上游 feed／公鑰及檢查更新入口，禁止以自動更新替換 fork。正式發佈仍需完成資料遷移策略、簽署與公證，不應與上游版本混用資料。詳見 [PROJECT.md](architecture/PROJECT.md)。
 
@@ -68,7 +68,7 @@ bash Tests/run-workspace-layout-script.sh
 
 ## 目錄
 
-以下路徑以 checkout 根目錄為準；目前功能與使用限制概覽見 [README](../README.md)。
+以下路徑以 checkout 根目錄為準；目前功能與使用限制概覽見[中文版 README](README.zh-TW.md) 或[英文版 README](../README.md)。
 
 | 路徑 | 用途 |
 | --- | --- |
@@ -77,7 +77,7 @@ bash Tests/run-workspace-layout-script.sh
 | `Design/Icons/` | 40 個功能圖標的 SVG／透明 PNG、明暗預覽與素材對照；主要導航與功能按鈕已接入既有 Asset Catalog 的 `FunctionIcons/` |
 | `HuyaKit/` | 虎牙協議與串流代理套件，包含 `huyaproxy` CLI |
 | `SourceCore/` | macOS 與 iOS 共用的來源契約、配置驗證及公開播放器協議 |
-| `InstallDeps.sh` | 下載外部 IINA 彈幕外掛並安裝網頁依賴 |
+| `InstallDeps.sh`、`PackageDanmakuPlugin.sh` | 安裝鎖定的網頁依賴；由 `Plugins/Danmaku/` 本機原始碼離線打包 IINA 彈幕外掛 |
 | `docs/architecture/PROJECT.md` | 工程分層、服務組裝、資料流與持久化 |
 | `Examples/Skins/README.md` | Skin 格式、打包與分享契約 |
 | `docs/development/` | 按任務分類的修改、驗證、資料與工作指引 |
@@ -90,7 +90,7 @@ bash Tests/run-workspace-layout-script.sh
 - `HuyaKit/Package.swift` 要求 Swift tools **6.4**；App 的 Swift language mode 為 6.0，兩者不是同一個版本要求。
 - 本次檢查環境：Xcode 27.0、Apple Swift 6.4。
 - Node.js／npm：安裝 `IINA-ANI/WebFiles/` 的前端依賴，不是 App 的執行時。
-- GitHub CLI `gh`：`InstallDeps.sh` 下載外掛時使用；按 GitHub 存取權限及速率限制需要配置登入。
+- Python 3：由 `PackageDanmakuPlugin.sh` 打包本機外掛；不再需要 GitHub CLI 下載上游外掛。
 - IINA 及彈幕外掛用於外部播放器驗證；mpv 用於獨立 mpv 路徑驗證。
 
 ## 設定
@@ -107,13 +107,28 @@ bash Tests/run-workspace-layout-script.sh
 
 翻譯維護於 `IINA-ANI/Localizable.xcstrings`，JSPlayer 與 Open Files 的 storyboard 字串維護於各自 `mul.lproj` 內的 catalog；新增字串須同步提供 `en`、`zh-Hans`、`zh-Hant`，並保留插值參數的型別與順序。
 
+## 彈幕顯示與互動
+
+在「設定 → 播放與彈幕」調整：
+
+- **保留彈幕原色**：預設開啟；關閉後統一白色。點播 XML 與有提供顏色的直播訊息使用來源原色，沒有顏色的來源不補造隨機色。
+- **懸停暫停單條彈幕**：預設開啟；滑鼠移上文字只暫停該條，移開後續行，不暫停影片或其他彈幕。這與頂部／底部固定彈幕是不同功能；關閉後恢復滑鼠穿透。
+- **顯示滾動／頂部固定／底部固定彈幕**：分別開關來源提供的類型，不把所有直播彈幕強制改成滾動。
+- **字型、字重、字級、速度與透明度**：字級 12–72，速度 100–2000（數值越大越快），透明度 0–1。設定會保存，並即時同步至已連線的新版外掛與內建 renderer。
+
+直播批次各自錯開送出，不把後續批次串成慢速佇列；最多保留 200 條待送彈幕，超量先捨棄舊訊息。單批最多分散 1.5 秒，已等待超過 2 秒的直播訊息不再重播；停止、隱藏或清空時取消待送內容。回歸入口：`node Tests/Playback/DanmakuQueueRegression.js`。
+
+IINA 請從「IINA 彈幕外掛 → 外掛設定…」使用隨 App 封裝的 **0.1.22-ani.1／build 128**，安裝或更新後重啟 IINA。舊版外掛不提供本輪完整設定與懸停功能。由 App 啟播的工作階段以 App 設定為準；直接在 IINA 開啟本機 XML 時使用外掛自己的偏好。mpv 路徑未新增同等互動彈幕能力。
+
+**彈幕遮擋 IINA 原生控制列：無法修復（現有 IINA 插件 API 限制）。** 插件 CSS 無法把整個 WKWebView 移到 IINA 原生 UI 下方；本次不修改 IINA 本體，也未以避讓或隱藏彈幕冒充層級修正。原生 hover／全螢幕等驗證限制見[工作記錄](history/WORK_LOG.md)。
+
 ## 同源下一集與自動連播
 
 「設定 → 播放與彈幕 → 同源自動連播」預設開啟；與「自動開啟解析結果」是兩個獨立開關。
 
 「導覽 → 下一集…」列出本 App 正在追蹤的 IINA／mpv 播放工作階段，選定後可手動接續，亦可取消該工作階段正在準備的下一集。多視窗必須明確選擇，不猜測目前焦點。沒有支援的工作階段時說明能力限制；JSPlayer 沿用自己的來源選擇控制項。
 
-- **在線**：IINA／mpv 自然播完後，重新讀取目前來源目錄，按精確集數身份接續同一目錄分組的下一集。保留作品、帳號、線路及品質；不跨站、不跨目錄分組、不自動降級品質，也不改播本地檔。
+- **在線**：IINA／mpv 自然播完後，重新讀取目前來源目錄，按精確集數身份接續同一目錄分組的下一集。v4 靜態網頁來源使用原作品頁重讀目錄，不從播放頁猜測作品。保留作品、帳號、線路及品質；不跨站、不跨目錄分組、不自動降級品質，也不改播本地檔。
 - **本地**：從本地影片、已完成下載或繼續觀看啟播時，將同資料夾所有影片按檔名自然排序（例如 `1 → 2 → 10`）載入 IINA／mpv 隊列，包含所選集數之前的檔案；仍從所選集數與保存秒數開始。IINA 透過 CLI 匯入完整播放列表，避免自身自動加檔造成重複。不遞迴子資料夾、不包含隱藏檔或符號連結；請將不同作品分開存放。不切回在線源。
 - 只有播放器回報自然 EOF 才接續；手動停止、關閉播放器、播放錯誤、來源身份不明或最後一集都停止，不循環。下一集解析／啟播失敗會提示，不跳過失敗集數。
 - 在線下一集重新解析媒體、建立觀看進度並準備彈幕；本地在同一播放器內換集，各集獨立記錄進度，只使用該檔自己的 XML，不沿用前集 XML。關閉開關不打斷當前影片，停止後續自動換集，但完整本地隊列仍可手動選播；末集或停用連播時停留在最後畫面。退出 App 會取消待處理的連播，不清空已交給播放器的隊列。
@@ -133,12 +148,12 @@ bash Tests/run-workspace-layout-script.sh
 
 ## 建置
 
-Bangumi 帳號登入需使用自己的 OAuth 應用配置；本機 `Config/Local.xcconfig` 不進 Git。未配置仍可建置及使用其他功能，但登入／續期會明確提示配置缺失。配置、回調及桌面端 secret 的公開分發限制見 [README](../README.md#bangumi-登入配置)。
+Bangumi 帳號登入需使用自己的 OAuth 應用配置；本機 `Config/Local.xcconfig` 不進 Git。未配置仍可建置及使用其他功能，但登入／續期會明確提示配置缺失。配置、回調及桌面端 secret 的公開分發限制見 [Bangumi 登入配置](README.zh-TW.md#bangumi-登入配置)。
 
 以下命令於專案根目錄執行：
 
 ```sh
-# 下載外掛，安裝 CommentCoreLibrary、mpegts.js、crypto-js
+# 離線打包本機外掛，安裝 CommentCoreLibrary、mpegts.js、crypto-js
 bash InstallDeps.sh
 
 # 解析 Swift Package 依賴
@@ -150,7 +165,7 @@ xcodebuild -project 'IINA-ANI.xcodeproj' -scheme 'IINA-ANI' \
   -derivedDataPath .build/xcode CODE_SIGNING_ALLOWED=NO build
 ```
 
-也可以直接用 Xcode 開啟 `IINA-ANI.xcodeproj`。未執行依賴安裝前，工程引用的 `IINA-ANI/iina-plugin-danmaku.iinaplgz` 與 `IINA-ANI/WebFiles/node_modules/` 不存在是預期狀態；不要以刪除資源引用的方式繞過。
+也可以直接用 Xcode 開啟 `IINA-ANI.xcodeproj`。`Package Danmaku Plugin` 建置階段會由本機原始碼產生 `IINA-ANI/iina-plugin-danmaku.iinaplgz`；未安裝網頁依賴前，`IINA-ANI/WebFiles/node_modules/` 不存在是預期狀態，先執行 `InstallDeps.sh`，不要刪除資源引用繞過。外掛封裝與 `node_modules` 均不納入版本控制。
 
 ### W11 原生 Torrent 核心與下載任務
 
@@ -201,8 +216,8 @@ bash Tests/run-w11-http-range.sh
 
 注意：
 
-- `InstallDeps.sh` 不帶參數時下載外掛最新 release；需要固定版本時，將實際 release tag 作為第一個參數傳入，並記錄採用版本。
-- 腳本會覆寫已下載的外掛包；設定 `CI=true` 時，也會依外掛 metadata 改寫 `IINAApp.swift` 的內建外掛版本常數。
+- `InstallDeps.sh` 不接受版本參數，不下載上游最新 release；外掛版本由 `Plugins/Danmaku/Info.json` 與 `IINAApp.swift` 同步維護，打包時核對。
+- 外掛原始碼、授權與固定 vendor 依賴納入版本控制；產出的 `.iinaplgz` 不納入。未配置此衍生外掛的上游自動更新入口，避免被原版覆寫。
 - 保留 `Package.resolved` 與 `package-lock.json`。依賴安裝不代表 App 建置或播放驗證通過。
 - 最初基線整理未執行完整依賴安裝、App 建置或播放器驗證；此記錄不代表後續來源接入的驗證結果。
 
@@ -331,15 +346,15 @@ Skin 可在 `manifest.json` 的 `entryPaths` 新增 `"pageMotion": "motions/page
 
 播放站點是可替換的追番背景來源，不是逐站帳號支援或全部站點可用的產品承諾。作品、集數與已確認來源關聯仍由既有追番服務管理；此清單僅使用訪客能力，不新增網站帳號，也不匯入 Cookie、token、遠端腳本或媒體嗅探規則。
 
-**設定 → 來源與帳號 → 來源訂閱… → 檢查訂閱更新**：在獨立子窗口從 `https://sub.creamycake.org/v1/css1.json` 取得 web-selector v2 訂閱，預覽每項的欄位差異／保留原因，再明確套用或捨棄。關閉子窗口、Esc 或取消會停止檢查並清除未套用預覽；不在背景自動套用。原始訂閱不能直接放入 sources 目錄。更新僅替換支援的公開搜尋欄位，沿用既有播放／目錄解析器，不新增來源能力。
+**設定 → 來源與帳號 → 來源訂閱… → 檢查訂閱更新**：在獨立子窗口輸入公開 HTTPS 訂閱網址，預設為 `https://sub.creamycake.org/v1/css1.json`。支援 Animeko `web-selector` v2 訂閱的根層或巢狀清單；先預覽再明確套用或捨棄。編輯網址、關閉或取消會清除未套用預覽；原始訂閱不能直接放入 sources 目錄。既有站點更新搜尋規則，新站則可轉為獨立 v4 靜態來源，匯入後仍需手動啟用。
 
-本機現可接受 17 個來源的搜尋配置（包含新增的 2k）；實際訂閱項目數依上游內容而變，Hanime 兩檔共用來源，Forest 保持排除。映射只接受核准的 host 與既有路徑／查詢欄位；未知站、未知格式、相互衝突的重複來源保留舊版並顯示原因，不根據名稱猜測新域名。搜尋請求使用 css1 的 searchUrl（只轉換關鍵詞／頁碼佔位符），不再把櫻花／熱播換成基線網址；核准網域間重新導向後，以實際回應網址解析作品、封面及相對連結，交給既有作品／集數匹配流程。索引配對採已核對的本地轉換，保留風車／海星選擇器修正。原生基線在 `Sources/native-search.json`，Fqdm 基線在 `Sources/fqdm.json`；海星仍用零起始 `pageindex`，服務頁碼由 1 起。既有訂閱快照須重新「檢查訂閱更新 → 套用此預覽」才會更新先前保存的搜尋網址。
+內建 17 個來源仍沿用原生解析器；已安裝完整來源亦可按精確主機更新搜尋規則。搜尋支援 `a`、按 DOM 結構配對的 `indexed`，以及共同陣列下的受限 JSONPath。支援路徑或查詢中的關鍵詞／頁碼模板，不以名稱推測身份。未知站可轉成獨立靜態來源，從配置取得搜尋、線路與集數規則，解析 HTML5 或 MacCMS encrypt 0／1／2 的直連媒體；不執行遠端 JavaScript、嗅探規則或匯入登入資料。HTTP、非標準來源連接埠、無效規則、原生主機衝突及互相衝突的重複來源保留原設定並顯示原因；Forest 保持排除。
 
-變更過的搜尋規則會以公開關鍵詞「海贼王」執行搜尋，必須取得可辨識的同來源作品；失敗、驗證頁或沒有結果時，僅保留該來源先前已套用的訂閱配置（尚未套用者不啟用），不阻止其他有效項目。與轉換基線相同的規則不重複探測，但仍須明確套用訂閱才能啟用。這是更新安全檢查，不代表站點永久可用或播放／下載通過。
+既有來源變更過的搜尋規則會以公開關鍵詞「海贼王」執行搜尋，必須取得可辨識的同來源作品；失敗、驗證頁或沒有結果時，僅保留該來源先前已套用的訂閱配置（尚未套用者不啟用），不阻止其他有效項目。與轉換基線相同的規則不重複探測，但仍須明確套用訂閱才能啟用。這是更新安全檢查，不代表站點永久可用或播放／下載通過。 新靜態來源的匯入預覽只驗證規則結構；套用後保持停用，啟用並選定作品與集數後才實際請求站點。需執行任意腳本、瀏覽器驗證或第三方解析服務的站點，不能僅靠靜態規則保證播放。
 
 明確套用後，去除憑證的快照原子保存於 `Application Support/<bundle ID>/sources/subscriptions/css1.json`，下一次啟動／重載恢復。失敗寫入、過時預覽、失敗重載均不替换活動快照；缺項不刪已有配置或作品收藏，不中斷現有播放／下載。Bilibili／直播等原專案來源不在訂閱覆寫範圍。
 
-css1 訂閱是後加番劇來源唯一的搜尋／自動尋源入口：舊搜尋規則只保留作轉換基線，不宣告搜尋能力，須在設定中明確套用該站訂閱後才啟用，不會 fallback 至舊規則。原專案來源、直接網址解析、既有播放／目錄適配器均保留。訂閱失敗或缺项僅保留先前已套用的配置；尚未套用的來源維持未啟用。正式 App 不再使用測試模式開關或專用啟動攔截，不刪除、搬移或自動匯入 `.build/subscription-isolation/home/` 的測試使用者資料。
+來源訂閱是既有後加番劇來源的搜尋／自動尋源入口：舊搜尋規則只保留作轉換基線，不宣告搜尋能力，須在設定中明確套用該站訂閱後才啟用，不會 fallback 至舊規則。原專案來源、直接網址解析、既有播放／目錄適配器均保留。訂閱失敗或缺项僅保留先前已套用的配置；尚未套用的來源維持未啟用。正式 App 不再使用測試模式開關或專用啟動攔截，不刪除、搬移或自動匯入 `.build/subscription-isolation/home/` 的測試使用者資料。
 
 Bilibili 額外接入使用者提供的 `https://search.bilibili.com/all?keyword={keyword}`：以非持久訪客 WKWebView 載入官方前端，僅容許 search.bilibili.com／www.bilibili.com 的 HTTPS 主頁導航（含已觀察的訪客跳轉），在該 origin 讀官方影片搜尋 API 分頁；不使用登入容器／帳號 Cookie，不以 HTTP 412 假裝空結果。結果的 BV 頁面仍走既有解析、準備與播放器流程；搜尋接入不新增其下載能力。
 
@@ -413,7 +428,7 @@ M6 另核對重新授權前後的 Bangumi 使用者身份：同一帳號紀錄�
 
 ### macOS 2k 解析相容性（2026-10-30）
 
-macOS 已新增 2k 原生來源，接受 `www.2kdm.com` 與 `www.mutedm.com` 的作品／集數網址，支援網頁專線 m2 的播放器解析。可直接使用「開啟網址」；要在番劇尋源中使用 2k 搜尋，請重新檢查並套用 CSS1 訂閱，舊快照不會自動新增來源搜尋規則。只接受經核對的 `list.name`／`list.id` 搜尋資料及本地作品連結模板，不匯入遠端 JavaScript。
+macOS 已新增 2k 原生來源，接受 `www.2kdm.com` 與 `www.mutedm.com` 的作品／集數網址，支援網頁專線 m2 的播放器解析。可直接使用「開啟網址」；要在番劇尋源中使用 2k 搜尋，請重新檢查並套用 CSS1 訂閱，舊快照不會自動新增來源搜尋規則。搜尋規則使用同一陣列中的名稱／ID 與明確作品連結模板，不匯入遠端 JavaScript。
 
 目前真網樣本已通過 macOS 的 2k 網頁專線、嘀嗒／熱播 B/G 解析與 MP4 解碼。這不是所有作品／線路的保證；2k APP 專線協議仍不支援，稀飯二級服務仍失敗。逐次驗證與上游波動見[來源排查記錄](development/source-diagnostics.md)。
 

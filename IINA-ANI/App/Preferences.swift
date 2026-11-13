@@ -116,8 +116,20 @@ struct WorkspaceDetailTransitionSettings: Equatable, Sendable {
     }
 }
 
+struct DanmakuSettings: Encodable, Equatable, Sendable {
+    let fontFamily: String
+    let fontWeight: String
+    let fontSize: Int
+    let speed: Double
+    let opacity: Double
+    let useSourceColor: Bool
+    let blockTypes: [String]
+    let hoverPause: Bool
+}
+
 final class Preferences: NSObject, Sendable {
     static let shared = Preferences(defaults: .standard)
+    static let danmakuSettingsDidChangeNotification = Notification.Name("Preferences.danmakuSettingsDidChange")
 
     nonisolated(unsafe) let prefs: UserDefaults
 
@@ -194,7 +206,9 @@ final class Preferences: NSObject, Sendable {
     }
 
     func isSourceEnabled(_ sourceID: String) -> Bool {
-        (prefs.dictionary(forKey: PolicyKey.enabledSources) as? [String: Bool])?[sourceID] ?? true
+        if let enabled = (prefs.dictionary(forKey: PolicyKey.enabledSources) as? [String: Bool])?[sourceID] { return enabled }
+        // Static subscription sources require an explicit enable action, including after a crash/restart.
+        return SourceRegistry.shared.source(for: sourceID)?.version != 4
     }
 
     func setSourceEnabled(_ enabled: Bool, sourceID: String) {
@@ -296,7 +310,9 @@ final class Preferences: NSObject, Sendable {
             return defaults(.dmBlockType) as? [String] ?? []
         }
         set {
+            guard newValue != dmBlockType else { return }
             defaultsSet(newValue, forKey: .dmBlockType)
+            notifyDanmakuSettingsChanged()
         }
     }
     
@@ -305,8 +321,9 @@ final class Preferences: NSObject, Sendable {
             return defaults(.danmukuFontFamilyName) as? String ?? "SimHei"
         }
         set {
+            guard newValue != danmukuFontFamilyName else { return }
             defaultsSet(newValue, forKey: .danmukuFontFamilyName)
-            didChangeValue(for: \.danmukuFontFamilyName)
+            notifyDanmakuSettingsChanged()
         }
     }
     
@@ -315,39 +332,82 @@ final class Preferences: NSObject, Sendable {
             return defaults(.danmukuFontWeight) as? String ?? "Regular"
         }
         set {
+            guard newValue != danmukuFontWeight else { return }
             defaultsSet(newValue, forKey: .danmukuFontWeight)
-            didChangeValue(for: \.danmukuFontWeight)
+            notifyDanmakuSettingsChanged()
         }
     }
     
     @objc var danmukuFontSize: Int {
         get {
-//            return defaults(.danmukuFontSize) as? Int ?? 24
-            return 24
+            min(max(defaults(.danmukuFontSize) as? Int ?? 24, 12), 72)
         }
         set {
-            defaultsSet(newValue, forKey: .danmukuFontSize)
-            didChangeValue(for: \.danmukuFontSize)
+            let value = min(max(newValue, 12), 72)
+            guard value != danmukuFontSize else { return }
+            defaultsSet(value, forKey: .danmukuFontSize)
+            notifyDanmakuSettingsChanged()
         }
     }
     
     @objc dynamic var dmSpeed: Double {
         get {
-            return defaults(.dmSpeed) as? Double ?? 680
+            let value = defaults(.dmSpeed) as? Double ?? 680
+            return value.isFinite ? min(max(value, 100), 2000) : 680
         }
         set {
-            defaultsSet(newValue, forKey: .dmSpeed)
-            didChangeValue(for: \.dmSpeed)
+            let value = newValue.isFinite ? min(max(newValue, 100), 2000) : 680
+            guard value != dmSpeed else { return }
+            defaultsSet(value, forKey: .dmSpeed)
+            notifyDanmakuSettingsChanged()
         }
     }
     
     @objc dynamic var dmOpacity: Double {
         get {
-            return defaults(.dmOpacity) as? Double ?? 1
+            let value = defaults(.dmOpacity) as? Double ?? 1
+            return value.isFinite ? min(max(value, 0), 1) : 1
         }
         set {
-            defaultsSet(newValue, forKey: .dmOpacity)
-            didChangeValue(for: \.dmOpacity)
+            let value = newValue.isFinite ? min(max(newValue, 0), 1) : 1
+            guard value != dmOpacity else { return }
+            defaultsSet(value, forKey: .dmOpacity)
+            notifyDanmakuSettingsChanged()
+        }
+    }
+
+    var dmUseSourceColor: Bool {
+        get { defaults(.dmUseSourceColor) as? Bool ?? true }
+        set {
+            guard newValue != dmUseSourceColor else { return }
+            defaultsSet(newValue, forKey: .dmUseSourceColor)
+            notifyDanmakuSettingsChanged()
+        }
+    }
+
+    var dmHoverPause: Bool {
+        get { defaults(.dmHoverPause) as? Bool ?? true }
+        set {
+            guard newValue != dmHoverPause else { return }
+            defaultsSet(newValue, forKey: .dmHoverPause)
+            notifyDanmakuSettingsChanged()
+        }
+    }
+
+    var danmakuSettings: DanmakuSettings {
+        DanmakuSettings(fontFamily: danmukuFontFamilyName, fontWeight: danmukuFontWeight,
+                        fontSize: danmukuFontSize, speed: dmSpeed, opacity: dmOpacity,
+                        useSourceColor: dmUseSourceColor, blockTypes: dmBlockType,
+                        hoverPause: dmHoverPause)
+    }
+
+    private func notifyDanmakuSettingsChanged() {
+        if Thread.isMainThread {
+            NotificationCenter.default.post(name: Self.danmakuSettingsDidChangeNotification, object: self)
+        } else {
+            DispatchQueue.main.async { [self] in
+                NotificationCenter.default.post(name: Self.danmakuSettingsDidChangeNotification, object: self)
+            }
         }
     }
     
@@ -473,6 +533,8 @@ enum PreferenceKeys: String {
     case dmSpeed
     case dmOpacity
     case dmBlockType
+    case dmUseSourceColor
+    case dmHoverPause
     case dmBlockList
     case dmPort
     

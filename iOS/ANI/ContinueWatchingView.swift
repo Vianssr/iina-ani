@@ -69,7 +69,7 @@ private struct ResumeHistoryView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var sources = MobileSourceLibrary.forApp()
     @State private var flow: MobileSourceFlow?
-    @State private var configuration: SourceConfiguration?
+    @State private var client: MobileSourceClient?
     @State private var session: PlaybackSession?
     @State private var failure: String?
     @State private var needsFile = false
@@ -145,12 +145,13 @@ private struct ResumeHistoryView: View {
         do {
             let revision = try sources.configurationRevision(for: context.selection.item.sourceID)
             guard revision == context.configurationRevision,
-                  let config = sources.sources.first(where: { $0.id == context.selection.item.sourceID })?.configuration else {
+                  let selected = sources.sources.first(where: { $0.id == context.selection.item.sourceID }) else {
                 throw PlaybackFailure.configurationChanged
             }
-            configuration = config
-            let sourceID = config.id
-            let next = MobileSourceFlow(client: .make(configuration: config),
+            let client = MobileSourceClient.make(source: selected.source, search: selected.search)
+            self.client = client
+            let sourceID = selected.id
+            let next = MobileSourceFlow(client: client,
                 requestedWork: context.work, requestedEpisode: context.episode,
                 authority: { try sources.configurationRevision(for: sourceID) },
                 resumeMapping: ConfirmedSourceMapping(context: context, sourceTitle: entry.title))
@@ -165,16 +166,16 @@ private struct ResumeHistoryView: View {
             failure = String(localized: "This playback history changed. Return to the list and choose it again.")
             return
         }
-        guard let result = flow?.takeResolved(), let configuration else { return }
+        guard let result = flow?.takeResolved(), let client else { return }
         #if DEBUG
         let url = SourceFixtures.playerURL(result.url)
         #else
         let url = result.url
         #endif
         session = PlaybackSession(url: url, title: entry.title, context: result.context,
-                                  history: history, historyEntry: entry, configuration: configuration,
-                                  continuation: MobileSourceContinuation(client: .make(configuration: configuration),
-                                    authority: { try sources.configurationRevision(for: configuration.id) }))
+                                  history: history, historyEntry: entry, source: client.source,
+                                  continuation: MobileSourceContinuation(client: client,
+                                    authority: { try sources.configurationRevision(for: client.source.id) }))
     }
 
     private func resumeLocal(reselected url: URL? = nil) {

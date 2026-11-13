@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import SwiftUI
 
 struct EpisodeBrowser: View {
@@ -114,7 +115,7 @@ struct SourcePicker: View {
                     if sources.sources.contains(where: { $0.id == selectedSourceID }) {
                         Picker("Source", selection: Binding(get: { selectedSourceID }, set: { sourceID = $0 })) {
                             ForEach(sources.sources) { source in
-                                Text(verbatim: source.configuration.name).tag(source.id)
+                                Text(verbatim: source.source.name).tag(source.id)
                             }
                         }.pickerStyle(.menu).accessibilityIdentifier("source-picker")
                             .disabled(savedMapping != nil)
@@ -125,8 +126,9 @@ struct SourcePicker: View {
                         Button("Automatically find this episode") {
                             candidate = nil
                             discovery.find(anime: anime, episode: episode,
-                                sources: sources.sources.map(\.configuration), library: library,
-                                authority: { try sources.configurationRevision(for: $0) })
+                                sources: sources.sources, library: library,
+                                authority: { try sources.configurationRevision(for: $0) },
+                                searchAuthority: { try sources.searchRevision(for: $0) })
                         }.frame(minHeight: 48).buttonStyle(.borderedProminent)
                             .disabled(discovery.busy).accessibilityIdentifier("source-automatic-find")
                         if discovery.busy {
@@ -138,11 +140,11 @@ struct SourcePicker: View {
                             if discovery.candidates.isEmpty { Text(PlaybackFailure.noCandidates.mobileMessage) }
                             ForEach(discovery.candidates) { match in
                                 Button {
-                                    automaticPlayback = false; candidate = match; sourceID = match.configuration.id
+                                    automaticPlayback = false; candidate = match; sourceID = match.source.id
                                 } label: {
                                     VStack(alignment: .leading) {
                                         Text(verbatim: match.catalog.work.title)
-                                        Text(verbatim: match.configuration.name).font(.caption)
+                                        Text(verbatim: match.source.name).font(.caption)
                                         if match.episode == nil { Text("Exact episode evidence is missing; confirm the catalogue manually.").font(.caption) }
                                     }.frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
                                 }.buttonStyle(.bordered).accessibilityIdentifier("source-automatic-candidate")
@@ -155,10 +157,10 @@ struct SourcePicker: View {
                         ForEach(sources.issues, id: \.self) { Text(verbatim: $0).font(.caption).foregroundStyle(.secondary) }
                     }
                     if let source = sources.sources.first(where: { $0.id == selectedSourceID }) {
-                        SourceContent(configuration: source.configuration, anime: anime, episode: episode,
+                        SourceContent(source: source.source, search: source.search, anime: anime, episode: episode,
                                       library: library, sources: sources, candidate: candidate,
                                       automatically: automaticPlayback, session: $session)
-                            .id(source.id + "#" + source.configuration.configurationRevision + "#" + String(revision) + "#" + (candidate?.id ?? "manual"))
+                            .id(source.id + "#" + source.source.configurationRevision + "#" + String(revision) + "#" + (candidate?.id ?? "manual") + "#" + source.searchRevision)
                     } else if let savedMapping {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("Saved source selection").font(.headline)
@@ -185,7 +187,7 @@ struct SourcePicker: View {
         }
         .onChange(of: discovery.automatic?.id) { _, _ in
             guard let match = discovery.automatic else { return }
-            automaticPlayback = true; candidate = match; sourceID = match.configuration.id
+            automaticPlayback = true; candidate = match; sourceID = match.source.id
         }
         .onChange(of: selectedSourceID) { _, _ in discovery.cancel() }
         .onDisappear { discovery.cancel() }
@@ -279,8 +281,8 @@ struct SourceImportPreview: View {
 }
 
 private struct SourceContent: View {
-    let configuration: SourceConfiguration
-    private let continuation: MobileSourceContinuation
+    let source: RuntimeSource
+    @State private var continuation: MobileSourceContinuation
     @Environment(MobilePlaybackHistory.self) private var history
     @AppStorage private var enabled: Bool
     private let candidate: MobileSourceCandidate?
@@ -291,24 +293,26 @@ private struct SourceContent: View {
     @Binding private var session: PlaybackSession?
     @ScaledMetric(relativeTo: .body) private var cellWidth = 64
 
-    init(configuration: SourceConfiguration, anime: Anime, episode: CatalogEpisode,
+    init(source: RuntimeSource, search: NativeSearchSource?, anime: Anime, episode: CatalogEpisode,
          library: MobileLibrary, sources: MobileSourceLibrary, candidate: MobileSourceCandidate?,
          automatically: Bool, session: Binding<PlaybackSession?>) {
-        self.configuration = configuration
+        self.source = source
         self.candidate = candidate
         self.automatically = automatically
         _session = session
-        continuation = MobileSourceContinuation(client: .make(configuration: configuration),
-            authority: { try sources.configurationRevision(for: configuration.id) })
-        capabilities = configuration.effectiveCapabilities(on: .iOS)
-        let enabledKey = "mobile.sources." + configuration.id + ".enabled"
+        let client = MobileSourceClient.make(source: source, search: search)
+        _continuation = State(initialValue: MobileSourceContinuation(client: client,
+            authority: { try sources.configurationRevision(for: source.id) }))
+        capabilities = client.capabilities
+        let enabledKey = "mobile.sources." + source.id + ".enabled"
         _enabled = AppStorage(wrappedValue: false, enabledKey)
         _query = State(initialValue: anime.title)
-        _flow = State(initialValue: MobileSourceFlow(client: .make(configuration: configuration),
+        _flow = State(initialValue: MobileSourceFlow(client: client,
             requestedWork: .bangumi(anime.id),
             requestedEpisode: .bangumi(episode.id, type: episode.type, sort: episode.sort),
             enabled: UserDefaults.standard.bool(forKey: enabledKey), library: library,
-            authority: { try sources.configurationRevision(for: configuration.id) }))
+            authority: { try sources.configurationRevision(for: source.id) },
+            searchAuthority: { try sources.searchRevision(for: source.id) }))
     }
 
     private let capabilities: Set<SourceCapability>
@@ -341,14 +345,25 @@ private struct SourceContent: View {
                     Text(catalog.work.title).font(.headline)
                     Text("Confirm the source episode. Numbering can differ; missing episodes are never replaced automatically.")
                         .font(.footnote).foregroundStyle(.secondary)
-                    ForEach(catalog.lines) { line in
-                        Text(line.title).font(.headline)
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 8)], spacing: 8) {
-                            ForEach(line.episodes) { sourceEpisode in
-                                EpisodeNumberButton(number: String(sourceEpisode.number), title: sourceEpisode.title,
-                                                    disabled: flow.busy || !capabilities.isSuperset(of: [.resolve, .mpv]) ||
-                                                        (catalog.lines.count > 1 && !capabilities.contains(.lines))) { flow.play(sourceEpisode) }
-                                    .accessibilityIdentifier("source-episode-\(line.id)-\(sourceEpisode.number)")
+                    if !flow.playbackOptions.isEmpty {
+                        Text("Choose playback stream").font(.headline)
+                        ForEach(flow.playbackOptions) { option in
+                            Button { flow.choosePlaybackOption(option) } label: {
+                                Text(verbatim: option.title)
+                                    .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                            }.buttonStyle(.bordered).disabled(flow.busy)
+                                .accessibilityIdentifier("source-playback-option-" + (option.qualityID ?? option.id))
+                        }
+                    } else {
+                        ForEach(catalog.lines) { line in
+                            Text(line.title).font(.headline)
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: cellWidth), spacing: 8)], spacing: 8) {
+                                ForEach(line.episodes) { sourceEpisode in
+                                    EpisodeNumberButton(number: String(sourceEpisode.number), title: sourceEpisode.title,
+                                                        disabled: flow.busy || !capabilities.isSuperset(of: [.resolve, .mpv]) ||
+                                                            (catalog.lines.count > 1 && !capabilities.contains(.lines))) { flow.play(sourceEpisode) }
+                                        .accessibilityIdentifier("source-episode-\(line.id)-\(sourceEpisode.number)")
+                                }
                             }
                         }
                     }
@@ -368,13 +383,18 @@ private struct SourceContent: View {
                             }.buttonStyle(.bordered).disabled(flow.busy).accessibilityIdentifier("source-work")
                         }
                         if flow.nextPage != nil { Button("Load more") { flow.loadMore() }.frame(minHeight: 48).disabled(flow.busy) }
+                    } else if SourceSubscriptionRules.hosts[source.id] != nil {
+                        Text("Apply the search subscription to search this built-in source.")
+                            .font(.footnote).foregroundStyle(.secondary)
                     }
                     DisclosureGroup("Open source page") {
                         TextField("Source page URL", text: $address)
                             .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
                             .textFieldStyle(.roundedBorder)
+                            .accessibilityIdentifier("source-page-url")
                         Button("Open source page") { flow.openPage(address) }.frame(minHeight: 48)
                             .disabled(address.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || flow.busy)
+                            .accessibilityIdentifier("source-page-open")
                     }
                 }
             }
@@ -393,11 +413,11 @@ private struct SourceContent: View {
             }
         }
         .task {
-            flow.updateAccess(enabled: enabled, configurationRevision: configuration.configurationRevision)
+            flow.updateAccess(enabled: enabled, configurationRevision: source.configurationRevision)
             if let candidate { flow.acceptCandidate(candidate, automatically: automatically) }
         }
         .onChange(of: enabled) { _, value in
-            flow.updateAccess(enabled: value, configurationRevision: configuration.configurationRevision)
+            flow.updateAccess(enabled: value, configurationRevision: source.configurationRevision)
         }
         .onChange(of: flow.resolved?.id) { _, _ in
             guard let result = flow.takeResolved() else { return }
@@ -407,7 +427,7 @@ private struct SourceContent: View {
             let url = result.url
             #endif
             session = PlaybackSession(url: url, title: result.title, context: result.context,
-                                      history: history, configuration: configuration, continuation: continuation)
+                                      history: history, source: source, continuation: continuation)
         }
         .onDisappear { flow.cancel() }
     }

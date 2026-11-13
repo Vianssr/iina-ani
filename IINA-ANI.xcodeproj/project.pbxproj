@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		534F55524345000000000003 /* SourceCore in Frameworks */ = {isa = PBXBuildFile; productRef = 534F55524345000000000002 /* SourceCore */; };
+		534F55524345000000000005 /* SourceRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = 534F55524345000000000004 /* SourceRuntime */; };
         A12300000000000000000003 = {isa = PBXBuildFile; fileRef = A12300000000000000000004; };
         A12300000000000000000001 = {isa = PBXBuildFile; fileRef = A12300000000000000000002; };
 		01010125211DBC27002F0F7F /* StringExtension.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01010124211DBC27002F0F7F /* StringExtension.swift */; };
@@ -78,6 +79,7 @@
 		01B53B6127B64FD20051F7B4 /* default.css in Copy Web Files */ = {isa = PBXBuildFile; fileRef = 01B53B5327B64E1A0051F7B4 /* default.css */; };
 		01B53B6227B64FD20051F7B4 /* index.htm in Copy Web Files */ = {isa = PBXBuildFile; fileRef = 01B53B5427B64E1A0051F7B4 /* index.htm */; };
 		01B53B6327B64FD20051F7B4 /* main.js in Copy Web Files */ = {isa = PBXBuildFile; fileRef = 01B53B5227B64E190051F7B4 /* main.js */; };
+		DA1100000000000000000001 /* danmaku-settings.js in Copy Web Files */ = {isa = PBXBuildFile; fileRef = DA1100000000000000000002 /* danmaku-settings.js */; };
 		01B53B6427B64FD20051F7B4 /* flvplayer.css in Copy Web Files */ = {isa = PBXBuildFile; fileRef = 0120932827A3B441002C7FD3 /* flvplayer.css */; };
 		01B53B6527B64FD20051F7B4 /* flvplayer.htm in Copy Web Files */ = {isa = PBXBuildFile; fileRef = 0120932A27A3B441002C7FD3 /* flvplayer.htm */; };
 		01B53B6627B64FD20051F7B4 /* flvplayer.js in Copy Web Files */ = {isa = PBXBuildFile; fileRef = 0120932927A3B441002C7FD3 /* flvplayer.js */; };
@@ -222,6 +224,7 @@
 				01B53B6127B64FD20051F7B4 /* default.css in Copy Web Files */,
 				01B53B6227B64FD20051F7B4 /* index.htm in Copy Web Files */,
 				01B53B6327B64FD20051F7B4 /* main.js in Copy Web Files */,
+				DA1100000000000000000001 /* danmaku-settings.js in Copy Web Files */,
 				01B53B6427B64FD20051F7B4 /* flvplayer.css in Copy Web Files */,
 				01B53B6527B64FD20051F7B4 /* flvplayer.htm in Copy Web Files */,
 				01B53B6627B64FD20051F7B4 /* flvplayer.js in Copy Web Files */,
@@ -324,6 +327,7 @@
 		01AEC8C120EFBCCF001406E8 /* MPVOption.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = MPVOption.swift; sourceTree = "<group>"; };
 		01AEC8C820F1081C001406E8 /* Identifiers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Identifiers.swift; sourceTree = "<group>"; };
 		01B53B5227B64E190051F7B4 /* main.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = main.js; sourceTree = "<group>"; };
+		DA1100000000000000000002 /* danmaku-settings.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = "danmaku-settings.js"; sourceTree = "<group>"; };
 		01B53B5327B64E1A0051F7B4 /* default.css */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.css; path = default.css; sourceTree = "<group>"; };
 		01B53B5427B64E1A0051F7B4 /* index.htm */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = index.htm; sourceTree = "<group>"; };
 		01B53B5A27B64F370051F7B4 /* CommentCoreLibrary.min.js */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.javascript; path = CommentCoreLibrary.min.js; sourceTree = "<group>"; };
@@ -461,6 +465,7 @@
 				01C0809427BC06EC00E87A8C /* SwiftProtobuf in Frameworks */,
 				0117EF04302256CC005E988D /* HuyaKit in Frameworks */,
 				534F55524345000000000003 /* SourceCore in Frameworks */,
+				534F55524345000000000005 /* SourceRuntime in Frameworks */,
 				01C248CD2CE480F30074A76F /* DequeModule in Frameworks */,
 				01E668D62CEA322F008C51E7 /* NIOWebSocket in Frameworks */,
 				01E668D42CEA322F008C51E7 /* NIOHTTP1 in Frameworks */,
@@ -588,6 +593,7 @@
 				01B53B5327B64E1A0051F7B4 /* default.css */,
 				01B53B5427B64E1A0051F7B4 /* index.htm */,
 				01B53B5227B64E190051F7B4 /* main.js */,
+				DA1100000000000000000002 /* danmaku-settings.js */,
 				01EDCCA62A791EB5001DC138 /* test.htm */,
 			);
 			path = Danmaku;
@@ -1023,6 +1029,7 @@
 			buildPhases = (
 				0A1100010000000000000002 /* Build Torrent Core */,
 				0A0830010000000000000005 /* Build Layout Script Helper */,
+				DA1100000000000000000003 /* Package Danmaku Plugin */,
 				01AEC8A320EDFD01001406E8 /* Sources */,
 				01AEC8A420EDFD01001406E8 /* Frameworks */,
 				01AEC8A520EDFD01001406E8 /* Resources */,
@@ -1051,6 +1058,7 @@
 				01E668D52CEA322F008C51E7 /* NIOWebSocket */,
 				0117EF03302256CC005E988D /* HuyaKit */,
 				534F55524345000000000002 /* SourceCore */,
+				534F55524345000000000004 /* SourceRuntime */,
 			);
 			productName = "IINA-ANI";
 			productReference = 01AEC8A720EDFD01001406E8 /* IINA-ANI.app */;
@@ -1144,6 +1152,26 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		DA1100000000000000000003 /* Package Danmaku Plugin */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/PackageDanmakuPlugin.sh",
+				"$(SRCROOT)/Plugins/Danmaku",
+				"$(SRCROOT)/IINA-ANI/WebFiles/Danmaku/danmaku-settings.js",
+				"$(SRCROOT)/IINA-ANI/Features/Playback/IINAApp.swift",
+			);
+			name = "Package Danmaku Plugin";
+			outputPaths = (
+				"$(SRCROOT)/IINA-ANI/iina-plugin-danmaku.iinaplgz",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/bash;
+			shellScript = "bash \"$SRCROOT/PackageDanmakuPlugin.sh\"";
+		};
 		01003E712B771D9100A152ED /* Run Script */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -1732,6 +1760,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 534F55524345000000000001 /* XCLocalSwiftPackageReference "SourceCore" */;
 			productName = SourceCore;
+		};
+		534F55524345000000000004 /* SourceRuntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 534F55524345000000000001 /* XCLocalSwiftPackageReference "SourceCore" */;
+			productName = SourceRuntime;
 		};
 		0117EF03302256CC005E988D /* HuyaKit */ = {
 			isa = XCSwiftPackageProductDependency;

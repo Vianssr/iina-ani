@@ -1,4 +1,9 @@
 import Foundation
+import SourceCore
+import enum SourceRuntime.SourceWebConfigurationConverter
+import struct SourceRuntime.SourceSubscriptionPlan
+import enum SourceRuntime.SourceSubscriptionConverter
+import enum SourceRuntime.SourceSubscriptionFailure
 @testable import IINA_ANI
 
 @main enum SourceSubscriptionStoreRegression {
@@ -88,6 +93,59 @@ import Foundation
         try isolated.applySubscription(nativePlan, expectedRevision: isolated.revision)
         try require(isolated.nativeSearch(for: "xifan") != nil && isolated.descriptor(for: "xifan")?.capabilities.contains(.search) == true, "native adapter search not activated by subscription")
         try require(isolated.nativeSearch(for: "fqdm")?.search.resultsSelector == "a.subscription-result", "native activation dropped configured subscription")
+        try await staticSubscription(root: root, directory: temporary.appendingPathComponent("static-sources"))
         print("PASS subscription persistence, identity, omission, stale preview, upstream isolation, corrupt reload, failed-write atomicity and default subscription-only search")
     }
+    @MainActor static func staticSubscription(root: URL, directory: URL) async throws {
+        let item: [String: Any] = ["factoryId": "web-selector", "version": 2, "arguments": [
+            "name": "Static subscription", "searchConfig": ["searchUrl": "https://static-store.example/search?q={keyword}",
+                "subjectFormatId": "a", "selectorSubjectFormatA": ["selectLists": "a.result"],
+                "channelFormatId": "no-channel", "selectorChannelFormatNoChannel": ["selectEpisodes": "a.episode"]]]]
+        let feed = try JSONSerialization.data(withJSONObject: ["exportedMediaSourceDataList": ["mediaSources": [item]]])
+        let configuration = try SourceWebConfigurationConverter.configuration(item)
+        let registry = SourceRegistry(builtinDirectory: root.appendingPathComponent("IINA-ANI/Sources"), userDirectory: directory)
+        let endpoint = URL(string: "https://mirror.example/online.json")!
+        let service = SourceSubscriptionService(registry: registry, fetchURL: { url in
+            try require(url == endpoint, "custom subscription URL was ignored")
+            return feed
+        })
+        let cancelled = try await service.check(url: endpoint)
+        try require(cancelled.configurations.count == 1 && cancelled.overrides.isEmpty && registry.source(for: configuration.id) == nil,
+                    "static sources must be previewed without installing")
+        service.cancelPendingCheck()
+        do { try service.apply(cancelled); throw Failure.assertion("cancelled static preview applied") }
+        catch SourceSubscriptionFailure.stalePreview {}
+        let plan = try await service.check(url: endpoint)
+        try service.apply(plan)
+        try require(registry.source(for: configuration.id)?.version == 4 &&
+                    registry.descriptor(for: configuration.id)?.capabilities.contains(.search) == true,
+                    "static configuration missing after atomic apply")
+        let work = try registry.item(for: "https://static-store.example/show/one")
+        let episode = try registry.item(for: "https://static-store.example/watch/second", expectedKind: .episode)
+        try require(work.kind == .work && episode.kind == .episode && work.sourceID == configuration.id && episode.sourceID == configuration.id,
+                    "desktop static page identity must use the caller's catalog role")
+        let nodes = [VideoTreeNode(title: "A", children: [
+            VideoTreeNode(site: .configured(configuration.id), index: 1, title: "Episode 1", id: "first", url: "https://static-store.example/watch/first"),
+            VideoTreeNode(site: .configured(configuration.id), index: 2, title: "Episode 2", id: "second", url: episode.pageURL)])]
+        let first = try registry.item(for: nodes[0].children[0].selectionURL, expectedKind: .episode)
+        let next = AutoplaySelection.next(after: PlayableSelection(item: work, episode: first, qualityID: "Line 1"), in: nodes, registry: registry)
+        try require(next?.item == work && next?.episode == episode && next?.qualityID == "Line 1", "static autoplay lost exact work or line")
+        try require(try registry.episodeIdentity(for: nodes[0].children[1]) == "\(configuration.id):episode:\(episode.pageURL)", "static update identity used catalog index")
+        let restarted = SourceRegistry(builtinDirectory: root.appendingPathComponent("IINA-ANI/Sources"), userDirectory: directory)
+        try require(restarted.source(for: configuration.id)?.configurationRevision == configuration.configurationRevision, "static sources did not survive restart")
+        let empty = SourceSubscriptionPlan(fingerprint: "empty", checkedAt: Date(), overrides: [:], entries: [])
+        try restarted.applySubscription(empty, expectedRevision: restarted.revision)
+        try require(restarted.source(for: configuration.id) != nil, "omitted static source deleted")
+        let file = directory.appendingPathComponent("subscriptions/css1.json")
+        let preserved = try Data(contentsOf: file)
+        var bad = try JSONSerialization.jsonObject(with: configuration.encodedData()) as! [String: Any]
+        bad["id"] = "web-conflicting"
+        let conflicting = try JSONSerialization.data(withJSONObject: bad)
+        let conflict = SourceSubscriptionPlan(fingerprint: "conflict", checkedAt: Date(), overrides: [:], entries: [], configurations: ["web-conflicting": conflicting])
+        do { try restarted.applySubscription(conflict, expectedRevision: restarted.revision); throw Failure.assertion("conflicting static host accepted") }
+        catch SourceRegistry.RegistryError.hostConflict {}
+        try require(try Data(contentsOf: file) == preserved, "static host conflict changed persisted data")
+        print("PASS static subscription custom URL preview, cancellation, atomic apply/restart, typed leaf identity and conflict isolation")
+    }
+
 }

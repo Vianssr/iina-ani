@@ -35,6 +35,7 @@ final class AnimeSourceService {
         var prepare: @Sendable (YouGetJSON, String) async throws -> YouGetJSON
         var mappingSelection: @Sendable (PlayableSelection) throws -> (selection: PlayableSelection, revision: String, configured: Bool)
         var mappingRevision: @Sendable (String) throws -> String
+        var episodeSelection: (@Sendable (String) async throws -> PlayableSelection)? = nil
     }
 
     enum SourceError: Error, LocalizedError {
@@ -85,7 +86,8 @@ final class AnimeSourceService {
             decode: { try await decoder.resolve($0) },
             prepare: { try await decoder.prepareVideoUrl($0, $1) },
             mappingSelection: { try decoder.mappingSelection($0) },
-            mappingRevision: { try decoder.mappingRevision($0) })
+            mappingRevision: { try decoder.mappingRevision($0) },
+            episodeSelection: { try await decoder.guestSelection(for: $0, expectedKind: .episode) })
     }
 
     /// Offline behavioral tests inject the existing decoder boundaries, not a second resolver.
@@ -224,7 +226,7 @@ final class AnimeSourceService {
                 guard let leaf = matched.nodes.first else {
                     return (source, result, nil, evidence.description, String(localized: "缺少所選類型／集號的明確集數。"), false)
                 }
-                let exact = try await dependencies.selection(leaf.selectionURL)
+                let exact = try await (dependencies.episodeSelection ?? dependencies.selection)(leaf.selectionURL)
                 try Task.checkCancellation()
                 guard exact.item.sourceID == source.id, exact.item.kind == .episode else {
                     return (source, result, nil, evidence.description, String(localized: "集數頁身份不屬於此來源。"), false)
@@ -407,7 +409,7 @@ final class AnimeSourceService {
         guard matches.failure == nil else { throw SourceError.failure(.missingEpisode) }
         var groups: [[String]] = []
         for node in matches.nodes {
-            let exact = try await dependencies.selection(node.selectionURL)
+            let exact = try await (dependencies.episodeSelection ?? dependencies.selection)(node.selectionURL)
             try Task.checkCancellation()
             _ = try current(choice, revision: revision)
             var leaf = choice

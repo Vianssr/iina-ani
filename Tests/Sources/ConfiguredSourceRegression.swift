@@ -1,4 +1,6 @@
 import SourceCore
+import enum SourceRuntime.SourceWebConfigurationConverter
+import struct SourceRuntime.SourceHTTPResponse
 import Foundation
 @testable import IINA_ANI
 
@@ -134,5 +136,50 @@ private final class CatalogProtocol: URLProtocol, @unchecked Sendable {
         }
         CatalogProtocol.requests.setOverride(nil)
         print("PASS: JSON player paths resolve the selected line and episode")
+        try await staticSource()
     }
+    static func staticSource() async throws {
+        let item: [String: Any] = ["factoryId": "web-selector", "version": 2, "arguments": [
+            "name": "Static fixture", "searchConfig": ["searchUrl": "https://static.example/search?q={keyword}",
+                "subjectFormatId": "indexed", "selectorSubjectFormatIndexed": ["selectNames": ".result .name", "selectLinks": ".result a"],
+                "channelFormatId": "index-grouped", "selectorChannelFormatFlattened": ["selectChannelNames": ".line-title", "selectEpisodeLists": ".episodes", "selectEpisodesFromList": "a"]]]]
+        let configuration = try SourceWebConfigurationConverter.configuration(item)
+        let source = ConfiguredSource(configuration: configuration, site: .configured(configuration.id), staticFetch: { request in
+            guard request.value(forHTTPHeaderField: "Cookie") == nil,
+                  request.value(forHTTPHeaderField: "Authorization") == nil, let url = request.url else {
+                throw Failure.assertion("static request leaked credentials")
+            }
+            let html: String
+            switch url.path {
+            case "/search": html = "<div class='result'><a href='/work/one'>Link</a><span class='name'>Fixture</span></div>"
+            case "/work/one": html = "<span class='line-title'>A</span><div class='episodes'><a href='/watch/first'>Episode 1</a><a href='/watch/second'>Episode 2</a></div>"
+            case "/work/other": html = "<div class='episodes'><a href='/watch/other'>Episode 1</a></div>"
+            case "/watch/second": html = "<video src='https://cdn.example/selected.mp4'></video>"
+            default: throw Failure.assertion("unselected static page requested")
+            }
+            return SourceHTTPResponse(data: Data(html.utf8), url: url, statusCode: 200)
+        })
+        let hits = try await source.search(query: "Fixture", page: 1)
+        try require(hits.results.count == 1 && hits.results[0].item.kind == .work, "static indexed search failed")
+        let work = try configuration.webItem("https://static.example/work/one", kind: .work)
+        let episode = try configuration.webItem("https://static.example/watch/second", kind: .episode)
+        let catalog = try await source.episodeList(work.pageURL)
+        try require(catalog.nodes.flatMap(\.children).map(\.selectionURL) == ["https://static.example/watch/first", episode.pageURL], "static catalog changed page identity")
+        let selected = PlayableSelection(item: work, episode: episode)
+        let media = try await source.resolveSelection(selected)
+        try require(media.streams["Line 1"]?.url == "https://cdn.example/selected.mp4" &&
+                    media.selection?.item == work && media.selection?.episode == episode && media.selection?.qualityID == "Line 1",
+                    "static exact episode resolve lost its source or selected line")
+        var wrong = selected
+        wrong.item = try configuration.webItem("https://static.example/work/other", kind: .work)
+        do { _ = try await source.resolveSelection(wrong); throw Failure.assertion("episode from another work accepted") }
+        catch PlaybackFailure.missingEpisode {}
+        wrong = selected; wrong.qualityID = "Line 2"
+        do { _ = try await source.resolveSelection(wrong); throw Failure.assertion("different static catalog line accepted") }
+        catch PlaybackFailure.missingEpisode {}
+        do { _ = try await source.decodeUrl(episode.pageURL); throw Failure.assertion("episode-only static decode guessed a work") }
+        catch PlaybackFailure.missingEpisode {}
+        print("PASS: static subscription search, exact catalog identity and work/episode/line resolution")
+    }
+
 }

@@ -23,7 +23,7 @@ struct DownloadSourceResolver: Sendable {
               let page = URL(string: ref.pageURL), page.user == nil, page.password == nil else {
             throw DownloadFailure.invalidSelection
         }
-        let normalized = try registry.item(for: ref.pageURL)
+        let normalized = try registry.item(for: ref.pageURL, expectedKind: ref.kind)
         guard normalized.sourceID == ref.sourceID, normalized.kind == ref.kind else { throw DownloadFailure.invalidSelection }
     }
 

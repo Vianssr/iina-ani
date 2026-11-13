@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "comment-core-library": "file:vendor/comment-core-library",
+    "iina-plugin-definition": "file:vendor/iina-plugin-definition"
+  }
+}

@@ -47,8 +47,6 @@ struct MobileDanmakuRegression {
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = MobileDanmakuStore(defaults: defaults)
-        precondition(store.enabled && store.blockedWords.isEmpty)
-        precondition(!store.hideScrolling && !store.hideTop && !store.hideBottom, "Fresh preferences must preserve existing defaults")
         try store.parse(data: xml)
         precondition(store.filteredCount == 3)
         precondition(store.activeEntries(at: 9).isEmpty)
@@ -59,6 +57,15 @@ struct MobileDanmakuRegression {
         precondition(store.activeEntries(at: 12) == paused, "Backward seek must reproduce only comments active at destination")
         precondition(store.activeEntries(at: 14).count == 2)
         precondition(store.activeEntries(at: 18).isEmpty)
+        store.appearance.speed = 0.5
+        precondition(store.activeEntries(at: 23).map(\.entry.mode) == [.scrolling], "Slow comments must survive beyond the old eight-second lookup window")
+        let slowPaused = store.activeEntries(at: 15)
+        precondition(slowPaused.count == 3)
+        precondition(store.activeEntries(at: 15) == slowPaused)
+        store.appearance.speed = 2
+        precondition(store.activeEntries(at: 14).isEmpty, "Speed changes must immediately rebuild comment lifetimes")
+        precondition(store.activeEntries(at: 12).map(\.entry.mode) == [.scrolling, .top], "Backward seeking must use the new lifetime")
+        store.appearance.speed = 1
         precondition(store.activeEntries(at: .nan).isEmpty)
         store.enabled = false
         precondition(store.activeEntries(at: 12).isEmpty)
@@ -97,6 +104,14 @@ struct MobileDanmakuRegression {
         precondition(store.filteredCount == 20, "Visible count must count matches before lane thinning")
         precondition(store.activeEntries(at: 2).count == 6, "Density must be bounded without overlapping lanes")
         precondition(Set(store.activeEntries(at: 2).map(\.lane)).count == 6)
+        let laneReuse = "[" + (0..<7).map { #"{"time":\#($0 == 6 ? 5 : 0),"text":"Lane \#($0)"}"# }.joined(separator: ",") + "]"
+        try store.parse(data: Data(laneReuse.utf8))
+        precondition(store.activeEntries(at: 5).allSatisfy { $0.entry.time == 0 })
+        store.appearance.speed = 2
+        precondition(store.activeEntries(at: 5).map(\.entry.text) == ["Lane 6"], "Faster speed must release occupied lanes")
+        store.appearance.speed = 0.5
+        precondition(store.activeEntries(at: 9).count == 6, "Slower speed must reserve lanes for the longer lifetime")
+        store.appearance.speed = 1
         store.clear()
         precondition(store.entries.isEmpty && store.activeEntries(at: 2).isEmpty, "Episode changes must clear the timeline")
         precondition(store.filteredCount == 0)
@@ -109,6 +124,7 @@ struct MobileDanmakuRegression {
         store.enabled = false
         store.hideScrolling = true
         store.hideBottom = true
+        store.appearance = MobileDanmakuAppearance(fontName: "Courier", fontSize: 32, speed: 1.5, opacity: 0.45, useSourceColors: false)
         store.clear()
         precondition(store.entries.isEmpty && store.filteredCount == 0)
         precondition(!store.enabled && store.blockedWords == "spoiler")
@@ -117,6 +133,13 @@ struct MobileDanmakuRegression {
         precondition(!restored.enabled && restored.blockedWords == "spoiler")
         precondition(restored.hideScrolling && restored.hideTop && restored.hideBottom, "A new store must restore every saved filter")
         precondition(restored.entries.isEmpty, "Episode content must not be persisted as a global preference")
+        precondition(restored.appearance == store.appearance, "Every appearance control must survive episode clearing and store recreation")
+        restored.appearance.fontSize = .nan
+        restored.appearance.speed = 0
+        restored.appearance.opacity = 2
+        precondition(restored.appearance.fontSize == 24 && restored.appearance.speed == 0.5 && restored.appearance.opacity == 1)
+        let bounded = MobileDanmakuStore(defaults: defaults)
+        precondition(bounded.appearance == restored.appearance, "Invalid settings must be bounded before persistence and timeline use")
         restored.enabled = true
         restored.blockedWords = ""
         restored.hideScrolling = false
@@ -125,6 +148,6 @@ struct MobileDanmakuRegression {
         let reset = MobileDanmakuStore(defaults: defaults)
         precondition(reset.enabled && reset.blockedWords.isEmpty)
         precondition(!reset.hideScrolling && !reset.hideTop && !reset.hideBottom, "Explicitly reset preferences must persist, including false values")
-        print("PASS: danmaku XML/CDF/AcFun parsing, import limits, failed-import preservation, persistent isolated preferences, filters, density, pause and bidirectional seeking")
+        print("PASS: danmaku parsing, import limits, preservation, persistent filters and appearance, speed-dependent lifetimes and lane reuse, pause and bidirectional seeking")
     }
 }

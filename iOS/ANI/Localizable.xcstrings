@@ -1,6 +1,1639 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "請輸入不含登入資訊的公開 HTTPS 訂閱網址。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a public HTTPS subscription URL without login information."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入不含登录信息的公开 HTTPS 订阅网址。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請輸入不含登入資訊的公開 HTTPS 訂閱網址。"
+          }
+        }
+      }
+    },
+    "訂閱網址": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscription URL"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅网址"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱網址"
+          }
+        }
+      }
+    },
+    "訂閱網址已變更；請重新檢查。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The subscription URL changed. Check it again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅网址已更改；请重新检查。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱網址已變更；請重新檢查。"
+          }
+        }
+      }
+    },
+    "待匯入靜態來源": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Static source ready to import"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待导入静态来源"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待匯入靜態來源"
+          }
+        }
+      }
+    },
+    "提供搜尋、選集與靜態直連解析；需明確套用及啟用。未驗證網站即時可用性，不執行遠端腳本或匯入登入資訊。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supports search, episode lists and static media links. Apply and enable explicitly. Live site availability is untested; remote scripts and login information are not imported."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提供搜索、选集与静态直连解析；需明确应用及启用。未验证网站即时可用性，不执行远程脚本或导入登录信息。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提供搜尋、選集與靜態直連解析；需明確套用及啟用。未驗證網站即時可用性，不執行遠端腳本或匯入登入資訊。"
+          }
+        }
+      }
+    },
+    "無法轉換為靜態來源：需公開 HTTPS 網址、有效搜尋與集數選擇器；原有設定保留。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot convert to a static source: a public HTTPS URL and valid search and episode selectors are required. Existing settings were preserved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法转换为静态来源：需要公开 HTTPS 网址、有效搜索与集数选择器；保留原有设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法轉換為靜態來源：需公開 HTTPS 網址、有效搜尋與集數選擇器；原有設定保留。"
+          }
+        }
+      }
+    },
+    "Subscriptions update search rules and can import static page sources. Review the entries before applying; new sources remain disabled.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscriptions update search rules and can import static page sources. Review the entries before applying; new sources remain disabled."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅可更新搜索规则并导入静态页面来源。请预览后应用；新来源保持停用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱可更新搜尋規則並匯入靜態頁面來源。請預覽後套用；新來源保持停用。"
+          }
+        }
+      }
+    },
+    "Apply subscription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply subscription"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用订阅"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "套用訂閱"
+          }
+        }
+      }
+    },
+    "Review source subscription": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Review source subscription"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预览来源订阅"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "預覽來源訂閱"
+          }
+        }
+      }
+    },
+    "Danmaku appearance": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku appearance"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕外观"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕外觀"
+          }
+        }
+      }
+    },
+    "Danmaku font": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku font"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕字体"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕字型"
+          }
+        }
+      }
+    },
+    "System font": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System font"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统字体"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系統字型"
+          }
+        }
+      }
+    },
+    "Danmaku font size": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku font size"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕字号"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕字級"
+          }
+        }
+      }
+    },
+    "Danmaku speed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku speed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕速度"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕速度"
+          }
+        }
+      }
+    },
+    "Danmaku speed does not change video playback speed.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku speed does not change video playback speed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕速度不会改变影片播放速度。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕速度不會改變影片播放速度。"
+          }
+        }
+      }
+    },
+    "Danmaku opacity": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku opacity"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕不透明度"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕不透明度"
+          }
+        }
+      }
+    },
+    "Danmaku color": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku color"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕颜色"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕顏色"
+          }
+        }
+      }
+    },
+    "Source colors": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source colors"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源原色"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源原色"
+          }
+        }
+      }
+    },
+    "Uniform white": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uniform white"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "统一白色"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "統一白色"
+          }
+        }
+      }
+    },
+    "Danmaku preview": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Danmaku preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弹幕预览"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "彈幕預覽"
+          }
+        }
+      }
+    },
+    "Saved configuration is inactive; original data retained.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved configuration is inactive; original data retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存的配置已停用；原始数据已保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存的配置已停用；原始資料已保留。"
+          }
+        }
+      }
+    },
+    "Source configuration conflicts with a built-in source; original data retained.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source configuration conflicts with a built-in source; original data retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源配置与内建来源冲突；原始数据已保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源配置與內建來源衝突；原始資料已保留。"
+          }
+        }
+      }
+    },
+    "Choose playback stream": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose playback stream"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择播放线路"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇播放線路"
+          }
+        }
+      }
+    },
+    "Apply the search subscription to search this built-in source.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apply the search subscription to search this built-in source."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用搜索订阅后即可搜索此内置来源。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "套用搜尋訂閱後即可搜尋此內建來源。"
+          }
+        }
+      }
+    },
+    "Saved webSelector configuration is inactive; original data retained.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved webSelector configuration is inactive; original data retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停用旧 webSelector 配置；原始数据已保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停用舊 webSelector 配置；原始資料已保留。"
+          }
+        }
+      }
+    },
+    "Saved search rules are inactive; original data retained.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved search rules are inactive; original data retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存的搜索规则未启用；原始数据已保留。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存的搜尋規則未啟用；原始資料已保留。"
+          }
+        }
+      }
+    },
+    "Built-in source catalog": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Built-in source catalog"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置来源列表"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "內建來源清單"
+          }
+        }
+      }
+    },
+    "Desktop search baselines": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desktop search baselines"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "桌面搜索基线"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "桌面搜尋基線"
+          }
+        }
+      }
+    },
+    "驗證未通過，已保留": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Validation failed; retained"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证未通过，已保留"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "驗證未通過，已保留"
+          }
+        }
+      }
+    },
+    "未變更": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unchanged"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未更改"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未變更"
+          }
+        }
+      }
+    },
+    "搜尋網址不符合本機核准的 HTTPS 網域、路徑與公開查詢欄位，保留原設定。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The search URL does not match locally approved HTTPS hosts, paths, and public query fields; existing settings are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索网址不符合本机批准的 HTTPS 域名、路径与公开查询字段，保留原设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋網址不符合本機核准的 HTTPS 網域、路徑與公開查詢欄位，保留原設定。"
+          }
+        }
+      }
+    },
+    "尚未支援此搜尋解析格式；不匯入遠端播放解析器，保留原設定。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This search parser format is not supported. Remote playback parsers are not imported; existing settings are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚不支持此搜索解析格式；不导入远程播放解析器，保留原设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未支援此搜尋解析格式；不匯入遠端播放解析器，保留原設定。"
+          }
+        }
+      }
+    },
+    "The source search response did not match its configured format.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source search response did not match its configured format."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源搜索响应与配置的格式不匹配。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源搜尋回應與設定的格式不符。"
+          }
+        }
+      }
+    },
+    "影视森林已移除；訂閱不會恢復其搜尋或播放能力。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yingshi Senlin has been removed; subscriptions will not restore its search or playback capabilities."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影视森林已移除；订阅不会恢复其搜索或播放能力。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "影视森林已移除；訂閱不會恢復其搜尋或播放能力。"
+          }
+        }
+      }
+    },
+    "標題選擇器": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Title Selector"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标题选择器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "標題選擇器"
+          }
+        }
+      }
+    },
+    "The source search request failed before receiving a response.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source search request failed before receiving a response."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源搜索请求在收到响应前失败。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源搜尋請求在收到回應前失敗。"
+          }
+        }
+      }
+    },
+    "來源訂閱超過 128 個項目上限。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source subscription exceeds the limit of 128 items."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源订阅超过 128 个项目上限。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源訂閱超過 128 個項目上限。"
+          }
+        }
+      }
+    },
+    "搜尋設定無法轉換，保留原設定。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search settings could not be converted; existing settings are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索设置无法转换，保留原设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋設定無法轉換，保留原設定。"
+          }
+        }
+      }
+    },
+    "僅支援 web-selector 第 2 版；保留原設定。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only web-selector version 2 is supported; existing settings are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅支持 web-selector 第 2 版；保留原设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅支援 web-selector 第 2 版；保留原設定。"
+          }
+        }
+      }
+    },
+    "封面選擇器": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cover Selector"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面选择器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "封面選擇器"
+          }
+        }
+      }
+    },
+    "訂閱超過大小限制；原有來源未變更。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The subscription exceeds the size limit; existing sources are unchanged."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅超过大小限制；原有来源未更改。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱超過大小限制；原有來源未變更。"
+          }
+        }
+      }
+    },
+    "找不到此來源的本機搜尋與播放適配器，保留原設定。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No local search and playback adapter was found for this source; existing settings are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到此来源的本地搜索与播放适配器，保留原设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到此來源的本機搜尋與播放適配器，保留原設定。"
+          }
+        }
+      }
+    },
+    "新的搜尋規則未取得可辨識作品（網路／驗證頁／無結果）；本次不覆寫舊規則。未判定站點永久失效。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new search rules returned no identifiable works (network, verification page, or no results). Existing rules are retained; the site is not marked permanently unavailable."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新搜索规则未获取可识别作品（网络／验证页／无结果）；本次不覆盖旧规则。未判定站点永久失效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新的搜尋規則未取得可辨識作品（網路／驗證頁／無結果）；本次不覆寫舊規則。未判定站點永久失效。"
+          }
+        }
+      }
+    },
+    "舊規則僅為轉換基線；套用後才參與搜尋／尋源。\n": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Old rules are only a conversion baseline; they participate in search and source discovery only after applying.\n"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旧规则仅为转换基线；应用后才参与搜索／寻源。\n"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "舊規則僅為轉換基線；套用後才參與搜尋／尋源。\n"
+          }
+        }
+      }
+    },
+    "已排除": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excluded"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已排除"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已排除"
+          }
+        }
+      }
+    },
+    "連結選擇器": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link Selector"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "链接选择器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "連結選擇器"
+          }
+        }
+      }
+    },
+    "來源或預覽已變更，請重新檢查訂閱後再套用。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source or preview has changed. Check the subscription again before applying it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源或预览已更改，请重新检查订阅后再应用。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源或預覽已變更，請重新檢查訂閱後再套用。"
+          }
+        }
+      }
+    },
+    "搜尋網址": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search URL"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索网址"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋網址"
+          }
+        }
+      }
+    },
+    "不支援": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支援"
+          }
+        }
+      }
+    },
+    "訂閱下載失敗或回應不受支援；原有來源未變更。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The subscription download failed or its response is unsupported; existing sources are unchanged."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅下载失败或响应不受支持；原有来源未更改。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱下載失敗或回應不受支援；原有來源未變更。"
+          }
+        }
+      }
+    },
+    "搜尋選擇器無效或超過 1024 字元上限，保留原設定。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The search selector is invalid or exceeds 1,024 characters; existing settings are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索选择器无效或超过 1024 字符上限，保留原设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋選擇器無效或超過 1024 字元上限，保留原設定。"
+          }
+        }
+      }
+    },
+    "待更新": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pending Update"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待更新"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待更新"
+          }
+        }
+      }
+    },
+    "The source search server returned HTTP %lld.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source search server returned HTTP %lld."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源搜索服务器返回 HTTP %lld。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源搜尋伺服器傳回 HTTP %lld。"
+          }
+        }
+      }
+    },
+    "缺少，已保留": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Missing; retained"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缺失，已保留"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缺少，已保留"
+          }
+        }
+      }
+    },
+    "1080p／720p 共用一個搜尋來源；保留本機品質選擇與播放適配器。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1080p and 720p share one search source; local quality selection and playback adapters are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1080p／720p 共用一个搜索来源；保留本地画质选择与播放适配器。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1080p／720p 共用一個搜尋來源；保留本機品質選擇與播放適配器。"
+          }
+        }
+      }
+    },
+    "The source search configuration is invalid.": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source search configuration is invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源搜索配置无效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源搜尋設定無效。"
+          }
+        }
+      }
+    },
+    "未知或無效網域，不能以名稱替換現有來源；未新增播放能力。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The host is unknown or invalid. Existing sources cannot be replaced by name; no playback capability was added."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知或无效域名，不能以名称替换现有来源；未新增播放能力。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知或無效網域，不能以名稱替換現有來源；未新增播放能力。"
+          }
+        }
+      }
+    },
+    "衝突，已保留": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conflict; retained"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "冲突，已保留"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "衝突，已保留"
+          }
+        }
+      }
+    },
+    "結果選擇器": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Result Selector"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结果选择器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "結果選擇器"
+          }
+        }
+      }
+    },
+    "無": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無"
+          }
+        }
+      }
+    },
+    "來源訂閱超過 2 MiB 上限。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The source subscription exceeds the 2 MiB limit."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源订阅超过 2 MiB 上限。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源訂閱超過 2 MiB 上限。"
+          }
+        }
+      }
+    },
+    "待啟用": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pending Activation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待启用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待啟用"
+          }
+        }
+      }
+    },
+    "同一來源的重複項目互相衝突或含不支援設定；全部拒絕，保留先前設定。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicate entries for the same source conflict or contain unsupported settings. All are rejected; previous settings are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一来源的重复项目互相冲突或含不支持的设置；全部拒绝，保留先前设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一來源的重複項目互相衝突或含不支援設定；全部拒絕，保留先前設定。"
+          }
+        }
+      }
+    },
+    "訂閱項目 %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Subscription Item %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "订阅项目 %lld"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "訂閱項目 %lld"
+          }
+        }
+      }
+    },
+    "本次訂閱未提供此來源，保留已安裝的搜尋與播放設定。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This subscription does not include this source; installed search and playback settings are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次订阅未提供此来源，保留已安装的搜索与播放设置。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次訂閱未提供此來源，保留已安裝的搜尋與播放設定。"
+          }
+        }
+      }
+    },
+    "僅更新公開搜尋欄位；保留本機分頁、播放解析與帳號邊界。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only public search fields are updated; local pagination, playback parsing, and account boundaries are retained."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅更新公开搜索字段；保留本地分页、播放解析与账号边界。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅更新公開搜尋欄位；保留本機分頁、播放解析與帳號邊界。"
+          }
+        }
+      }
+    },
+    "來源訂閱格式無效，應包含 mediaSources 或 exportedMediaSourceDataList.mediaSources。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid source subscription format: expected mediaSources or exportedMediaSourceDataList.mediaSources."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源订阅格式无效，应包含 mediaSources 或 exportedMediaSourceDataList.mediaSources。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "來源訂閱格式無效，應包含 mediaSources 或 exportedMediaSourceDataList.mediaSources。"
+          }
+        }
+      }
+    },
+    "找不到本機來源搜尋基線：%@。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local source search baseline could not be found: %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到本地来源搜索基线：%@。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到本機來源搜尋基線：%@。"
+          }
+        }
+      }
+    },
+    "本機來源搜尋基線格式無效。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The local source search baseline format is invalid."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地来源搜索基线格式无效。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本機來源搜尋基線格式無效。"
+          }
+        }
+      }
+    },
+  "Import source JSON or source lists. The default CSS1 subscription only updates built-in search rules.": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Import source JSON or source lists. The default CSS1 subscription only updates built-in search rules."
+        }
+      },
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "导入来源 JSON 或来源列表。默认 CSS1 订阅仅更新内置搜索规则。"
+        }
+      },
+      "zh-Hant": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "匯入來源 JSON 或來源清單。預設 CSS1 訂閱僅更新內建搜尋規則。"
+        }
+      }
+    }
+  },
+  "Search updates keep saved playback selections and source enablement unchanged.": {
+    "extractionState": "manual",
+    "localizations": {
+      "en": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "Search updates keep saved playback selections and source enablement unchanged."
+        }
+      },
+      "zh-Hans": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "搜索更新不会更改已保存的播放选择或来源启用状态。"
+        }
+      },
+      "zh-Hant": {
+        "stringUnit": {
+          "state": "translated",
+          "value": "搜尋更新不會變更已儲存的播放選擇或來源啟用狀態。"
+        }
+      }
+    }
+  },
     "This line is restricted to the source's own app. Select the website line.": {
       "extractionState": "manual",
       "localizations": {

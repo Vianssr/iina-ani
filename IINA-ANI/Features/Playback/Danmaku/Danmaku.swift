@@ -562,7 +562,21 @@ new Uint8Array(sendRegisterGroups(["live:\(id)", "chat:\(id)"]));
 				let ree = try Douyin_Response(serializedBytes: re.data.gunzipped())
 				let dms = ree.messagesList.filter { $0.method == "WebcastChatMessage" }.compactMap {
 					try? Douyin_ChatMessage(serializedBytes: $0.payload)
-				}.map { DanmakuComment(text: $0.content) }
+                }.map { message in
+                    var comment = DanmakuComment(text: message.content)
+                    if message.hasRtfContent, message.rtfContent.hasDefaultFormat {
+                        let format = message.rtfContent.defaultFormat
+                        // Only an explicit message-level RGB format applies to the comment.
+                        let hex = format.color.hasPrefix("#") ? String(format.color.dropFirst()) : format.color
+                        if hex.count == 6, let color = Int(hex, radix: 16), (0...0xFFFFFF).contains(color) {
+                            comment.color = color
+                        }
+                        if format.fontSize > 0 {
+                            comment.fontSize = Int(format.fontSize)
+                        }
+                    }
+                    return comment
+                }
 				sendDM(.init(method: .sendDM, text: "", dms: dms))
 				guard ree.needAck else { return }
 				var pf = Douyin_PushFrame()

@@ -14,6 +14,9 @@ flowchart TD
     Features --> Infrastructure[Infrastructure：儲存、HTTP 與快取]
     Features --> SourceCore[SourceCore：來源契約、配置驗證與公開播放器協議]
     iOS[iOS：ANI] --> SourceCore
+    iOS --> SourceRuntime[SourceRuntime：桌面衍生來源解析、HTTP 與搜尋訂閱]
+    Features --> SourceRuntime
+    SourceRuntime --> SourceCore
     Features --> HuyaKit[HuyaKit：虎牙串流代理]
     Features --> Torrent[Native：Torrent 核心]
     Workspace --> LayoutScript[Native：LayoutScript helper]
@@ -35,7 +38,7 @@ flowchart TD
 | `IINA-ANI/Features/Bangumi/` | Bangumi 模型、查詢與作品同步 |
 | `IINA-ANI/Features/Discovery/` | 搜尋、推薦聚合、Bilibili 動態、YouTube 瀏覽與 trace.moe 識圖 |
 | `IINA-ANI/Features/Sources/` | 平台來源登記、配置／訂閱管理與統一媒體結果；`Decoders/` 存放解析器 |
-| `SourceCore/` | macOS／iOS 共用的來源身份、能力、配置驗證、訂閱規則與固定公開播放器協議 |
+| `SourceCore/` | 共用 SourceCore 身份／配置／公開播放器協議，以及 SourceRuntime 桌面衍生原生／配置解析、HTTP 與搜尋訂閱 |
 | `IINA-ANI/Features/Playback/` | 播放協調、播放器參數、進度與歷史；`Danmaku/`、`JSPlayer/`、`OpenFiles/` 分別處理彈幕、網頁播放器及本機影片入口 |
 | `IINA-ANI/Features/Downloads/` | 下載任務、來源解析、直連與 HLS 後端 |
 | `IINA-ANI/Features/Torrent/` | 原生 session、RSS 搜尋、metadata、下載後端、HTTP Range 與串流播放 |
@@ -95,9 +98,9 @@ Layout 編排經驗證與交易保存。Skin 套件由封裝與儲存層管理�
 
 `BrowseSearchService` 整合 Bangumi 搜尋、來源搜尋與網址解析；`DiscoveryService` 聚合日常推薦及放送資訊。`BangumiService` 提供作品、集數、人物、關聯與評論資料，`BangumiWorkSync` 將作品資訊接入本機作品庫。
 
-`SourceRegistry` 保存來源描述與能力，並提供完整 JSON 的預覽／原子匯入／同 ID 替換；使用者配置覆蓋隨包配置，匯入後停用，清單按 ID 排序。`SourceSubscriptionService` 另外處理搜尋規則訂閱，不冒充完整來源配置。`AnimeSourceService` 結合作品、集數與來源映射尋找候選；已保存的精確映射優先，失效時阻止自動換站。
+`SourceRegistry` 保存來源描述與能力，並提供完整 JSON 的預覽／原子匯入／同 ID 替換；使用者配置覆蓋隨包配置，匯入後停用，清單按 ID 排序。`SourceSubscriptionService` 處理訂閱預覽；原生搜尋覆寫與新增 v4 靜態配置分開驗證，在同一快照原子保存。`AnimeSourceService` 結合作品、集數與來源映射尋找候選；已保存的精確映射優先，失效時阻止自動換站。
 
-M6 的兩端搜尋訂閱共用 `SourceSubscriptionRules` 的已審核 host／selector 規則。iOS `MobileSourceSubscription` 將 CSS1 搜尋更新做相容性核對、探測、差異預覽與原子 overlay 保存，不改完整配置的播放規則或來源啟用狀態。`MobileSourceDiscovery` 只在名稱、年份、類型、明確季度及唯一正篇集數證據完整時自動交接；候選不完整／歧義及既有失效映射都阻止自動播放。
+兩端訂閱共用 `SourceRuntime.SourceSubscriptionConverter` 及匿名、有界的自訂 HTTPS 下載政策。已安裝來源按精確 host 更新通用搜尋規則；未知站可轉為 v4 靜態配置，由 `StaticWebSourceClient` 共用搜尋、目錄及直連解析。iOS `MobileSourceSubscription` 管理預覽生命週期及原子快照保存；搜尋覆寫不改原生播放修訂，新靜態配置擁有自己的修訂且預設停用；`MobileSourceLibrary` 載入 17 個本機來源身份，舊 v3 `webSelector` 配置保留資料但不執行。`MobileSourceClient` 委派 SourceRuntime 的原生／完整配置適配器，不保留舊行動 CSS1 解析分支。`MobileSourceDiscovery` 仍要求名稱、年份、類型、明確季度及唯一正篇集數證據，歧義及既有失效映射阻止自動播放。
 
 Bilibili 動態及 YouTube 瀏覽使用各自的服務。`TraceMoeSearchService` 接收準備完成的圖片並返回辨識候選，結果由窗口送往作品搜尋、AniList 或預覽入口。
 
@@ -113,7 +116,7 @@ M4 的 `MobileSourceContinuation` 將原來源 client 與持久配置權威帶�
 
 M6 的共用完整配置升至 v2 才可選 `danmaku`，宣告固定 `bilibili-xml` provider 與精確播放頁／aid／cid，參與配置 fingerprint；舊 v1 繼續接受原欄位，不接受新彈幕欄位。iOS `MobileBilibiliDanmakuProvider` 以訪客請求核對公開影片 metadata 與 XML chatid，拒絕 redirect、跨集、超限與不支援格式；`MobileAutomaticDanmaku` 以播放集數、load、請求版本及持久來源權威隔離結果。手動附件優先，關閉／取消／切集撤銷舊結果；桌面仍使用原生站點／播放器彈幕路徑，不把配置宣告誤當桌面新後端。
 
-直播彈幕轉為 `DanmakuEvent`，經本機 WebSocket 傳往 IINA 彈幕外掛，或經 JavaScript bridge 送入 JSPlayer；點播彈幕使用 XML 檔案。虎牙串流由 `HuyaKit` 解析 `.slice`，經本機 FLV 代理提供給播放器。
+直播彈幕轉為 `DanmakuEvent`，經本機 WebSocket 傳往 IINA 彈幕外掛，或經 JavaScript bridge 送入 JSPlayer；點播彈幕使用 XML 檔案。`DanmakuComment` 可攜來源顏色、模式與字號，缺少來源資料時才採白色滾動預設。`Preferences` 變更通知將完整 `DanmakuSettings` 快照同步至 v2 工作階段與 JSPlayer；舊協議保留其既有訊息格式。XML 外掛使用 settings-only 連線，不建立直播訂閱。`WebFiles/Danmaku/danmaku-settings.js` 是內建與外掛唯一共用的設定／篩選／逐條懸停實作；關閉／換片清除計時器、連線與互動狀態。IINA 原生 overlay 層級不在公開插件 API 的控制範圍，標記為無法修復，不以 CSS 宣稱修正。虎牙串流由 `HuyaKit` 解析 `.slice`，經本機 FLV 代理提供給播放器。
 
 ### 帳號與請求上下文
 
@@ -161,9 +164,9 @@ Core Data 模型位於 `Core Data/DataModel.xcdatamodeld`，目前模型為 `Lib
 
 ## 套件與資源組成
 
-Swift 依賴由 Xcode 的 Swift Package Manager 整合。根工程以 `SourceCore`、iOS 工程以 `../SourceCore` 引用同一個本機套件，兩端使用 `import SourceCore`；來源契約與配置驗證不再透過重複 target membership 或 `MOBILE_SOURCES` 分支編譯。`PublicPlayerProtocol` 的 HTTP transport 留在 App 端，桌面解碼錯誤亦在適配層轉換；JSON 欄位、配置 fingerprint 與持久化身份維持原格式。套件邊界及獨立測試見 [SourceCore](../../SourceCore/README.md)。`HuyaKit/Package.swift` 定義虎牙 library 與 `huyaproxy` executable。`Native` 的 C++ 核心透過 `TorrentBridge.h` 與 Swift 交換 session、metadata、檔案及傳輸狀態。
+Swift 依賴由 Xcode 的 Swift Package Manager 整合。根工程以 `SourceCore`、iOS 工程以 `../SourceCore` 引用同一個本機套件，兩端連結 `SourceCore` 與 `SourceRuntime` 產品；來源契約與配置驗證沒有 `MOBILE_SOURCES` 分支。行動來源 HTTP、從桌面移植的 16 個原生解析器及完整配置解析器位於 SourceRuntime；桌面原有帳號傳輸與原生適配器保留。兩端搜尋訂閱使用同一轉換／下載實作。既有配置 fingerprint 維持格式，原生適配器亦提供穩定 SHA-256 修訂。套件邊界與獨立測試見 [SourceCore](../../SourceCore/README.md)。`HuyaKit/Package.swift` 定義虎牙 library 與 `huyaproxy` executable；`Native` C++ 核心透過 `TorrentBridge.h` 與 Swift 交換 session、metadata、檔案及傳輸狀態。
 
-`WebFiles/package.json` 管理網頁播放器與彈幕所需的 JavaScript 資源；`InstallDeps.sh` 準備這些資源與外部 IINA 彈幕外掛。圖像位於 `Assets/`，來源規則位於 `Sources/`，本地化字串由字串目錄及各網頁／Storyboard 資源提供。
+`WebFiles/package.json` 管理網頁播放器與彈幕所需的 JavaScript 資源；`InstallDeps.sh` 執行 `npm ci` 並呼叫 `PackageDanmakuPlugin.sh`。IINA 外掛維護於 `Plugins/Danmaku/`，保留上游授權與固定 vendor 依賴；打包腳本離線產生可重現的 `.iinaplgz`，核對 App／外掛版本，並加入同一份共用 renderer helper。Xcode 的 `Package Danmaku Plugin` 階段亦會自動打包，不再下載上游最新外掛或改寫版本常數。圖像位於 `Assets/`，來源規則位於 `Sources/`，本地化字串由字串目錄及各網頁／Storyboard 資源提供。
 
 `Config/App.xcconfig` 載入本機配置，將 Bangumi OAuth 應用設定注入 Info.plist。Xcode 建置階段同時整合 Torrent 原生核心與 LayoutScript helper。
 

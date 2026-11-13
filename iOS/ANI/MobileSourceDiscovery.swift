@@ -1,9 +1,10 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 import Observation
 
 struct MobileSourceCandidate: Identifiable, Sendable {
-    let configuration: SourceConfiguration
+    let source: RuntimeSource
     let catalog: MobileSourceCatalog
     let episode: MobileSourceEpisode?
     let trusted: Bool
@@ -105,9 +106,10 @@ final class MobileSourceDiscovery {
         generation += 1; task?.cancel(); task = nil; busy = false; automatic = nil
     }
 
-    func find(anime: Anime, episode: CatalogEpisode, sources: [SourceConfiguration],
+    func find(anime: Anime, episode: CatalogEpisode, sources: [MobileSourceEntry],
               library: MobileLibrary, authority: @escaping (String) throws -> String,
-              client: @escaping (SourceConfiguration) -> MobileSourceClient = { .make(configuration: $0) }) {
+              searchAuthority: ((String) throws -> String)? = nil,
+              client: @escaping (MobileSourceEntry) -> MobileSourceClient = { .make(source: $0.source, search: $0.search) }) {
         cancel(); candidates = []; failures = []; searched = false
         // An invalid stored choice is still a choice: only explicit durable deletion unlocks discovery.
         guard library.isReadable, library.storedMapping(for: .bangumi(anime.id),
@@ -118,18 +120,36 @@ final class MobileSourceDiscovery {
             var found: [MobileSourceCandidate] = []
             var errors: [PlaybackFailure] = []
             var allComplete = true
-            for configuration in sources.sorted(by: { $0.id < $1.id }) {
+            func validate(_ entry: MobileSourceEntry) throws {
+                guard try authority(entry.id) == entry.source.configurationRevision else { throw PlaybackFailure.configurationChanged }
+                if let searchAuthority {
+                    guard try searchAuthority(entry.id) == entry.searchRevision else { throw PlaybackFailure.configurationChanged }
+                }
+            }
+            // Snapshot participation before the first request. Sources disabled at
+            // entry are not candidates; disabling a participant later still revokes trust.
+            let searchSources = sources.sorted(by: { $0.id < $1.id }).filter { entry in
+                do {
+                    try validate(entry)
+                    return true
+                } catch {
+                    let failure = MobileSourceClient.failure(for: error)
+                    if failure != .sourceDisabled { allComplete = false; errors.append(failure) }
+                    return false
+                }
+            }
+            for entry in searchSources {
                 do {
                     try Task.checkCancellation()
-                    guard try authority(configuration.id) == configuration.configurationRevision else { throw PlaybackFailure.configurationChanged }
-                    let api = client(configuration)
+                    try validate(entry)
+                    let api = client(entry)
                     try api.require(.search); try api.require(.episodes); try api.require(.resolve); try api.require(.mpv)
                     var seen = Set<String>()
                     let aliases = Array(Set([anime.title, anime.name].filter { !$0.isEmpty })).sorted()
                     for alias in aliases {
                         let page = try await api.search(alias)
                         try Task.checkCancellation()
-                        guard try authority(configuration.id) == configuration.configurationRevision else { throw PlaybackFailure.configurationChanged }
+                        try validate(entry)
                         if page.nextPage != nil { allComplete = false }
                         if page.works.count > 8 { allComplete = false }
                         for work in page.works.prefix(8) where seen.insert(work.id).inserted {
@@ -137,26 +157,26 @@ final class MobileSourceDiscovery {
                             guard evidence.compatible else { continue }
                             let catalog = try await api.catalog(work)
                             try Task.checkCancellation()
-                            guard try authority(configuration.id) == configuration.configurationRevision else { throw PlaybackFailure.configurationChanged }
+                            try validate(entry)
                             let actual = MobileSourceTrust.evidence(anime: anime, title: catalog.work.title)
                             let leaf = MobileSourceTrust.episode(in: catalog, requested: episode, anime: anime)
                             if leaf == nil { errors.append(.missingEpisode) }
-                            found.append(MobileSourceCandidate(configuration: configuration, catalog: catalog,
-                                episode: leaf, trusted: evidence.trusted && actual.trusted && leaf != nil))
+                            found.append(MobileSourceCandidate(source: entry.source, catalog: catalog,
+                                episode: leaf, trusted: entry.source.classification.kind == .anime && evidence.trusted && actual.trusted && leaf != nil))
                         }
                     }
                 } catch {
                     if Task.isCancelled || error is CancellationError { return }
-                    let failure = MobileSourceClient.failure(for: error)
-                    if failure != .sourceDisabled { allComplete = false; errors.append(failure) }
+                    allComplete = false
+                    errors.append(MobileSourceClient.failure(for: error))
                 }
             }
             guard let self, self.generation == expected, !Task.isCancelled else { return }
-            // Revalidate the entire search set at issuance; a later disabled/config-changed candidate
-            // cannot turn an ambiguous report into an apparently unique automatic choice.
-            for candidate in found {
+            // Revalidate every participant, even those with no results, so a later
+            // authority change cannot make an incomplete search appear unique.
+            for entry in searchSources {
                 do {
-                    guard try authority(candidate.configuration.id) == candidate.configuration.configurationRevision else { throw PlaybackFailure.configurationChanged }
+                    try validate(entry)
                 } catch { allComplete = false; errors.append(MobileSourceClient.failure(for: error)) }
             }
             guard library.isReadable, library.storedMapping(for: .bangumi(anime.id),

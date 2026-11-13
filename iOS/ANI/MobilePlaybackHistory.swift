@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import CryptoKit
 import Foundation
 import Observation
@@ -135,19 +136,19 @@ final class MobilePlaybackHistory {
     }
 
     func begin(context: PlaybackContext?, localReference: MobileLocalMediaReference?, title: String,
-               configuration: SourceConfiguration?, identity: PlaybackLoadIdentity,
+               source: RuntimeSource?, identity: PlaybackLoadIdentity,
                resumePosition: Double? = nil) -> MobilePlaybackHistoryRecorder? {
         do {
             guard isReadable else { throw StorageFailure.unreadable }
             let durable: PlaybackContext?
             let entryID: String
             if let context {
-                guard localReference == nil, let configuration,
-                      context.configurationRevision == configuration.configurationRevision else {
+                guard localReference == nil, let source,
+                      context.configurationRevision == source.configurationRevision else {
                     throw PlaybackFailure.configurationChanged
                 }
                 durable = PlaybackContext(work: context.work, episode: context.episode,
-                    selection: try configuration.mappingSelection(context.selection),
+                    selection: try source.mappingSelection(context.selection),
                     configurationRevision: context.configurationRevision)
                 try ConfirmedSourceMapping(context: durable!, sourceTitle: title).validateForPersistence()
                 entryID = MobilePlaybackHistoryEntry.sourceID(durable!)

@@ -100,7 +100,7 @@ actor WebSocketSession {
 }
 
 @MainActor
-final class DanmakuSessionManager: DanmakuDelegate, DanmakuWSDelegate {
+final class DanmakuSessionManager: NSObject, DanmakuDelegate, DanmakuWSDelegate {
     private let decoder: VideoDecoder
     private var connectedItems: [String: DanmakuWS] = [:]
     private var danmakus = [Danmaku]()
@@ -108,6 +108,13 @@ final class DanmakuSessionManager: DanmakuDelegate, DanmakuWSDelegate {
 
     init(decoder: VideoDecoder) {
         self.decoder = decoder
+        super.init()
+        NotificationCenter.default.addObserver(self, selector: #selector(settingsChanged),
+            name: Preferences.danmakuSettingsDidChangeNotification, object: Preferences.shared)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     // MARK: - Session lifecycle
@@ -119,15 +126,8 @@ final class DanmakuSessionManager: DanmakuDelegate, DanmakuWSDelegate {
     func sessionEnded(_ session: WebSocketSession) {
         let contextName = session.contextName
         sessions.removeValue(forKey: contextName)
-        connectedItems = connectedItems.filter { $0.value.contextName != contextName }
-        let activeURLs = Set(connectedItems.values.map { $0.url })
-        danmakus.removeAll { dm in
-            let remove = !activeURLs.contains(dm.url)
-            if remove {
-                dm.stop()
-            }
-            return remove
-        }
+        connectedItems.removeValue(forKey: contextName)
+        stopUnusedDanmakus()
     }
 
     // MARK: - Text handling
@@ -135,7 +135,7 @@ final class DanmakuSessionManager: DanmakuDelegate, DanmakuWSDelegate {
     func textReceived(_ text: String, contextName: String) {
         var clickType: IINAUrlType = .none
 
-        var ws: DanmakuWS? = {
+        let ws: DanmakuWS? = {
             if text.starts(with: "iinaDM://") {
                 clickType = .plugin
                 var v = 0
@@ -165,7 +165,8 @@ final class DanmakuSessionManager: DanmakuDelegate, DanmakuWSDelegate {
                                    site: .init(url: u),
                                    url: u,
                                    contextName: contextName)
-                re.version = 1
+                // This scheme belongs to the bundled renderer, which consumes atomic settings.
+                re.version = 2
                 return re
             } else {
                 return nil
@@ -175,25 +176,33 @@ final class DanmakuSessionManager: DanmakuDelegate, DanmakuWSDelegate {
         guard var ws else { return }
 
         ws.delegate = self
-        ws.loadCustomFont()
-        ws.customDMSpeed()
-        ws.customDMOpdacity()
-
+        connectedItems.removeValue(forKey: contextName)
         switch clickType {
         case .danmaku:
             if [.bilibili, .bangumi, .b23].contains(ws.site) {
-                ws.loadFilters()
+                connectedItems[contextName] = ws
+                ws.synchronizeSettings()
                 ws.loadXMLDM()
             } else if ws.site != .unsupported {
+                connectedItems[contextName] = ws
+                ws.synchronizeSettings()
                 loadNewDanmaku(ws)
-                connectedItems["\(ws.contextName):\(ws.url)"] = ws
             }
+        case .plugin where ws.version >= 2 && ws.url == "settings":
+            // XML remains loaded by the plugin; this session only receives preferences.
+            connectedItems[contextName] = ws
+            ws.synchronizeSettings()
         case .plugin where ![.unsupported, .bangumi, .bilibili, .b23].contains(ws.site):
+            connectedItems[contextName] = ws
+            ws.synchronizeSettings()
             loadNewDanmaku(ws)
-            connectedItems["\(ws.contextName):\(ws.url)"] = ws
+        case .plugin:
+            connectedItems[contextName] = ws
+            ws.synchronizeSettings()
         default:
             break
         }
+        stopUnusedDanmakus()
     }
 
     // MARK: - DanmakuDelegate
@@ -214,6 +223,19 @@ final class DanmakuSessionManager: DanmakuDelegate, DanmakuWSDelegate {
     }
 
     // MARK: - Private
+
+    @objc private func settingsChanged() {
+        connectedItems.values.forEach { $0.synchronizeSettings() }
+    }
+
+    private func stopUnusedDanmakus() {
+        let activeURLs = Set(connectedItems.values.map { $0.url })
+        danmakus.removeAll { dm in
+            guard !activeURLs.contains(dm.url) else { return false }
+            dm.stop()
+            return true
+        }
+    }
 
     private func loadNewDanmaku(_ ws: DanmakuWS) {
         guard !danmakus.contains(where: { $0.url == ws.url }) else { return }

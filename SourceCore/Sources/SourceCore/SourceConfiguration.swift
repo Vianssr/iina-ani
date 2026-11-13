@@ -2,7 +2,8 @@ import Foundation
 import CryptoKit
 
 public struct SourceConfiguration: Decodable, Sendable {
-    /// Declarative CSS1 selectors. Executed by the iOS static-page adapter only.
+    /// Declarative selectors. Version 4 uses the shared static-page adapter;
+    /// retained version 3 data is never implicitly upgraded by an application.
     public struct WebSelector: Codable, Sendable {
         public let baseURL: String
         public let relativeLinksUseSearchURL: Bool?
@@ -85,6 +86,13 @@ public struct SourceConfiguration: Decodable, Sendable {
         public let jsonCoverPath: String?
         public let jsonIdentifierPath: String?
         public let jsonTotalPath: String?
+        /// Independent selectors must be paired by their DOM container, never by list position.
+        public let indexedNamesSelector: String?
+        public let indexedLinksSelector: String?
+        public let resultBaseURL: String?
+        public let resultURLTemplate: String?
+        public let jsonTitleAlternatives: [String]?
+        public let jsonIdentifierAlternatives: [String]?
     }
     /// Explicit, reviewed episode bindings, never title or catalogue-index matches.
     /// This guest XML provider is consumed by iOS, not the desktop generic decoder.
@@ -134,8 +142,8 @@ public struct SourceConfiguration: Decodable, Sendable {
         id = try c.decode(String.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         version = try c.decode(Int.self, forKey: .version)
-        guard (1...3).contains(version), version >= 2 || !c.contains(.danmaku),
-              (version == 3) == c.contains(.webSelector) else {
+        guard (1...4).contains(version), version >= 2 || !c.contains(.danmaku),
+              (version >= 3) == c.contains(.webSelector) else {
             throw ConfigurationError.invalidConfiguration
         }
         hosts = try c.decode([String].self, forKey: .hosts).map { $0.lowercased() }
@@ -206,7 +214,7 @@ public struct SourceConfiguration: Decodable, Sendable {
             "route": ["pattern","idGroup","lineGroup","episodeGroup","detailTemplate","queryIdentityParameter","idIsPositiveInteger"],
             "catalog": ["url","format","titleSelector","coverSelector","coverAttribute","panelSelector","lineTitleSelector","episodeSelector","episodeTitleSelector","episodeURLAttribute","jsonTitlePath","jsonCoverPath","jsonEntriesPath","jsonEpisodeTitlePath","jsonEpisodeURLPath","jsonEpisodeIdentityPath","jsonMediaPath","jsonEntryExtensions","jsonLineTitlePath","jsonLineNumberPath","jsonEpisodeNumberPath","labelLinkTemplate"],
             "player": ["format","payloadPattern","idKey","lineKey","episodeKey","paidKey","previewKey","encodingKey","urlKey","idIsString","allowedExtensions","streamURLTemplate","rejectSelectors"],
-            "search": ["url", "format", "queryParameter", "pageParameter", "rowsPerPage", "firstPage", "resultsSelector", "titleSelector", "linkSelector", "nextPageSelector", "rejectSelectors", "coverSelector", "coverAttribute", "hrefAttribute", "jsonResultsPath", "jsonTitlePath", "jsonCoverPath", "jsonIdentifierPath", "jsonTotalPath"],
+            "search": ["url", "format", "queryParameter", "pageParameter", "rowsPerPage", "firstPage", "resultsSelector", "titleSelector", "linkSelector", "nextPageSelector", "rejectSelectors", "coverSelector", "coverAttribute", "hrefAttribute", "jsonResultsPath", "jsonTitlePath", "jsonCoverPath", "jsonIdentifierPath", "jsonTotalPath", "indexedNamesSelector", "indexedLinksSelector", "resultBaseURL", "resultURLTemplate", "jsonTitleAlternatives", "jsonIdentifierAlternatives"],
             "webSelector": ["baseURL", "relativeLinksUseSearchURL", "preferredVideoHeight", "subjectFormat", "searchNames", "searchLinks", "linkTemplate", "channelFormat", "channelNames", "episodeLists", "episodeNames", "episodeLinks"],
             "danmaku": ["provider", "episodes"]
         ]
@@ -247,7 +255,7 @@ public struct SourceConfiguration: Decodable, Sendable {
         }
         let supported: Set<SourceCapability> = [.information, .resolve, .episodes, .lines, .quality, .search, .iina, .mpv, .download]
         guard !id.isEmpty, id.count <= 64, id.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-" || $0 == "_") }),
-              !name.isEmpty, (1...3).contains(version), !hosts.isEmpty, hosts.allSatisfy(validHost), mediaHosts.allSatisfy(validHost),
+              !name.isEmpty, (1...4).contains(version), !hosts.isEmpty, hosts.allSatisfy(validHost), mediaHosts.allSatisfy(validHost),
               credentialHosts.allSatisfy({ hosts.contains($0) }), !capabilities.isEmpty, capabilities.isSubset(of: supported),
               capabilities.contains(.information), capabilities.contains(.resolve), capabilities.contains(.episodes),
               route.idGroup > 0, route.lineGroup.map({ $0 > 0 }) ?? true, route.episodeGroup.map({ $0 > 0 }) ?? true,
@@ -258,9 +266,10 @@ public struct SourceConfiguration: Decodable, Sendable {
             throw ConfigurationError.invalidConfiguration
         }
         if let spec = webSelector {
-            guard version == 3, catalog.format == "web-selector", player.format == "web-selector",
-                  search?.format == "web-selector", search?.url.components(separatedBy: "{query}").count == 2,
-                  search?.queryParameter == "", search?.pageParameter == "", search?.rowsPerPage == 100,
+            guard (version == 3 || version == 4), catalog.format == "web-selector", player.format == "web-selector",
+                  (version == 3 ? search?.format == "web-selector" : ["html", "json"].contains(search?.format ?? "")),
+                  search?.url.components(separatedBy: "{query}").count == 2,
+                  (version == 4 || (search?.queryParameter == "" && search?.pageParameter == "" && search?.rowsPerPage == 100)),
                   route.pattern == "^/(.*)$", route.idGroup == 1,
                   route.lineGroup == nil, route.episodeGroup == nil, route.queryIdentityParameter == nil,
                   route.detailTemplate == spec.baseURL + "/{id}", catalog.url == route.detailTemplate,
@@ -268,15 +277,20 @@ public struct SourceConfiguration: Decodable, Sendable {
                   URLComponents(string: spec.baseURL)?.query == nil,
                   URLComponents(string: spec.baseURL)?.fragment == nil,
                   credentialHosts.isEmpty, danmaku == nil,
-                  capabilities.isSubset(of: [.information, .search, .episodes, .lines, .resolve, .mpv]),
+                  capabilities.isSubset(of: version == 3 ? [.information, .search, .episodes, .lines, .resolve, .mpv] : [.information, .search, .episodes, .lines, .resolve, .mpv, .iina]),
                   ["a", "indexed", "json-path-indexed"].contains(spec.subjectFormat),
                   ["index-grouped", "no-channel"].contains(spec.channelFormat),
                   (try? requestURL(spec.baseURL)) != nil,
                   let searchURL = search?.url, !hasInlineAuthentication(searchURL), !hasInlineAuthentication(spec.baseURL),
-                  !expanded(searchURL, values: ["query": "test"]).contains("{"),
-                  !expanded(searchURL, values: ["query": "test"]).contains("}"),
-                  (try? requestURL(expanded(searchURL, values: ["query": "test"]))) != nil else {
+                  !expanded(searchURL, values: ["query": "test", "page": "1"]).contains("{"),
+                  !expanded(searchURL, values: ["query": "test", "page": "1"]).contains("}"),
+                  (try? requestURL(expanded(searchURL, values: ["query": "test", "page": "1"]))) != nil else {
                 throw ConfigurationError.invalidConfiguration
+            }
+            if version == 4 {
+                guard hosts.allSatisfy(Self.publicDNSHost), mediaHosts.allSatisfy(Self.publicDNSHost),
+                      let search else { throw ConfigurationError.invalidConfiguration }
+                try validateSearch(search)
             }
             if let height = spec.preferredVideoHeight, !(1...4320).contains(height) {
                 throw ConfigurationError.invalidConfiguration
@@ -305,10 +319,6 @@ public struct SourceConfiguration: Decodable, Sendable {
             throw ConfigurationError.invalidConfiguration
         }
         let sampleID = "ConfigValidationID"
-        func hasInlineAuthentication(_ raw: String) -> Bool {
-            let names: Set<String> = ["cookie", "token", "access_token", "authorization", "auth", "api_key", "apikey", "password"]
-            return (URLComponents(string: raw)?.queryItems ?? []).contains { names.contains($0.name.lowercased()) }
-        }
         let detail = expanded(route.detailTemplate, values: ["id": sampleID])
         guard !hasInlineAuthentication(route.detailTemplate), !detail.contains("{") && !detail.contains("}"), (try? requestURL(detail)) != nil else { throw ConfigurationError.invalidConfiguration }
         let catalogURL = expanded(catalog.url, values: ["id": sampleID])
@@ -342,20 +352,8 @@ public struct SourceConfiguration: Decodable, Sendable {
                 guard let path = player.payloadPattern, !path.isEmpty else { throw ConfigurationError.invalidConfiguration }
             }
         }
-        if let search {
-            let searchURL = expanded(search.url, values: ["query": "test", "page": "1"])
-            guard capabilities.contains(.search), search.rowsPerPage > 0, search.rowsPerPage <= 100,
-                  (0...1).contains(search.firstPage ?? 1),
-                  ["html", "json"].contains(search.format), !hasInlineAuthentication(search.url), !searchURL.contains("{") && !searchURL.contains("}"),
-                  (try? requestURL(searchURL)) != nil else { throw ConfigurationError.invalidConfiguration }
-            if search.format == "html" {
-                guard let results = search.resultsSelector, !results.isEmpty, let title = search.titleSelector, !title.isEmpty,
-                      let href = search.hrefAttribute, !href.isEmpty else { throw ConfigurationError.invalidConfiguration }
-            } else {
-                guard let results = search.jsonResultsPath, !results.isEmpty, let title = search.jsonTitlePath, !title.isEmpty,
-                      let identifier = search.jsonIdentifierPath, !identifier.isEmpty else { throw ConfigurationError.invalidConfiguration }
-            }
-        } else if capabilities.contains(.search) { throw ConfigurationError.invalidConfiguration }
+        if let search { try validateSearch(search) }
+        else if capabilities.contains(.search) { throw ConfigurationError.invalidConfiguration }
         if let danmaku {
             guard danmaku.provider == "bilibili-xml", !danmaku.episodes.isEmpty,
                   danmaku.episodes.count <= 10_000, contentKind != .live else {
@@ -391,6 +389,81 @@ public struct SourceConfiguration: Decodable, Sendable {
         guard !capabilities.contains(.danmaku), !capabilities.contains(.jsPlayer),
               !capabilities.contains(.browse) else { throw ConfigurationError.unsupportedCapability }
     }
+    private func hasInlineAuthentication(_ raw: String) -> Bool {
+        let names: Set<String> = ["cookie", "token", "access_token", "authorization", "auth", "api_key", "apikey", "password"]
+        return (URLComponents(string: raw)?.queryItems ?? []).contains { names.contains($0.name.lowercased()) }
+    }
+
+    private func validateSearch(_ search: Search) throws {
+        let searchURL = expanded(search.url, values: ["query": "test", "page": "1"])
+        guard capabilities.contains(.search), search.rowsPerPage > 0, search.rowsPerPage <= 100,
+              (0...1).contains(search.firstPage ?? 1),
+              ["html", "json"].contains(search.format), !hasInlineAuthentication(search.url), !searchURL.contains("{") && !searchURL.contains("}"),
+              (try? requestURL(searchURL)) != nil else { throw ConfigurationError.invalidConfiguration }
+        if search.format == "html" {
+            let paired = search.indexedNamesSelector != nil || search.indexedLinksSelector != nil
+            if paired {
+                guard search.indexedNamesSelector?.isEmpty == false, search.indexedLinksSelector?.isEmpty == false else {
+                    throw ConfigurationError.invalidConfiguration
+                }
+            } else {
+                guard let results = search.resultsSelector, !results.isEmpty, let title = search.titleSelector, !title.isEmpty else {
+                    throw ConfigurationError.invalidConfiguration
+                }
+            }
+            guard let href = search.hrefAttribute, !href.isEmpty else { throw ConfigurationError.invalidConfiguration }
+        } else {
+            guard let results = search.jsonResultsPath, !results.isEmpty, let title = search.jsonTitlePath, !title.isEmpty,
+                  let identifier = search.jsonIdentifierPath, !identifier.isEmpty,
+                  search.indexedNamesSelector == nil, search.indexedLinksSelector == nil else { throw ConfigurationError.invalidConfiguration }
+        }
+        let selectors = [search.indexedNamesSelector, search.indexedLinksSelector].compactMap { $0 }
+        guard selectors.allSatisfy({ $0.utf8.count <= 1024 && !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }) else {
+            throw ConfigurationError.invalidConfiguration
+        }
+        for paths in [search.jsonTitleAlternatives, search.jsonIdentifierAlternatives].compactMap({ $0 }) {
+            guard !paths.isEmpty, paths.count <= 8, paths.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 256 }) else {
+                throw ConfigurationError.invalidConfiguration
+            }
+        }
+        if let base = search.resultBaseURL {
+            guard !hasInlineAuthentication(base), (try? requestURL(base)) != nil else { throw ConfigurationError.invalidConfiguration }
+        }
+        if let template = search.resultURLTemplate {
+            let sample = expanded(template, values: ["id": "test", "value": "test"])
+            guard template.utf8.count <= 4096, !hasInlineAuthentication(template), !sample.contains("{"), !sample.contains("}"),
+                  let base = URL(string: search.resultBaseURL ?? searchURL),
+                  let resolved = URL(string: sample, relativeTo: base)?.absoluteURL,
+                  (try? requestURL(resolved.absoluteString)) != nil else { throw ConfigurationError.invalidConfiguration }
+        }
+        if version == 4 {
+            let fields = [search.resultsSelector, search.titleSelector, search.linkSelector,
+                          search.coverSelector, search.nextPageSelector].compactMap { $0 } + (search.rejectSelectors ?? [])
+            guard fields.count <= 32, fields.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 1024 &&
+                !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }),
+                [search.queryParameter, search.pageParameter].allSatisfy({ $0.utf8.count <= 128 &&
+                    !$0.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains) }) else {
+                throw ConfigurationError.invalidConfiguration
+            }
+        }
+    }
+
+    /// New static imports require DNS names, never local aliases or IP literals.
+    /// Runtime transport additionally checks resolved addresses before network access.
+    private static func publicDNSHost(_ host: String) -> Bool {
+        guard host.utf8.count <= 253, !host.hasSuffix("."), host.contains("."),
+              !["localhost", "local", "lan", "internal", "home", "home.arpa"].contains(where: {
+                  host == $0 || host.hasSuffix("." + $0)
+              }) else { return false }
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard let top = labels.last, top.count >= 2,
+              top.allSatisfy({ $0.isASCII && $0.isLetter }) || top.hasPrefix("xn--") else { return false }
+        return labels.allSatisfy { label in
+            !label.isEmpty && label.count <= 63 && label.first != "-" && label.last != "-" &&
+                label.allSatisfy { $0.isASCII && ($0.isLetter || $0.isNumber || $0 == "-") }
+        }
+    }
+
     /// The approved configuration supplies the cross-provider identity assertion.
     /// Runtime provider metadata and XML chatid must still be verified before use.
     public func danmakuBinding(for selection: PlayableSelection, revision: String?) throws -> Danmaku.Episode? {
@@ -409,7 +482,7 @@ public struct SourceConfiguration: Decodable, Sendable {
     ]
 
     public func effectiveCapabilities(on platform: SourcePlatform) -> Set<SourceCapability> {
-        if webSelector != nil && platform != .iOS { return [] }
+        if version == 3 && platform != .iOS { return [] }
         return capabilities.intersection(Self.parserCapabilities).intersection(platform.capabilities)
     }
 
@@ -563,7 +636,7 @@ public struct SourceConfiguration: Decodable, Sendable {
     /// these exact HTTPS destinations, never arbitrary redirect hosts.
     public var requestHosts: Set<String> {
         var result = Set(hosts)
-        guard webSelector != nil else { return result }
+        guard version == 3, webSelector != nil else { return result }
         let moves = ["www.2kdm.com": "www.mutedm.com",
                      "www.didahd.pro": "www.didahd.xyz",
                      "www.rebozj.pro": "www.rebozj.cc"]
@@ -574,7 +647,7 @@ public struct SourceConfiguration: Decodable, Sendable {
     /// XiFan currently publishes HTTPS media on this one non-default endpoint.
     /// This does not authorize ports on source pages or on other media hosts.
     public func allowsMediaPort(_ url: URL) -> Bool {
-        url.port == nil || (webSelector != nil && hosts.contains("dm1.xfdm.pro") &&
+        url.port == nil || (version == 3 && webSelector != nil && hosts.contains("dm1.xfdm.pro") &&
             url.scheme?.lowercased() == "https" && url.host?.lowercased() == "play.xfvod.pro" && url.port == 8088)
     }
 
@@ -583,6 +656,11 @@ public struct SourceConfiguration: Decodable, Sendable {
               let host = c.host?.lowercased(),
               media ? (mediaHosts.contains(host) || anonymousExternalHTTPSMedia) : requestHosts.contains(host),
               let url = c.url, media ? allowsMediaPort(url) : c.port == nil else { throw ConfigurationError.invalidURL }
+        if version == 4 {
+            guard Self.publicDNSHost(host), c.fragment == nil,
+                  raw.utf8.count <= 16_384, !raw.contains(where: { $0.isWhitespace || $0.isNewline }),
+                  !raw.contains("\\"), media || !hasInlineAuthentication(raw) else { throw ConfigurationError.invalidURL }
+        }
         return url
     }
     public func validatedPlayerMediaURL(_ payload: [String: Any], id: String, line: Int, episode: Int) throws -> String {

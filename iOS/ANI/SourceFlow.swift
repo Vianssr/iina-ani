@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 import Observation
 
@@ -15,6 +16,8 @@ final class MobileSourceFlow {
     enum StorageFailure: Equatable { case unavailable, save, remove, invalidate }
     private(set) var results: [MobileSourceWork] = []
     private(set) var catalog: MobileSourceCatalog?
+    private(set) var playbackOptions: [MobileSourceEpisode] = []
+    private var optionsCatalog: MobileSourceCatalog?
     private(set) var nextPage: Int?
     private(set) var busy = false
     private(set) var failure: PlaybackFailure?
@@ -29,6 +32,8 @@ final class MobileSourceFlow {
     private let requestedEpisode: PlaybackEpisodeIdentity?
     private let library: MobileLibrary?
     private let authority: (() throws -> String)?
+    private let searchAuthority: (() throws -> String)?
+    private let searchRevision: String
     private var enabled: Bool
     private var configurationRevision: String
     private var lastQuery = ""
@@ -40,6 +45,7 @@ final class MobileSourceFlow {
     private enum Action {
         case search(String, Int), catalog(MobileSourceWork)
         case resolve(MobileSourceEpisode, MobileSourceCatalog), reuse(ConfirmedSourceMapping)
+        case options(MobileSourceEpisode, MobileSourceCatalog)
         case automatic(MobileSourceCandidate)
     }
     private enum AccessError: Error { case storageUnavailable }
@@ -47,7 +53,7 @@ final class MobileSourceFlow {
     init(client: MobileSourceClient, requestedWork: PlaybackWorkIdentity? = nil,
          requestedEpisode: PlaybackEpisodeIdentity? = nil, enabled: Bool = false,
          library: MobileLibrary? = nil, authority: (() throws -> String)? = nil,
-         resumeMapping: ConfirmedSourceMapping? = nil) {
+         searchAuthority: (() throws -> String)? = nil, resumeMapping: ConfirmedSourceMapping? = nil) {
         precondition((requestedWork == nil) == (requestedEpisode == nil))
         self.client = client
         self.requestedWork = requestedWork
@@ -55,7 +61,9 @@ final class MobileSourceFlow {
         self.enabled = enabled
         self.library = library
         self.authority = authority
-        configurationRevision = client.configuration.configurationRevision
+        self.searchAuthority = searchAuthority
+        searchRevision = MobileSourceEntry(source: client.source, imported: false, search: client.search).searchRevision
+        configurationRevision = client.source.configurationRevision
         savedMapping = resumeMapping
         if let library, let requestedWork, let requestedEpisode, resumeMapping == nil {
             savedMapping = library.mapping(for: requestedWork, episode: requestedEpisode) ??
@@ -110,8 +118,8 @@ final class MobileSourceFlow {
         catalog = nil; run(.catalog(work))
     }
     func acceptCandidate(_ candidate: MobileSourceCandidate, automatically: Bool) {
-        guard savedMapping == nil, candidate.configuration.id == client.configuration.id,
-              candidate.configuration.configurationRevision == client.configuration.configurationRevision else { return }
+        guard savedMapping == nil, candidate.source.id == client.source.id,
+              candidate.source.configurationRevision == client.source.configurationRevision else { return }
         if automatically, candidate.trusted, candidate.episode != nil {
             run(.automatic(candidate))
         } else {
@@ -123,7 +131,12 @@ final class MobileSourceFlow {
         do { try checkAccess() }
         catch { cancel(); reject(error); return }
         guard let catalog else { cancel(); failure = .missingEpisode; return }
-        run(.resolve(episode, catalog))
+        run(.options(episode, catalog))
+    }
+    func choosePlaybackOption(_ episode: MobileSourceEpisode) {
+        guard savedMapping == nil, playbackOptions.contains(episode), let optionsCatalog else { return }
+        do { run(.resolve(episode, try client.selecting(episode, in: optionsCatalog))) }
+        catch { cancel(); reject(error) }
     }
     func playSaved() {
         guard canPlaySaved, let savedMapping else { return }
@@ -145,6 +158,7 @@ final class MobileSourceFlow {
     func cancel() {
         generation += 1; task?.cancel(); task = nil; busy = false; failure = nil
         resolved = nil
+        playbackOptions = []; optionsCatalog = nil
     }
 
     /// Consume once, re-reading durable source/configuration authority at the actual session handoff.
@@ -170,19 +184,24 @@ final class MobileSourceFlow {
         } else {
             guard enabled else { throw PlaybackFailure.sourceDisabled }
         }
-        guard configurationRevision == client.configuration.configurationRevision else { throw PlaybackFailure.configurationChanged }
+        guard configurationRevision == client.source.configurationRevision else { throw PlaybackFailure.configurationChanged }
+    }
+
+    private func checkSearchAccess() throws {
+        guard let searchAuthority else { return }
+        guard try searchAuthority() == searchRevision else { throw PlaybackFailure.configurationChanged }
     }
 
     private func checkMapping(_ mapping: ConfirmedSourceMapping) throws {
-        guard mapping.context.selection.item.sourceID == client.configuration.id,
-              mapping.context.configurationRevision == client.configuration.configurationRevision else {
+        guard mapping.context.selection.item.sourceID == client.source.id,
+              mapping.context.configurationRevision == client.source.configurationRevision else {
             throw PlaybackFailure.configurationChanged
         }
         guard let requestedWork, let requestedEpisode, mapping.matches(work: requestedWork, episode: requestedEpisode) else {
             throw PlaybackFailure.missingEpisode
         }
         if let failure = library?.mappingFailure(for: requestedWork, episode: requestedEpisode) { throw failure }
-        _ = try client.configuration.mappingSelection(mapping.context.selection)
+        _ = try client.source.mappingSelection(mapping.context.selection)
     }
 
     private func reject(_ error: Error) {
@@ -217,8 +236,10 @@ final class MobileSourceFlow {
         cancel()
         storageFailure = nil
         lastAction = action
-        do { try checkAccess() }
-        catch { reject(error); return }
+        do {
+            try checkAccess()
+            if case .search = action { try checkSearchAccess() }
+        } catch { reject(error); return }
         let expected = generation
         busy = true
         let client = client
@@ -230,6 +251,7 @@ final class MobileSourceFlow {
                     try Task.checkCancellation()
                     guard let self, self.generation == expected else { return }
                     try self.checkAccess()
+                    try self.checkSearchAccess()
                     var seen = Set(self.results.map(\.id))
                     self.results += result.works.filter { seen.insert($0.id).inserted }
                     self.nextPage = result.nextPage
@@ -241,6 +263,20 @@ final class MobileSourceFlow {
                     guard let self, self.generation == expected else { return }
                     try self.checkAccess()
                     self.catalog = result
+                case .options(let episode, let catalog):
+                    try client.require(.mpv)
+                    let options = try await client.playbackOptions(episode, in: catalog)
+                    try Task.checkCancellation()
+                    guard let self, self.generation == expected else { return }
+                    try self.checkAccess()
+                    if options.count == 1, let option = options.first {
+                        let selected = try client.selecting(option, in: catalog)
+                        let url = try await client.resolve(option, in: selected)
+                        try self.complete(option, catalog: selected, url: url, expected: expected, confirming: true)
+                    } else {
+                        self.playbackOptions = options
+                        self.optionsCatalog = catalog
+                    }
                 case .resolve(let episode, let catalog):
                     try client.require(.mpv)
                     _ = try client.playbackContext(episode, in: catalog, requestedWork: nil, requestedEpisode: nil)
@@ -254,15 +290,11 @@ final class MobileSourceFlow {
                     let work = MobileSourceWork(item: mapping.context.selection.item, title: mapping.sourceTitle)
                     let catalog = try await client.catalog(work)
                     try Task.checkCancellation()
-                    let episode: MobileSourceEpisode
-                    do {
-                        guard let owner = self, owner.generation == expected else { return }
-                        try owner.checkAccess()
-                        episode = try client.episode(matching: mapping.context.selection, in: catalog)
-                    }
-                    let url = try await client.resolve(episode, in: catalog)
-                    guard let self else { return }
-                    try self.complete(episode, catalog: catalog, url: url, expected: expected, confirming: false)
+                    let selected = try await client.selectedEpisode(matching: mapping.context.selection, in: catalog)
+                    guard let owner = self, owner.generation == expected else { return }
+                    try owner.checkAccess()
+                    let url = try await client.resolve(selected.episode, in: selected.catalog)
+                    try owner.complete(selected.episode, catalog: selected.catalog, url: url, expected: expected, confirming: false)
                 case .automatic(let candidate):
                     guard let self else { return }
                     guard candidate.trusted, let episode = candidate.episode,
@@ -273,14 +305,26 @@ final class MobileSourceFlow {
                     }
                     try self.checkAccess()
                     try client.require(.mpv)
-                    _ = try client.playbackContext(episode, in: candidate.catalog, requestedWork: work, requestedEpisode: requested)
-                    let url = try await client.resolve(episode, in: candidate.catalog)
+                    let options = try await client.playbackOptions(episode, in: candidate.catalog)
+                    try Task.checkCancellation()
+                    guard self.generation == expected else { return }
+                    try self.checkAccess()
+                    guard options.count == 1, let option = options.first else {
+                        self.catalog = candidate.catalog
+                        self.playbackOptions = options
+                        self.optionsCatalog = candidate.catalog
+                        self.busy = false; self.task = nil
+                        return
+                    }
+                    let selected = try client.selecting(option, in: candidate.catalog)
+                    _ = try client.playbackContext(option, in: selected, requestedWork: work, requestedEpisode: requested)
+                    let url = try await client.resolve(option, in: selected)
                     try Task.checkCancellation()
                     guard self.generation == expected else { return }
                     guard library.storedMapping(for: work, episode: requested) == nil else {
                         throw PlaybackFailure.configurationChanged
                     }
-                    try self.complete(episode, catalog: candidate.catalog, url: url, expected: expected, confirming: true)
+                    try self.complete(option, catalog: selected, url: url, expected: expected, confirming: true)
                 }
                 guard let self, self.generation == expected else { return }
                 self.busy = false; self.task = nil
@@ -354,14 +398,18 @@ struct MobileSourceContinuation {
         try Task.checkCancellation()
         let revision = try authority()
         guard context.configurationRevision == revision,
-              revision == client.configuration.configurationRevision,
-              context.selection.item.sourceID == client.configuration.id else {
+              revision == client.source.configurationRevision,
+              context.selection.item.sourceID == client.source.id else {
             throw PlaybackFailure.configurationChanged
         }
         try client.require(.mpv)
-        try client.require(.episodes)
+        if context.selection.item.kind == .work { try client.require(.episodes) }
+        else { try client.require(.information) }
+        let standalone = client.source.id == "hanime1" && context.selection.item.kind == .video &&
+            context.selection.episode == context.selection.item && context.selection.lineID == "0" &&
+            context.selection.qualityID.map(ConfirmedSourceMapping.safeLabel) == true
         guard context.selection.classification.kind != .live,
-              context.selection.item.kind == .work, context.selection.torrent == nil else {
+              context.selection.item.kind == .work || standalone, context.selection.torrent == nil else {
             throw PlaybackFailure.unsupportedResponse
         }
     }
@@ -369,23 +417,30 @@ struct MobileSourceContinuation {
     func resolve(after context: PlaybackContext, next: Bool, currentTitle: String) async throws -> MobileResolvedPlayback? {
         try validate(context)
         let work = MobileSourceWork(item: context.selection.item, title: "")
-        let catalog = try await client.catalog(work)
+        let fresh = try await client.catalog(work)
         try validate(context)
+        let current = try await client.selectedEpisode(matching: context.selection, in: fresh)
+        try validate(context)
+        let catalog: MobileSourceCatalog
         let episode: MobileSourceEpisode
         if next {
-            guard let candidate = try client.nextEpisode(after: context.selection, in: catalog) else { return nil }
-            episode = candidate
+            guard let candidate = try client.nextEpisode(after: context.selection, in: current.catalog) else { return nil }
+            let selection = PlayableSelection(item: context.selection.item, episode: candidate.item,
+                lineID: String(candidate.line), qualityID: context.selection.qualityID,
+                classification: context.selection.classification)
+            let selected = try await client.selectedEpisode(matching: selection, in: current.catalog)
+            episode = selected.episode; catalog = selected.catalog
         } else {
-            episode = try client.episode(matching: context.selection, in: catalog)
+            episode = current.episode; catalog = current.catalog
         }
         let url = try await client.resolve(episode, in: catalog)
         try validate(context)
         let resolvedContext = try client.playbackContext(episode, in: catalog,
             requestedWork: context.work, requestedEpisode: next ? nil : context.episode)
-        // CSS1 catalogues preserve the supplied work title instead of extracting one.
+        // Some native catalogues preserve the supplied title instead of extracting one.
         // Recover it only from the exact current episode suffix, preserving separators
         // inside the work name and never carrying the previous episode into the next title.
-        let currentEpisode = try client.episode(matching: context.selection, in: catalog)
+        let currentEpisode = current.episode
         let suffix = " · " + currentEpisode.title
         let previousWorkTitle = currentTitle.hasSuffix(suffix)
             ? String(currentTitle.dropLast(suffix.count)).trimmingCharacters(in: .whitespacesAndNewlines) : ""

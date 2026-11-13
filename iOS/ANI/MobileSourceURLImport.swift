@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 import CoreFoundation
 import Observation
@@ -36,7 +37,6 @@ struct MobileSourceImportResponse: Sendable {
 @MainActor @Observable
 final class MobileSourceURLImport {
     typealias Fetch = @Sendable (URL) async throws -> MobileSourceImportResponse
-    typealias Probe = @MainActor @Sendable (SourceConfiguration) async throws -> Bool
     static let maximumSources = 100
     static let maximumTotalBytes = 16 * 1024 * 1024
     private(set) var busy = false
@@ -47,17 +47,17 @@ final class MobileSourceURLImport {
     private var generation = UUID()
     @ObservationIgnored private var task: Task<Void, Never>?
     private let fetch: Fetch
-    private let probe: Probe
+    private let searchFetch: SourceHTTPTransport.Fetch?
 
-    init(probe: @escaping Probe = { try await MobileSourceURLImport.probeResolution($0) },
-         fetchResponse: @escaping Fetch = { try await MobileSourceImportTransport.fetchResponse($0) }) {
+    init(searchFetch: SourceHTTPTransport.Fetch? = nil, fetchResponse: @escaping Fetch = { url in
+        try await MobileSourceImportTransport.fetchResponse(url)
+    }) {
         self.fetch = fetchResponse
-        self.probe = probe
+        self.searchFetch = searchFetch
     }
 
-    convenience init(probe: @escaping Probe = { try await MobileSourceURLImport.probeResolution($0) },
-                     fetch: @escaping @Sendable (URL) async throws -> Data) {
-        self.init(probe: probe, fetchResponse: { .init(data: try await fetch($0), url: $0) })
+    convenience init(searchFetch: SourceHTTPTransport.Fetch? = nil, fetch: @escaping @Sendable (URL) async throws -> Data) {
+        self.init(searchFetch: searchFetch, fetchResponse: { .init(data: try await fetch($0), url: $0) })
     }
 
     deinit { task?.cancel() }
@@ -65,7 +65,7 @@ final class MobileSourceURLImport {
     static func forApp() -> MobileSourceURLImport {
         #if DEBUG
         if ProcessInfo.processInfo.arguments.contains("-source-import-ui-fixture") {
-            return MobileSourceURLImport(probe: { _ in true }) { url in
+            return MobileSourceURLImport { url in
                 let data = try MobileSourceFixtures.configurationData()
                 guard var object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
                     throw MobileSourceImportFailure.download
@@ -73,6 +73,8 @@ final class MobileSourceURLImport {
                 object["id"] = "fixture-url-source"
                 object["name"] = "URL configuration fixture"
                 switch url.absoluteString {
+                case "https://configuration.example/static.json":
+                    return try MobileSourceFixtures.staticSubscriptionData()
                 case "https://configuration.example/source.json":
                     return try JSONSerialization.data(withJSONObject: object)
                 case "https://configuration.example/list.json":
@@ -84,16 +86,8 @@ final class MobileSourceURLImport {
                     encoded = encoded.replacingOccurrences(of: "fqdm.cc", with: "second.example")
                     second = try JSONSerialization.jsonObject(with: Data(encoded.utf8)) as! [String: Any]
                     return try JSONSerialization.data(withJSONObject: ["version": 1, "sources": [object, second]])
-                case "https://mirror.example/rules.json?version=2":
-                    guard let search = try MobileSourceLibrary.validate(data).search else { throw MobileSourceImportFailure.download }
-                    let item: [String: Any] = ["id": "fixture-css1", "factoryId": "web-selector", "version": 2,
-                        "arguments": ["name": "Mirrored CSS1 fixture", "searchConfig": [
-                            "searchUrl": search.url.replacingOccurrences(of: "{query}", with: "{keyword}"),
-                            "subjectFormatId": "a", "selectorSubjectFormatA": ["selectLists": search.resultsSelector ?? "a"],
-                            "channelFormatId": "index-grouped", "selectorChannelFormatFlattened": [
-                                "selectChannelNames": ".module-tab-item span", "selectEpisodeLists": ".module-play-list",
-                                "selectEpisodesFromList": "a", "selectEpisodeLinksFromList": ""]]]]
-                    return try JSONSerialization.data(withJSONObject: ["mediaSources": [item]])
+                case SourceSubscriptionTransport.endpoint.absoluteString:
+                    return try await MobileSourceSubscription.download()
                 default: throw MobileSourceImportFailure.download
                 }
             }
@@ -121,21 +115,26 @@ final class MobileSourceURLImport {
         }
         let expected = generation
         let fetch = fetch
-        let probe = probe
         busy = true
         task = Task { [weak self] in
             do {
                 let response = try await fetch(url)
                 try Task.checkCancellation()
-                var content = try await Self.decode(response, fetch: fetch)
-                if case .batch(let batch) = content {
-                    content = .batch(try await Self.verified(batch, probe: probe))
-                }
+                let content = try await Self.decode(response, fetch: fetch)
                 try Task.checkCancellation()
                 guard let self, self.generation == expected else { return }
                 switch content {
                 case .single(let draft): self.draft = draft
                 case .batch(let batch): self.batch = batch
+                case .subscription(let data):
+                    guard let library else { throw MobileSourceImportFailure.requiresSources }
+                    library.reload()
+                    let prepared = try await MobileSourceSubscription.prepare(
+                        baselines: library.subscriptionBaselines, current: library.sources, fetch: { data },
+                        searchFetch: self.searchFetch ?? MobileSourceSubscription.fixtureSearchFetch)
+                    guard self.generation == expected else { return }
+                    try library.validateSubscriptionRevisions(prepared.revisions)
+                    self.subscriptionPreview = prepared
                 }
                 self.busy = false
                 self.task = nil
@@ -148,96 +147,9 @@ final class MobileSourceURLImport {
         }
     }
 
-    /// Only CSS1 conversions need this gate; native configurations retain their import contract.
-    /// Failure excludes this update, never deletes or disables an existing source.
-    static func verified(_ batch: MobileSourceBatchDraft, probe: @escaping Probe) async throws -> MobileSourceBatchDraft {
-        var failures: [Int: String] = [:]
-        let candidates = batch.drafts.enumerated().filter { $0.element.configuration.webSelector != nil }
-        try await withThrowingTaskGroup(of: (Int, String?).self) { group in
-            var next = 0
-            func enqueue() {
-                guard next < candidates.count else { return }
-                let (index, draft) = candidates[next]
-                next += 1
-                group.addTask {
-                    do {
-                        let passed = try await probe(draft.configuration)
-                        try Task.checkCancellation()
-                        return (index, passed ? nil : String(localized: "No sample media URL resolved; skipped this import. Retry later."))
-                    } catch {
-                        try Task.checkCancellation()
-                        let reason = MobileSourceClient.failure(for: error)
-                        let message: String
-                        switch reason {
-                        case .authenticationRequired: message = String(localized: "Site requires authentication or blocked the request; skipped this import.")
-                        case .network: message = String(localized: "Source check timed out or failed to connect; skipped this import. Retry later.")
-                        default: message = reason.mobileMessage
-                        }
-                        return (index, message)
-                    }
-                }
-            }
-            for _ in 0..<min(3, candidates.count) { enqueue() }
-            for try await (index, reason) in group {
-                if let reason { failures[index] = reason }
-                enqueue()
-            }
-        }
-        try Task.checkCancellation()
-        let notices = failures.keys.sorted().map { batch.drafts[$0].configuration.name + " · " + failures[$0]! }
-        return .init(drafts: batch.drafts.enumerated().filter { failures[$0.offset] == nil }.map(\.element),
-                     notices: batch.notices + notices)
-    }
-
-    /// A resolved sample is a compatibility check, not proof of playback or content identity.
-    nonisolated static func probeResolution(_ configuration: SourceConfiguration) async throws -> Bool {
-        try await withThrowingTaskGroup(of: Bool.self) { group in
-            group.addTask {
-                let client = MobileSourceClient(configuration: configuration)
-                var works: [MobileSourceWork] = []
-                for query in ["海贼王", "鬼灭之刃"] {
-                    works = try await client.search(query).works
-                    if !works.isEmpty { break }
-                }
-                var lastFailure: Error?
-                for work in works.prefix(2) {
-                    try Task.checkCancellation()
-                    do {
-                        let catalog = try await client.catalog(work)
-                        for line in catalog.lines.prefix(3) {
-                            guard let episode = line.episodes.first else { continue }
-                            do {
-                                _ = try await client.resolve(episode, in: catalog)
-                                try Task.checkCancellation()
-                                return true
-                            } catch {
-                                try Task.checkCancellation()
-                                let failure = MobileSourceClient.failure(for: error)
-                                if [.authenticationRequired, .httpForbidden, .websiteVerification].contains(failure) { throw error }
-                                lastFailure = error
-                            }
-                        }
-                    } catch {
-                        try Task.checkCancellation()
-                        let failure = MobileSourceClient.failure(for: error)
-                        if [.authenticationRequired, .httpForbidden, .websiteVerification].contains(failure) { throw error }
-                        lastFailure = error
-                    }
-                }
-                if let lastFailure { throw lastFailure }
-                return false
-            }
-            group.addTask {
-                try await Task.sleep(nanoseconds: 45_000_000_000)
-                throw URLError(.timedOut)
-            }
-            defer { group.cancelAll() }
-            return try await group.next() ?? false
-        }
-    }
 
     private enum Content {
-        case single(MobileSourceDraft), batch(MobileSourceBatchDraft)
+        case single(MobileSourceDraft), batch(MobileSourceBatchDraft), subscription(Data)
     }
 
     private static func decode(_ response: MobileSourceImportResponse, fetch: Fetch) async throws -> Content {
@@ -245,7 +157,7 @@ final class MobileSourceURLImport {
         guard MobileSourceImportTransport.allows(response.url), !data.isEmpty,
               data.count <= MobileSourceImportTransport.maximumBytes,
               let object = try? JSONSerialization.jsonObject(with: data) else { throw MobileSourceImportFailure.invalidConfiguration }
-        // A valid native configuration remains native even if an exporter adds a `sources` key.
+        // Valid configured JSON remains a single import even if an exporter adds a `sources` key.
         if let configuration = try? MobileSourceLibrary.validate(data) {
             return .single(.init(configuration: configuration, data: data))
         }
@@ -253,8 +165,7 @@ final class MobileSourceURLImport {
         if let list = object as? [Any] { entries = list }
         else if let root = object as? [String: Any] {
             if root["mediaSources"] != nil || (root["exportedMediaSourceDataList"] as? [String: Any])?["mediaSources"] != nil {
-                do { return .batch(try MobileCSS1Configuration.convert(data: data)) }
-                catch { throw MobileSourceImportFailure.invalidConfiguration }
+                return .subscription(data)
             }
             guard root["id"] == nil, let version = root["version"] as? NSNumber,
                   CFGetTypeID(version) != CFBooleanGetTypeID(), version == 1, let list = root["sources"] as? [Any] else {
@@ -295,61 +206,23 @@ final class MobileSourceURLImport {
     }
 }
 
-/// Anonymous, bounded HTTPS transport. Neither the URL nor credentials are persisted.
-final class MobileSourceImportTransport: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
-    static let maximumBytes = 2 * 1024 * 1024
+/// The same anonymous HTTPS download policy is used for configuration files and subscriptions.
+/// Neither the entered URL nor credentials are persisted.
+enum MobileSourceImportTransport {
+    static let maximumBytes = SourceSubscriptionTransport.maximumBytes
 
-    static func parse(_ input: String) -> URL? {
-        let value = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard value.count <= 8192, !value.contains(where: { $0.isWhitespace }), !value.contains("\\"),
-              let url = URL(string: value), allows(url) else { return nil }
-        return url
-    }
+    static func parse(_ input: String) -> URL? { SourceSubscriptionTransport.parse(input) }
+    static func allows(_ url: URL) -> Bool { SourceSubscriptionTransport.allows(url) }
 
-    static func allows(_ url: URL) -> Bool {
-        url.scheme?.lowercased() == "https" && !(url.host ?? "").isEmpty &&
-            url.user == nil && url.password == nil && url.fragment == nil
-    }
-
-    static func anonymousRequest(_ url: URL) -> URLRequest {
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
-        request.httpShouldHandleCookies = false
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        return request
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask,
-                    willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest,
-                    completionHandler: @escaping (URLRequest?) -> Void) {
-        guard let url = request.url, Self.allows(url) else { completionHandler(nil); return }
-        // Rebuild instead of forwarding headers supplied by the previous hop.
-        completionHandler(Self.anonymousRequest(url))
-    }
-
-    static func fetch(_ url: URL) async throws -> Data {
-        try await fetchResponse(url).data
-    }
+    static func fetch(_ url: URL) async throws -> Data { try await fetchResponse(url).data }
 
     static func fetchResponse(_ url: URL) async throws -> MobileSourceImportResponse {
-        guard allows(url) else { throw MobileSourceImportFailure.invalidAddress }
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.httpCookieStorage = nil
-        configuration.httpShouldSetCookies = false
-        configuration.urlCredentialStorage = nil
-        configuration.urlCache = nil
-        configuration.timeoutIntervalForResource = 45
-        let session = URLSession(configuration: configuration, delegate: MobileSourceImportTransport(), delegateQueue: nil)
-        defer { session.invalidateAndCancel() }
-        let (bytes, response) = try await session.bytes(for: anonymousRequest(url))
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200,
-              let finalURL = response.url, allows(finalURL) else { throw MobileSourceImportFailure.download }
-        guard response.expectedContentLength <= maximumBytes else { throw MobileSourceImportFailure.invalidConfiguration }
-        var data = Data()
-        for try await byte in bytes {
-            guard data.count < maximumBytes else { throw MobileSourceImportFailure.invalidConfiguration }
-            data.append(byte)
-        }
-        try Task.checkCancellation()
-        return .init(data: data, url: finalURL)
+        do {
+            let response = try await SourceSubscriptionTransport.response(from: url)
+            return .init(data: response.data, url: response.url)
+        } catch SourceSubscriptionFailure.invalidAddress { throw MobileSourceImportFailure.invalidAddress }
+        catch SourceSubscriptionFailure.oversized { throw MobileSourceImportFailure.invalidConfiguration }
+        catch is CancellationError { throw CancellationError() }
+        catch { throw MobileSourceImportFailure.download }
     }
 }

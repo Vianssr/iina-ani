@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import Foundation
 import Observation
 
@@ -51,7 +52,7 @@ final class PlaybackSession: Identifiable {
     private var handledEOF: PlaybackLoadIdentity?
     private let history: MobilePlaybackHistory?
     private let historyEntry: MobilePlaybackHistoryEntry?
-    private let configuration: SourceConfiguration?
+    private let source: RuntimeSource?
     private var recorder: MobilePlaybackHistoryRecorder?
     private var localAccess: [MobileLocalMediaAccess] = []
     private var preparation: Task<Void, Never>?
@@ -81,7 +82,7 @@ final class PlaybackSession: Identifiable {
 
     init(url: URL, securityScoped: Bool = false, title: String? = nil, context: PlaybackContext? = nil,
          history: MobilePlaybackHistory? = nil, historyEntry: MobilePlaybackHistoryEntry? = nil,
-         configuration: SourceConfiguration? = nil, continuation: MobileSourceContinuation? = nil,
+         source: RuntimeSource? = nil, continuation: MobileSourceContinuation? = nil,
          defaults: UserDefaults = .standard) {
         self.defaults = defaults
         danmaku = MobileDanmakuStore(defaults: defaults)
@@ -89,7 +90,7 @@ final class PlaybackSession: Identifiable {
         autoPlayNext = defaults.bool(forKey: "mobile.player.autoPlayNext")
         self.history = history
         self.historyEntry = historyEntry
-        self.configuration = configuration
+        self.source = source
         episodes = [PlaybackEpisode(url: url, title: title, context: context)]
         if securityScoped { retainAccess(url) }
         observePlayback()
@@ -104,7 +105,7 @@ final class PlaybackSession: Identifiable {
         autoPlayNext = defaults.bool(forKey: "mobile.player.autoPlayNext")
         self.history = history
         historyEntry = nil
-        configuration = nil
+        source = nil
         episodes = urls.map { PlaybackEpisode(url: $0) }
         if securityScoped { urls.forEach(retainAccess) }
         observePlayback()
@@ -301,7 +302,7 @@ final class PlaybackSession: Identifiable {
         let episodeID = current.id
         let context = current.context
         let target: MobileDanmakuTarget?
-        if let configuration, let context, continuation != nil,
+        if let configuration = source?.configured, let context, continuation != nil,
            let binding = try? configuration.danmakuBinding(for: context.selection, revision: context.configurationRevision) {
             target = MobileDanmakuTarget(episodeID: episodeID, sourceID: configuration.id,
                 pageURL: binding.pageURL, configurationRevision: configuration.configurationRevision,
@@ -334,7 +335,7 @@ final class PlaybackSession: Identifiable {
                 cancelNextEpisode()
                 recorder?.flush()
                 recorder = history?.begin(context: current.context, localReference: current.localReference,
-                    title: current.title, configuration: configuration, identity: event.identity, resumePosition: resumePosition)
+                    title: current.title, source: source, identity: event.identity, resumePosition: resumePosition)
             }
             recorder?.receive(event)
             switch event.kind {

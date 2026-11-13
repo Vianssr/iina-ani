@@ -1,4 +1,5 @@
 import SourceCore
+import SourceRuntime
 import AppKit
 import SwiftUI
 import SDWebImage
@@ -654,7 +655,7 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
     }
 
     private func sourceSettings() {
-        add("subscription.manage", .sources, String(localized: "來源訂閱"), "css1 subscription anime check update preview apply 訂閱 番劇 檢查 更新 預覽 套用", String(localized: "在獨立視窗檢查、預覽與套用 css1 來源訂閱。")) {
+        add("subscription.manage", .sources, String(localized: "來源訂閱"), "css1 subscription anime check update preview apply 訂閱 番劇 檢查 更新 預覽 套用", String(localized: "輸入訂閱網址，預覽並匯入來源配置。")) {
             button(String(localized: "來源訂閱…"), icon: .subscription) { [weak self] in self?.showSubscription() }
         }
         add("sources.import", .sources, String(localized: "完整來源配置"),
@@ -888,6 +889,9 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
         add("danmaku.plugin", .playback, String(localized: "IINA 彈幕外掛"), "plugin install iina 外掛 插件", String(localized: "使用既有外掛安裝／設定流程。")) {
             button(String(localized: "外掛設定…"), icon: .danmaku) { [weak self] in self?.showPlugin() }
         }
+        add("danmaku.uiLayer", .playback, String(localized: "彈幕與 IINA 控制列層級"), "overlay ui z-index 遮擋 遮挡 層級 层级", String(localized: "現有 IINA 插件 API 無法將彈幕移至原生控制列下方；本專案不修改 IINA 本體。")) {
+            NSTextField(labelWithString: String(localized: "無法修復（IINA 插件 API 限制）"))
+        }
         add("danmaku.port", .playback, String(localized: "本機彈幕埠"), "port server 端口", String(localized: "1024–65535；沿用現有 HTTP 服務啟動／播放器行為，不另建伺服器。")) {
             number(Double(prefs.dmPort), minimum: 1024, maximum: 65535) { [weak self] in self?.prefs.dmPort = Int($0) }
         }
@@ -901,17 +905,44 @@ final class WorkspaceSettingsController: NSViewController, NSSearchFieldDelegate
                 }
             }
         }
-        add("danmaku.font", .playback, String(localized: "彈幕字型"), "font 字体", String(localized: "既有彈幕字型偏好；套用時機沿用播放端。")) {
+        add("danmaku.font", .playback, String(localized: "彈幕字型"), "font 字体", String(localized: "設定會保存，並即時套用至已連線的新版 IINA 彈幕外掛與內建播放器。")) {
             text(prefs.danmukuFontFamilyName) { [weak self] in self?.prefs.danmukuFontFamilyName = $0 }
         }
-        add("danmaku.weight", .playback, String(localized: "彈幕字重"), "font weight 粗細", String(localized: "既有字重名称，例如 Regular／Bold；不改字級固定的原行為。")) {
+        add("danmaku.weight", .playback, String(localized: "彈幕字重"), "font weight 粗細", String(localized: "字重名稱，例如 Regular／Bold。")) {
             text(prefs.danmukuFontWeight) { [weak self] in self?.prefs.danmukuFontWeight = $0 }
         }
-        add("danmaku.speed", .playback, String(localized: "彈幕速度"), "speed 弹幕 速度", String(localized: "沿用既有 dmSpeed。")) {
+        add("danmaku.fontSize", .playback, String(localized: "彈幕字級"), "font size 字号 大小", String(localized: "12–72；設定會保存並即時套用。")) {
+            number(Double(prefs.danmukuFontSize), minimum: 12, maximum: 72) { [weak self] in self?.prefs.danmukuFontSize = Int($0) }
+        }
+        add("danmaku.speed", .playback, String(localized: "彈幕速度"), "speed 弹幕 速度", String(localized: "設定會保存，並即時套用至已連線的新版 IINA 彈幕外掛與內建播放器。")) {
             number(prefs.dmSpeed, minimum: 100, maximum: 2000) { [weak self] in self?.prefs.dmSpeed = $0 }
         }
-        add("danmaku.opacity", .playback, String(localized: "彈幕透明度"), "opacity alpha 透明 不透明", String(localized: "0–1；沿用既有 dmOpacity。")) {
+        add("danmaku.opacity", .playback, String(localized: "彈幕透明度"), "opacity alpha 透明 不透明", String(localized: "0 為完全透明，1 為完全不透明；設定會保存並即時套用。")) {
             number(prefs.dmOpacity, minimum: 0, maximum: 1, integer: false) { [weak self] in self?.prefs.dmOpacity = $0 }
+        }
+        add("danmaku.sourceColor", .playback, String(localized: "保留彈幕原色"), "color colour 彩色 原色 白色", String(localized: "關閉後統一顯示白色；來源未提供顏色時使用白色。")) {
+            toggle(prefs.dmUseSourceColor) { [weak self] in self?.prefs.dmUseSourceColor = $0 }
+        }
+        add("danmaku.scroll", .playback, String(localized: "顯示滾動彈幕"), "scroll 滾動 滚动", String(localized: "設定會保存，並即時套用至已連線的新版 IINA 彈幕外掛與內建播放器。")) {
+            danmakuTypeToggle("Scroll")
+        }
+        add("danmaku.top", .playback, String(localized: "顯示頂部固定彈幕"), "top 頂部 顶部 固定", String(localized: "設定會保存，並即時套用至已連線的新版 IINA 彈幕外掛與內建播放器。")) {
+            danmakuTypeToggle("Top")
+        }
+        add("danmaku.bottom", .playback, String(localized: "顯示底部固定彈幕"), "bottom 底部 固定", String(localized: "設定會保存，並即時套用至已連線的新版 IINA 彈幕外掛與內建播放器。")) {
+            danmakuTypeToggle("Bottom")
+        }
+        add("danmaku.hoverPause", .playback, String(localized: "懸停暫停單條彈幕"), "hover pause 懸停 悬停 暫停 暂停", String(localized: "滑鼠移上彈幕時只暫停該條，移開後繼續；不暫停影片或其他彈幕。")) {
+            toggle(prefs.dmHoverPause) { [weak self] in self?.prefs.dmHoverPause = $0 }
+        }
+    }
+
+    private func danmakuTypeToggle(_ type: String) -> NSButton {
+        toggle(!prefs.dmBlockType.contains(type)) { [weak self] visible in
+            guard let self else { return }
+            var blocked = prefs.dmBlockType.filter { $0 != type }
+            if !visible { blocked.append(type) }
+            prefs.dmBlockType = blocked
         }
     }
 
@@ -1112,15 +1143,18 @@ private struct WorkspaceSettingsPluginSheet: View {
 }
 
 @MainActor
-private final class WorkspaceSourceSubscriptionController: NSWindowController, NSWindowDelegate {
+private final class WorkspaceSourceSubscriptionController: NSWindowController, NSWindowDelegate, NSTextFieldDelegate {
     var onClose: (() -> Void)?
     private let service: SourceSubscriptionService
     private let skin: SkinAppearance
     private let content = WorkspaceSettingsDocumentStack()
     private let scroll = NSScrollView()
+    private let header = NSStackView()
+    private let addressField = NSTextField(string: SourceSubscriptionTransport.endpoint.absoluteString)
     private var actions: [ObjectIdentifier: () -> Void] = [:]
     private var checkTask: Task<Void, Never>?
     private var plan: SourceSubscriptionPlan?
+    private var planURL: URL?
     private var checking = false
     private var active = true
     private var message = String(localized: "尚未檢查訂閱；檢查後先預覽差異，不會自動套用。")
@@ -1156,6 +1190,19 @@ private final class WorkspaceSourceSubscriptionController: NSWindowController, N
             scroll.bottomAnchor.constraint(equalTo: root.bottomAnchor),
             content.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor)
         ])
+        header.orientation = .vertical
+        header.alignment = .leading
+        header.spacing = 8
+        header.addArrangedSubview(label(String(localized: "來源訂閱\n輸入公開 HTTPS 網址，先預覽再套用；新來源需手動啟用。配置匯入成功不代表站點目前可播放。")))
+        header.addArrangedSubview(label(String(localized: "訂閱網址")))
+        addressField.delegate = self
+        addressField.placeholderString = "https://"
+        addressField.setAccessibilityIdentifier("subscription.url")
+        addressField.setAccessibilityLabel(String(localized: "訂閱網址"))
+        addressField.bindSkin(skin, slot: "search", componentID: "settings.preferences")
+        header.addArrangedSubview(addressField)
+        add(header)
+        for view in header.arrangedSubviews { view.widthAnchor.constraint(equalTo: header.widthAnchor).isActive = true }
         rebuild()
         window.center()
     }
@@ -1193,6 +1240,12 @@ private final class WorkspaceSourceSubscriptionController: NSWindowController, N
         return button
     }
     @objc private func invoke(_ sender: NSButton) { actions[ObjectIdentifier(sender)]?() }
+    func controlTextDidChange(_ notification: Notification) {
+        guard active, notification.object as? NSTextField === addressField else { return }
+        invalidatePreview()
+        message = String(localized: "訂閱網址已變更；請重新檢查。")
+        rebuild()
+    }
     private func add(_ view: NSView) {
         content.addArrangedSubview(view)
         view.widthAnchor.constraint(equalTo: content.widthAnchor, constant: -32).isActive = true
@@ -1201,9 +1254,9 @@ private final class WorkspaceSourceSubscriptionController: NSWindowController, N
         DateFormatter.localizedString(from: value, dateStyle: .medium, timeStyle: .short)
     }
     private func rebuild() {
-        for view in content.arrangedSubviews { content.removeArrangedSubview(view); view.removeFromSuperview() }
+        // Keep the editor mounted while clearing an obsolete preview as the user types.
+        for view in content.arrangedSubviews where view !== header { content.removeArrangedSubview(view); view.removeFromSuperview() }
         actions.removeAll(keepingCapacity: true)
-        add(label(String(localized: "css1 番劇背景來源訂閱\n僅使用訪客能力；不匯入 Cookie、token、授權資料或腳本，不新增站點帳號。搜尋規則更新不代表播放或下載已驗證。")))
         let check = button(checking ? String(localized: "正在檢查…") : String(localized: "檢查訂閱更新"), id: "check") { [weak self] in self?.check() }
         check.isEnabled = !checking
         var commands: [NSView] = [check]
@@ -1221,28 +1274,33 @@ private final class WorkspaceSourceSubscriptionController: NSWindowController, N
         add(NSStackView(views: commands))
         var status = message
         if let applied = service.lastApplied {
-            status += String(localized: "\n最近套用：\(date(applied.checkedAt)) 檢查的版本（\(applied.overrides.count) 個來源配置）。")
+            status += String(localized: "\n最近套用：\(date(applied.checkedAt)) 檢查的版本（\(applied.overrides.count + applied.configurations.count) 個來源配置）。")
         } else { status += String(localized: "\n最近套用：尚無套用記錄。") }
         if let error = service.lastError { status += String(localized: "\n最近服務錯誤：\(error)") }
         let statusLabel = label(status)
         statusLabel.setAccessibilityIdentifier("subscription.status")
         add(statusLabel)
         guard let plan else { return }
-        add(label(String(localized: "本次訂閱差異預覽\n檢查時間：\(date(plan.checkedAt))\n\(plan.entries.count) 個項目；\(plan.overrides.count) 個可套用來源配置。尚未保存，請閱讀差異後選擇套用或捨棄。")))
+        add(label(String(localized: "本次訂閱差異預覽\n檢查時間：\(date(plan.checkedAt))\n\(plan.entries.count) 個項目；\(plan.overrides.count + plan.configurations.count) 個可套用來源配置。尚未保存，請閱讀差異後選擇套用或捨棄。")))
+        if !plan.configurations.isEmpty {
+            add(label(String(localized: "新增靜態來源保持停用；請到來源管理啟用後，明確選擇作品及集數驗證播放。")))
+        }
         for entry in plan.entries {
             let source = entry.sourceID ?? String(localized: "未對應既有來源")
             add(label(String(localized: "\(entry.name) · \(entry.status)\n來源：\(source)\n\(entry.detail)")))
         }
         let apply = button(String(localized: "套用此預覽"), id: "apply") { [weak self] in self?.apply() }
-        apply.isEnabled = !checking && !plan.overrides.isEmpty
+        apply.isEnabled = !checking && (!plan.overrides.isEmpty || !plan.configurations.isEmpty)
         add(NSStackView(views: [apply, button(String(localized: "捨棄預覽"), id: "discard") { [weak self] in self?.discard() }]))
-        if plan.overrides.isEmpty { add(label(String(localized: "本次沒有可套用的配置；可捨棄預覽或重新檢查。"))) }
+        if plan.overrides.isEmpty && plan.configurations.isEmpty { add(label(String(localized: "本次沒有可套用的配置；可捨棄預覽或重新檢查。"))) }
     }
     private func invalidatePreview() {
         checkTask?.cancel()
         checkTask = nil
         plan = nil
+        planURL = nil
         checking = false
+        service.cancelPendingCheck()
     }
     private func discard() {
         guard active else { return }
@@ -1253,17 +1311,24 @@ private final class WorkspaceSourceSubscriptionController: NSWindowController, N
     private func check() {
         guard active else { return }
         invalidatePreview()
+        guard let url = SourceSubscriptionTransport.parse(addressField.stringValue) else {
+            message = SourceSubscriptionFailure.invalidAddress.localizedDescription
+            rebuild()
+            return
+        }
         checking = true
         message = String(localized: "正在取得資料、轉換規則並比較來源；原配置未變更。")
         rebuild()
         let service = service
         checkTask = Task { [weak self] in
             do {
-                let plan = try await service.check()
-                guard !Task.isCancelled, let self, active else { return }
+                let plan = try await service.check(url: url)
+                guard !Task.isCancelled, let self, active,
+                      SourceSubscriptionTransport.parse(addressField.stringValue) == url else { return }
                 checkTask = nil
                 checking = false
                 self.plan = plan
+                planURL = url
                 message = String(localized: "檢查完成，尚未套用。請閱讀逐項差異後，選擇套用或捨棄。")
                 rebuild()
             } catch {
@@ -1276,7 +1341,8 @@ private final class WorkspaceSourceSubscriptionController: NSWindowController, N
         }
     }
     private func apply() {
-        guard active, !checking, let plan else { return }
+        guard active, !checking, let plan,
+              planURL == SourceSubscriptionTransport.parse(addressField.stringValue) else { return }
         do {
             try service.apply(plan)
             invalidatePreview()

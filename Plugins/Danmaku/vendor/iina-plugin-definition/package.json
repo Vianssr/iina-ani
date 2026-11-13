@@ -1,0 +1,19 @@
+{
+  "name": "iina-plugin-definition",
+  "version": "0.99.4",
+  "description": "Type definitions for IINA plugin API.",
+  "main": "",
+  "types": "iina/index.d.ts",
+  "author": {
+    "name": "Hechen Li",
+    "url": "https://github.com/lhc70000"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "npx typedoc --out docs iina/index.d.ts"
+  },
+  "devDependencies": {
+    "@knodes/typedoc-plugin-pages": "^0.23.1",
+    "typedoc": "^0.23.27"
+  }
+}

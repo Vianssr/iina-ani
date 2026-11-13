@@ -1,0 +1,39 @@
+{
+    "name": "Danmaku",
+    "identifier": "com.xjbeta.danmaku",
+    "version": "0.1.22-ani.1",
+    "ghVersion": 128,
+    "description": "IINA Danmaku",
+    "author": {
+        "name": "xjbeta",
+        "email": "xjbeta",
+        "url": "https://github.com/xjbeta"
+    },
+    "entry": "main.js",
+    "globalEntry": "global.js",
+    "permissions": [
+        "show-osd",
+        "video-overlay",
+        "file-system",
+        "network-request"
+    ],
+    "allowedDomains": [
+        "127.0.0.1"
+    ],
+    "preferencesPage": "pref.html",
+    "preferenceDefaults": {
+        "dmOpacity": 1,
+        "dmSpeed": 680,
+        "dmFont": "PingFang SC",
+        "dmFontWeight": "Regular",
+        "dmFontSize": 24,
+        "dmUseSourceColor": 1,
+        "dmHoverPause": 1,
+        "enableIINAPLUSOptsParse": 0,
+        "blockTypeScroll": 0,
+        "blockTypeTop": 0,
+        "blockTypeBottom": 0,
+        "blockTypeColor": 0,
+        "blockTypeAdvanced": 0
+    }
+}

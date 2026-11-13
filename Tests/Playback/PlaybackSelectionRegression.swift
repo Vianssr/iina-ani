@@ -1,4 +1,6 @@
 import SourceCore
+import enum SourceRuntime.SourceWebConfigurationConverter
+import struct SourceRuntime.SourceHTTPResponse
 import Foundation
 @testable import IINA_ANI
 
@@ -52,6 +54,7 @@ struct PlaybackSelectionRegression {
             throw Failure(message: "missing Bangumi episode fell back to the first episode")
         } catch VideoGetError.notFountData {}
         try autoplayCatalogs()
+        try await staticContinuationCatalog()
         try autoplayLocalFiles()
         try autoplayEOF()
         try retainedEOF()
@@ -77,6 +80,11 @@ struct PlaybackSelectionRegression {
         var expected = selected
         expected.episode = try registry.item(for: second.selectionURL)
         try require(next == expected, "Autoplay must preserve work, account, classification, line and exact quality")
+        var nativeCatalogChoice = selected
+        nativeCatalogChoice.item = selected.episode!
+        nativeCatalogChoice.episode = nil
+        try require(AutoplaySelection.catalogSelection(after: selected, registry: registry) == nativeCatalogChoice,
+                    "Native continuation catalogs must still request the actual played page with line, quality and account intact")
         try require(AutoplaySelection.next(after: expected, in: nested, registry: registry) == nil,
                     "The final sibling must stop instead of crossing to another line")
         try require(AutoplaySelection.completedItems(after: selected, in: nested, registry: registry) == nil,
@@ -117,6 +125,91 @@ struct PlaybackSelectionRegression {
         try require(AutoplaySelection.next(after: bili, in: parts, registry: registry)?.item == (try registry.item(for: parts[1].selectionURL)),
                     "Canonical single-video URLs must match exactly the first Bilibili part")
     }
+    @MainActor static func staticContinuationCatalog() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("static-continuation-" + UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let directory = root.appendingPathComponent("sources")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let item: [String: Any] = ["factoryId": "web-selector", "version": 2, "arguments": [
+            "name": "Continuation fixture", "searchConfig": [
+                "searchUrl": "https://continuation.example/search?q={keyword}", "subjectFormatId": "a",
+                "selectorSubjectFormatA": ["selectLists": "a.result"],
+                "channelFormatId": "index-grouped",
+                "selectorChannelFormatFlattened": ["selectChannelNames": ".line", "selectEpisodeLists": ".episodes", "selectEpisodesFromList": "a"]]]]
+        let configuration = try SourceWebConfigurationConverter.configuration(item)
+        try configuration.encodedData().write(to: directory.appendingPathComponent("static.json"))
+        let registry = SourceRegistry(builtinDirectory: directory, userDirectory: root.appendingPathComponent("users"))
+        let work = try configuration.webItem("https://continuation.example/series?id=42", kind: .work)
+        func episode(_ number: Int) throws -> SourceItemRef {
+            try configuration.webItem("https://continuation.example/watch/b?ep=\(number)", kind: .episode)
+        }
+        let selection = PlayableSelection(item: work, episode: try episode(7), lineID: "0", qualityID: "Line 2",
+            classification: MediaClassification(kind: .anime, provenance: "manual"))
+        let source = ConfiguredSource(configuration: configuration, site: .configured(configuration.id), staticFetch: { request in
+            guard let url = request.url, url.absoluteString == work.pageURL,
+                  request.value(forHTTPHeaderField: "Cookie") == nil,
+                  request.value(forHTTPHeaderField: "Authorization") == nil else {
+                throw Failure(message: "Continuation requested an episode/inferred work page or leaked credentials")
+            }
+            let html = """
+            <span class="line">A</span><span class="line">B</span>
+            <div class="episodes">
+              <a href="/watch/a?ep=7">Episode 7</a>
+              <a href="/watch/a?ep=8">Episode 8</a>
+            </div>
+            <div class="episodes">
+              <a href="/watch/b?ep=6">Episode 6</a>
+              <a href="/watch/b?ep=7">Episode 7</a>
+              <a href="/watch/b?ep=8">Episode 8</a>
+            </div>
+            """
+            return SourceHTTPResponse(data: Data(html.utf8), url: url, statusCode: 200)
+        })
+        let choice = AutoplaySelection.catalogSelection(after: selection, registry: registry)
+        try require(choice == selection, "Static continuation must preserve exact work, episode, line, quality and classification")
+        let list = try await source.episodeList(choice.item.pageURL)
+        let catalog = VideoSelectionCatalog(nodes: list.nodes, current: list.current, selection: choice)
+        let history = try PlaybackHistoryStore(url: root.appendingPathComponent("history.json"), registry: registry)
+        try history.validateResumeCatalog(catalog, selection: selection)
+        var expected = selection
+        expected.episode = try episode(8)
+        try require(AutoplaySelection.next(after: selection, in: catalog.nodes, registry: registry) == expected,
+                    "A nonfirst static episode must continue to its exact same-group sibling, never catalog.current or another line")
+        try require(AutoplaySelection.next(after: expected, in: catalog.nodes, registry: registry) == nil,
+                    "Static continuation must stop at its selected group's final leaf")
+        try require(AutoplaySelection.completedItems(after: expected, in: catalog.nodes, registry: registry) ==
+                    [try episode(6), try episode(7), try episode(8)],
+                    "Static final-episode evidence must contain only exact siblings from the original work")
+        var wrongWork = choice
+        wrongWork.item = try configuration.webItem("https://continuation.example/series?id=43", kind: .work)
+        do {
+            try history.validateResumeCatalog(
+                VideoSelectionCatalog(nodes: catalog.nodes, current: 0, selection: wrongWork), selection: selection)
+            throw Failure(message: "Continuation accepted a different work's catalog")
+        } catch PlaybackFailure.missingEpisode {}
+
+        let repository = URL(fileURLWithPath: #filePath).deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent()
+        let data = try Data(contentsOf: repository.appendingPathComponent("IINA-ANI/Sources/fqdm.json"))
+        var definition = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        for version in [1, 2] {
+            definition["version"] = version
+            let routed = try SourceConfiguration.load(data: JSONSerialization.data(withJSONObject: definition))
+            try routed.encodedData().write(to: directory.appendingPathComponent("routed.json"))
+            try registry.reload(builtinDirectory: directory, userDirectory: root.appendingPathComponent("users"))
+            let played = PlayableSelection(
+                item: try routed.item("https://www.fqdm.cc/index.php/vod/detail/id/42.html"),
+                episode: try routed.item("https://www.fqdm.cc/index.php/vod/play/id/42/sid/2/nid/7.html"),
+                lineID: "2", qualityID: "Second line (2)", accountID: UUID(),
+                classification: selection.classification)
+            var routedChoice = played
+            routedChoice.item = played.episode!
+            routedChoice.episode = nil
+            try require(AutoplaySelection.catalogSelection(after: played, registry: registry) == routedChoice,
+                        "Configured v\(version) continuation must retain the actual played-page behavior")
+        }
+    }
+
 
     static func autoplayLocalFiles() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("autoplay-" + UUID().uuidString)

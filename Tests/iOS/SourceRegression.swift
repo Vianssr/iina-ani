@@ -1,5 +1,18 @@
 import SourceCore
 import Foundation
+import SourceRuntime
+
+func sourceClient(_ configuration: SourceConfiguration, fetch: (@Sendable (URL) async throws -> Data)? = nil) -> MobileSourceClient {
+    let transport: SourceHTTPTransport.Fetch? = fetch.map { fetch in
+        { @Sendable request in
+            guard let url = request.url else { throw MobileSourceError.invalidSelection }
+            return SourceHTTPResponse(data: try await fetch(url), url: url, statusCode: 200)
+        }
+    }
+    let search = configuration.search.map { NativeSearchSource(hosts: configuration.hosts, search: $0,
+        resultURLTemplate: $0.format == "json" ? configuration.route.detailTemplate : nil) }
+    return MobileSourceClient(source: .configured(configuration), search: search, fetch: transport)
+}
 
 actor RetryTransport {
     var calls = 0
@@ -51,34 +64,9 @@ actor MappingTransport {
         try await configurationFiles(root: root)
         try await SourceURLImportRegression.run(root: root)
         try await DefaultSubscriptionRegression.run(root: root)
-        try MobileCSS1Regression.run(root: root)
-        try await CSS1ClientRegression.run(root: root)
-        try await CSS1ProtocolRegression.run()
-        try await CSS1IdentityRegression.run(root: root)
-        if let option = CommandLine.arguments.firstIndex(of: "--css1-url"), CommandLine.arguments.indices.contains(option + 1) {
-            let importer = MobileSourceURLImport()
-            importer.load(CommandLine.arguments[option + 1])
-            while importer.busy { try await Task.sleep(for: .milliseconds(20)) }
-            guard let batch = importer.batch else { throw MobileSourceError.invalidResponse }
-            print("LIVE CSS1: imported=\(batch.drafts.count), skipped=\(batch.notices.count)")
-            for id in ["fanqie-dongman", "jibi-dongman", "wedm"] {
-                guard let draft = batch.drafts.first(where: { $0.configuration.id == id }) else { continue }
-                do {
-                    let client = MobileSourceClient(configuration: draft.configuration)
-                    let results = try await client.search("海贼王")
-                    guard let work = results.works.first else { throw MobileSourceError.unavailable }
-                    let catalog = try await client.catalog(work)
-                    guard let episode = catalog.lines.first?.episodes.first else { throw MobileSourceError.unavailable }
-                    let media = try await client.resolve(episode, in: catalog)
-                    print("LIVE CSS1 \(id): search=\(results.works.count), lines=\(catalog.lines.count), resolved=\(media.pathExtension)")
-                } catch {
-                    print("LIVE CSS1 \(id): failed=\(MobileSourceClient.failure(for: error).rawValue)")
-                }
-            }
-        }
         let config = try SourceConfiguration.load(fileURL: root.appendingPathComponent("IINA-ANI/Sources/fqdm.json"))
         if CommandLine.arguments.contains("--live") {
-            let live = MobileSourceClient(configuration: config)
+            let live = sourceClient(config)
             do {
                 let page = try await live.search("葬送的芙莉莲")
                 print("LIVE: search candidates=\(page.works.count)")
@@ -104,7 +92,7 @@ actor MappingTransport {
             return Data("<script>var player_aaaa=\(json);</script>".utf8)
         }
         let validPlayer = try player()
-        let client = MobileSourceClient(configuration: config) { url in
+        let client = sourceClient(config) { url in
             if url.path.contains("search") { return Data(search.utf8) }
             if url.path.contains("detail") { return Data(catalog.utf8) }
             return validPlayer
@@ -118,21 +106,21 @@ actor MappingTransport {
         let media = try await client.resolve(second, in: list)
         precondition(media.host == "media.example.test")
         for data in [try player("99"), try player(episode: 1), try player(paid: 1), try player(preview: 30), try player(media: "http://media.example.test/video.mp4"), try player(media: "https://user:secret@media.example.test/video.mp4"), try player(media: "https://media.example.test/page.html")] {
-            let invalid = MobileSourceClient(configuration: config) { _ in data }
+            let invalid = sourceClient(config) { _ in data }
             await rejects { _ = try await invalid.resolve(second, in: list) }
         }
         let unissued = MobileSourceEpisode(item: second.item, title: "Wrong", line: 1, number: 1)
         await rejects { _ = try await client.resolve(unissued, in: list) }
-        let blocked = MobileSourceClient(configuration: config) { _ in Data("<form id='challenge-form'></form>".utf8) }
+        let blocked = sourceClient(config) { _ in Data("<form id='challenge-form'></form>".utf8) }
         await rejects { _ = try await blocked.search("Fixture") }
-        let empty = MobileSourceClient(configuration: config) { _ in Data("<html><body>No results</body></html>".utf8) }
+        let empty = sourceClient(config) { _ in Data("<html><body>No results</body></html>".utf8) }
         let noResults = try await empty.search("Fixture")
         precondition(noResults.works.isEmpty)
-        let next = MobileSourceClient(configuration: config) { _ in Data((search + "<a rel='next' href='?page=2'>Next</a>").utf8) }
+        let next = sourceClient(config) { _ in Data((search + "<a rel='next' href='?page=2'>Next</a>").utf8) }
         let paginated = try await next.search("Fixture")
         precondition(paginated.nextPage == 2)
         // A transport that ignores cancellation still cannot mutate the latest flow.
-        let slow = MobileSourceClient(configuration: config) { _ in
+        let slow = sourceClient(config) { _ in
             try? await Task.sleep(for: .milliseconds(120))
             return Data(search.utf8)
         }
@@ -143,14 +131,14 @@ actor MappingTransport {
         try await Task.sleep(for: .milliseconds(180))
         precondition(flow.results.isEmpty && !flow.busy && !flow.failed && flow.resolved == nil)
         let retryTransport = RetryTransport(body: Data(search.utf8))
-        let retryFlow = MobileSourceFlow(client: MobileSourceClient(configuration: config) { try await retryTransport.fetch($0) }, enabled: true)
+        let retryFlow = MobileSourceFlow(client: sourceClient(config) { try await retryTransport.fetch($0) }, enabled: true)
         retryFlow.search("Fixture")
         while retryFlow.busy { try await Task.sleep(for: .milliseconds(10)) }
         precondition(retryFlow.failure == .network && retryFlow.canRetry)
         retryFlow.retry()
         while retryFlow.busy { try await Task.sleep(for: .milliseconds(10)) }
         precondition(!retryFlow.failed && retryFlow.results.count == 1)
-        let encoded = MobileSourceClient(configuration: config) { url in
+        let encoded = sourceClient(config) { url in
             let items = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             precondition(items.first { $0.name == "wd" }?.value == "A & + 字")
             precondition(items.first { $0.name == "page" }?.value == "2")
@@ -209,7 +197,7 @@ extension SourceRegression {
         var alternateObject = try JSONSerialization.jsonObject(with: original) as! [String: Any]
         alternateObject["id"] = "aaa-alternative"
         let alternate = try SourceConfiguration.load(data: JSONSerialization.data(withJSONObject: alternateObject))
-        let sources = MobileSourceLibrary(directory: directory.appendingPathComponent("Sources"), bundled: { [config, alternate] })
+        let sources = MobileSourceLibrary(directory: directory.appendingPathComponent("Sources"), bundled: { [.configured(config), .configured(alternate)] })
         precondition(sources.sources.first?.id == alternate.id)
         let enabledKey = "mobile.sources." + config.id + ".enabled"
         defaults.set(true, forKey: enabledKey)
@@ -220,7 +208,7 @@ extension SourceRegression {
         let library = MobileLibrary(file: legacyURL, libraryFile: libraryURL)
         @MainActor func flow(_ transport: MappingTransport, library: MobileLibrary,
                   episode: PlaybackEpisodeIdentity = .bangumi(501, type: 0, sort: 2)) -> MobileSourceFlow {
-            let candidate = MobileSourceFlow(client: MobileSourceClient(configuration: config) { await transport.fetch($0) },
+            let candidate = MobileSourceFlow(client: sourceClient(config) { await transport.fetch($0) },
                 requestedWork: requestedWork, requestedEpisode: episode, enabled: true, library: library,
                 authority: { try sources.configurationRevision(for: config.id, defaults: defaults) })
             candidate.updateAccess(enabled: true, configurationRevision: config.configurationRevision)
@@ -261,7 +249,7 @@ extension SourceRegression {
         // History resumes its own exact selection without recreating a removed library mapping.
         try restarted.removeMapping(for: requestedWork, episode: requestedEpisode)
         let historyTransport = MappingTransport(catalog: catalogData, player: player)
-        let historyResume = MobileSourceFlow(client: MobileSourceClient(configuration: config) { await historyTransport.fetch($0) },
+        let historyResume = MobileSourceFlow(client: sourceClient(config) { await historyTransport.fetch($0) },
             requestedWork: requestedWork, requestedEpisode: requestedEpisode,
             authority: { try sources.configurationRevision(for: config.id, defaults: defaults) },
             resumeMapping: confirmed)
@@ -329,12 +317,12 @@ extension SourceRegression {
         let wrong = flow(MappingTransport(catalog: catalogData, player: wrongPlayer), library: library)
         wrong.playSaved()
         await idle(wrong)
-        precondition(wrong.failure == .missingEpisode && wrong.requiresReconfirmation && wrong.resolved == nil && !wrong.canRetry)
+        precondition(wrong.failure == .mediaNotFound && !wrong.requiresReconfirmation && wrong.resolved == nil && !wrong.canRetry)
         for payload in [wrongPlayer, paidPlayer, previewPlayer] {
             try library.removeMapping(for: requestedWork, episode: requestedEpisode)
             let rejected = flow(MappingTransport(catalog: catalogData, player: payload), library: library)
             await confirm(rejected)
-            precondition(rejected.failure == (payload == wrongPlayer ? .missingEpisode : .authenticationRequired))
+            precondition(rejected.failure == .mediaNotFound)
             precondition(!rejected.canRetry && rejected.resolved == nil && rejected.catalog != nil)
             precondition(library.mapping(for: requestedWork, episode: requestedEpisode) == nil)
         }
@@ -464,7 +452,7 @@ extension SourceRegression {
         precondition(PlaybackEpisodeIdentity.bangumi(901, type: 0, sort: 1) != .bangumi(902, type: 1, sort: 1))
         precondition(PlaybackWorkIdentity.source(sourceID: "a|b", workID: "c") != .source(sourceID: "a", workID: "b|c"))
 
-        let disabled = MobileSourceFlow(client: MobileSourceClient(configuration: config) { _ in
+        let disabled = MobileSourceFlow(client: sourceClient(config) { _ in
             preconditionFailure("A disabled source must not perform a request")
         })
         disabled.search("Fixture")
@@ -479,24 +467,24 @@ extension SourceRegression {
         let missing = MobileSourceFlow(client: client, enabled: true)
         missing.play(episode)
         precondition(missing.failure == .missingEpisode)
-        let empty = MobileSourceFlow(client: MobileSourceClient(configuration: config) { _ in
+        let empty = MobileSourceFlow(client: sourceClient(config) { _ in
             Data("<html><body>No results</body></html>".utf8)
         }, enabled: true)
         empty.search("missing")
         while empty.busy { try await Task.sleep(for: .milliseconds(10)) }
         precondition(empty.failure == .noCandidates && !empty.canRetry)
 
-        let challenge = MobileSourceFlow(client: MobileSourceClient(configuration: config) { _ in
+        let challenge = MobileSourceFlow(client: sourceClient(config) { _ in
             Data("<form id='challenge-form'></form>".utf8)
         }, enabled: true)
         challenge.search("Fixture")
         while challenge.busy { try await Task.sleep(for: .milliseconds(10)) }
-        precondition(challenge.failure == .authenticationRequired && !challenge.canRetry)
+        precondition(challenge.failure == .searchStructure && !challenge.canRetry)
         precondition(MobileSourceClient.failure(for: CancellationError()) == .cancelled)
         precondition(MobileSourceClient.failure(for: URLError(.timedOut)) == .network)
         precondition(MobileSourceClient.failure(for: SourceConfiguration.ConfigurationError.invalidMedia) == .unsupportedResponse)
 
-        let delayed = MobileSourceClient(configuration: config) { url in
+        let delayed = sourceClient(config) { url in
             if url.path.contains("detail") {
                 return Data("<div class='module-info-heading'><h1>Fixture</h1></div><div class='module-play-list'><a class='module-play-list-link' href='/index.php/vod/play/id/42/sid/1/nid/2.html'>Episode 2</a></div>".utf8)
             }
@@ -543,7 +531,7 @@ extension SourceRegression {
         allCapabilities["capabilities"] = config.capabilities.union([.quality]).map(\.rawValue)
         let declared = try SourceConfiguration.load(data: JSONSerialization.data(withJSONObject: allCapabilities))
         let effective = declared.effectiveCapabilities(on: .iOS)
-        let declaredClient = MobileSourceClient(configuration: declared) { _ in
+        let declaredClient = sourceClient(declared) { _ in
             preconditionFailure("Unsupported capability must be rejected before fetching")
         }
         for capability in [SourceCapability.iina, .jsPlayer, .danmaku, .download, .browse, .quality] {
@@ -558,7 +546,7 @@ extension SourceRegression {
         var noSearchConfiguration = allCapabilities
         noSearchConfiguration["capabilities"] = config.capabilities.subtracting([.search]).map(\.rawValue)
         noSearchConfiguration.removeValue(forKey: "search")
-        let noSearchClient = MobileSourceClient(configuration: try SourceConfiguration.load(data: JSONSerialization.data(withJSONObject: noSearchConfiguration))) { _ in
+        let noSearchClient = sourceClient(try SourceConfiguration.load(data: JSONSerialization.data(withJSONObject: noSearchConfiguration))) { _ in
             preconditionFailure("An undeclared search capability must not fetch")
         }
         await rejects { _ = try await noSearchClient.search("Fixture") }
@@ -578,20 +566,20 @@ extension SourceRegression {
         let input = directory.appendingPathComponent("input.json")
         try other.write(to: input)
         let stored = directory.appendingPathComponent("sources")
-        let library = MobileSourceLibrary(directory: stored, bundled: { [config] })
+        let library = MobileSourceLibrary(directory: stored, bundled: { [.configured(config)] })
         let draft = try library.prepare(input)
         precondition(!library.replaces(draft))
         try library.apply(draft)
         precondition(library.sources.map(\.id) == ["fqdm", "second-source"])
-        let restored = MobileSourceLibrary(directory: stored, bundled: { [config] })
-        precondition(restored.sources.last?.configuration.name == "Second source")
+        let restored = MobileSourceLibrary(directory: stored, bundled: { [.configured(config)] })
+        precondition(restored.sources.last?.source.name == "Second source")
         precondition(restored.replaces(draft))
         otherObject["name"] = "Updated source"
         let updatedData = try JSONSerialization.data(withJSONObject: otherObject)
         try updatedData.write(to: input)
         try restored.apply(restored.prepare(input))
-        let replaced = MobileSourceLibrary(directory: stored, bundled: { [config] })
-        precondition(replaced.sources.last?.configuration.name == "Updated source")
+        let replaced = MobileSourceLibrary(directory: stored, bundled: { [.configured(config)] })
+        precondition(replaced.sources.last?.source.name == "Updated source")
         let before = try Data(contentsOf: stored.appendingPathComponent("second-source.json"))
         let invalidDraft = MobileSourceDraft(configuration: draft.configuration, data: Data("broken".utf8))
         await rejects { _ = try restored.apply(invalidDraft) }
@@ -605,7 +593,7 @@ extension SourceRegression {
         precondition(brokenContents == "broken")
         let blocked = directory.appendingPathComponent("not-a-directory")
         try Data("preserve".utf8).write(to: blocked)
-        let inaccessible = MobileSourceLibrary(directory: blocked, bundled: { [config] })
+        let inaccessible = MobileSourceLibrary(directory: blocked, bundled: { [.configured(config)] })
         await rejects { _ = try inaccessible.apply(draft) }
         let blockedContents = try String(contentsOf: blocked, encoding: .utf8)
         precondition(blockedContents == "preserve")
@@ -614,7 +602,7 @@ extension SourceRegression {
         let archive = try MobileSourceLibrary.validate(archiveData)
         let jsonSearch = Data(#"{"response":{"numFound":21,"docs":[{"identifier":"public-film","title":"A <b>film</b>"}]}}"#.utf8)
         let jsonCatalog = Data(#"{"metadata":{"title":"A film"},"files":[{"name":"video one.mp4"},{"name":"subtitles.srt"},{"name":"video-two.mp4"}]}"#.utf8)
-        let archiveClient = MobileSourceClient(configuration: archive) { url in
+        let archiveClient = sourceClient(archive) { url in
             if url.path == "/advancedsearch.php" { return jsonSearch }
             if url.path == "/metadata/public-film" { return jsonCatalog }
             throw MobileSourceError.invalidSelection
@@ -644,7 +632,7 @@ extension SourceRegression {
         await idle(fileFlow)
         precondition(fileFlow.takeResolved()?.url == archiveMedia)
         let reorderedFiles = Data(#"{"metadata":{"title":"Renamed film"},"files":[{"name":"video-two.mp4"},{"name":"video one.mp4"}]}"#.utf8)
-        let reorderedClient = MobileSourceClient(configuration: archive) { _ in reorderedFiles }
+        let reorderedClient = sourceClient(archive) { _ in reorderedFiles }
         let fileRestart = MobileLibrary(file: fileLegacy)
         let savedFile = MobileSourceFlow(client: reorderedClient, requestedWork: archiveContext.work,
             requestedEpisode: archiveContext.episode, enabled: true, library: fileRestart)
@@ -660,7 +648,7 @@ extension SourceRegression {
         player["format"] = "json"; player["payloadPattern"] = "data.player"
         payloadConfig["player"] = player
         let jsonConfig = try SourceConfiguration.load(data: JSONSerialization.data(withJSONObject: payloadConfig))
-        let payloadClient = MobileSourceClient(configuration: jsonConfig) { url in
+        let payloadClient = sourceClient(jsonConfig) { url in
             if url.path == "/search" {
                 precondition(URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "page" })?.value == "0")
                 return Data(#"{"results":[{"id":42,"title":"JSON show"}],"total":1}"#.utf8)
@@ -682,14 +670,13 @@ extension SourceRegression {
         var htmlFilesObject = try JSONSerialization.jsonObject(with: archiveData) as! [String: Any]
         htmlFilesObject["catalog"] = ["url": "https://archive.org/details/{id}", "format": "html", "titleSelector": "h1", "panelSelector": ".files", "episodeSelector": "a", "episodeURLAttribute": "href"]
         let htmlFilesConfig = try SourceConfiguration.load(data: JSONSerialization.data(withJSONObject: htmlFilesObject))
-        let htmlFiles = MobileSourceClient(configuration: htmlFilesConfig) { _ in
+        let htmlFiles = sourceClient(htmlFilesConfig) { _ in
             Data("<h1>Files</h1><div class='files'><a href='/details/public-film?file=video.mp4'>Video</a></div>".utf8)
         }
-        let htmlFileCatalog = try await htmlFiles.catalog(archivePage.works[0])
-        precondition(htmlFileCatalog.lines[0].episodes[0].number == 1)
-        let fileMedia = try await htmlFiles.resolve(htmlFileCatalog.lines[0].episodes[0], in: htmlFileCatalog)
-        precondition(fileMedia.path == "/download/public-film/video.mp4")
-        let noSearch = MobileSourceClient(configuration: config)
+        // Desktop HTML catalogs require explicit routed line/episode numbers;
+        // file-query catalogs remain supported through their configured JSON representation.
+        await rejects { _ = try await htmlFiles.catalog(archivePage.works[0]) }
+        let noSearch = sourceClient(config)
         let manualWork = try noSearch.work(at: "https://www.fqdm.cc/index.php/vod/detail/id/42.html")
         precondition(manualWork.item.kind == .work)
         await rejects { _ = try noSearch.work(at: "https://evil.example/index.php/vod/detail/id/42.html") }
@@ -707,7 +694,7 @@ extension SourceRegression {
             "<div class='module-play-list'>\(link(2, 1))\(link(2, 2))</div>"
         let payload = Data(#"<script>var player_aaaa={"id":"42","sid":1,"nid":3,"points":0,"trysee":0,"encrypt":0,"url":"https://media.example.test/third.mp4"};</script>"#.utf8)
         let transport = MappingTransport(catalog: Data(markup.utf8), player: payload)
-        let client = MobileSourceClient(configuration: config) { try Task.checkCancellation(); return await transport.fetch($0) }
+        let client = sourceClient(config) { try Task.checkCancellation(); return await transport.fetch($0) }
         let catalog = try await client.catalog(work)
         let current = catalog.lines[0].episodes[0], third = catalog.lines[0].episodes[1]
         let context = try client.playbackContext(current, in: catalog,

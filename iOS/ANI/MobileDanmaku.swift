@@ -3,6 +3,7 @@ import CoreFoundation
 import Observation
 #if os(iOS)
 import SwiftUI
+import UIKit
 #endif
 
 // The desktop DanmakuEvent is an untimed WebKit/WebSocket transport. This VOD
@@ -198,6 +199,33 @@ private final class BilibiliXMLDelegate: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, resolveExternalEntityName name: String, systemID: String?) -> Data? { reject(parser); return nil }
 }
 
+struct MobileDanmakuAppearance: Codable, Equatable {
+    var fontName = ""
+    var fontSize = 24.0
+    var speed = 1.0
+    var opacity = 1.0
+    var useSourceColors = true
+
+    var normalized: Self {
+        var value = self
+        value.fontSize = fontSize.isFinite ? min(48, max(12, fontSize)) : 24
+        value.speed = speed.isFinite ? min(2, max(0.5, speed)) : 1
+        value.opacity = opacity.isFinite ? min(1, max(0.1, opacity)) : 1
+        return value
+    }
+
+    #if os(iOS)
+    var font: Font {
+        fontName.isEmpty ? .system(size: fontSize, weight: .semibold) : .custom(fontName, fixedSize: fontSize)
+    }
+
+    var lineHeight: CGFloat {
+        let font = UIFont(name: fontName, size: fontSize) ?? .systemFont(ofSize: fontSize, weight: .semibold)
+        return max(font.lineHeight, fontSize * 1.4)
+    }
+    #endif
+}
+
 struct MobileScheduledDanmaku: Equatable {
     let entry: MobileDanmakuEntry
     let lane: Int
@@ -206,6 +234,19 @@ struct MobileScheduledDanmaku: Equatable {
 @MainActor @Observable
 final class MobileDanmakuStore {
     var enabled = true { didSet { defaults.set(enabled, forKey: "mobile.danmaku.enabled") } }
+    private var storedAppearance = MobileDanmakuAppearance()
+    var appearance: MobileDanmakuAppearance {
+        get { storedAppearance }
+        set {
+            let value = newValue.normalized
+            let speedChanged = storedAppearance.speed != value.speed
+            storedAppearance = value
+            if let data = try? JSONEncoder().encode(value) {
+                defaults.set(data, forKey: "mobile.danmaku.appearance")
+            }
+            if speedChanged { rebuildTimeline() }
+        }
+    }
     var automaticEnabled = true {
         didSet {
             defaults.set(automaticEnabled, forKey: "mobile.danmaku.automatic")
@@ -250,6 +291,10 @@ final class MobileDanmakuStore {
         hideScrolling = defaults.bool(forKey: "mobile.danmaku.hideScrolling")
         hideTop = defaults.bool(forKey: "mobile.danmaku.hideTop")
         hideBottom = defaults.bool(forKey: "mobile.danmaku.hideBottom")
+        if let data = defaults.data(forKey: "mobile.danmaku.appearance"),
+           let saved = try? JSONDecoder().decode(MobileDanmakuAppearance.self, from: data) {
+            storedAppearance = saved.normalized
+        }
     }
 
     // The file importer's caller owns security-scoped access for this read.
@@ -337,6 +382,10 @@ final class MobileDanmakuStore {
         }
     }
 
+    func duration(for mode: MobileDanmakuMode) -> Double {
+        mode.duration / appearance.speed
+    }
+
     func activeEntries(at position: Double) -> [MobileScheduledDanmaku] {
         guard enabled, position.isFinite, position >= 0 else { return [] }
         // Binary search avoids scanning an entire episode on each video tick.
@@ -344,13 +393,13 @@ final class MobileDanmakuStore {
         var high = timeline.count
         while low < high {
             let middle = (low + high) / 2
-            if timeline[middle].entry.time < position - 8 { low = middle + 1 }
+            if timeline[middle].entry.time < position - duration(for: .scrolling) { low = middle + 1 }
             else { high = middle }
         }
         var visible: [MobileScheduledDanmaku] = []
         for item in timeline[low...] {
             guard item.entry.time <= position else { break }
-            if position < item.entry.time + item.entry.mode.duration { visible.append(item) }
+            if position < item.entry.time + duration(for: item.entry.mode) { visible.append(item) }
         }
         return visible
     }
@@ -370,7 +419,7 @@ final class MobileDanmakuStore {
             // visually instead of overlapping text or delaying comments off-time.
             guard let lane = available.firstIndex(where: { $0 <= entry.time }) else { continue }
             scheduled.append(MobileScheduledDanmaku(entry: entry, lane: lane))
-            available[lane] = entry.time + entry.mode.duration
+            available[lane] = entry.time + duration(for: entry.mode)
             lanes[entry.mode] = available
         }
         timeline = scheduled
@@ -386,27 +435,38 @@ struct MobileDanmakuOverlay: View {
     var body: some View {
         let active = store.activeEntries(at: position)
         Canvas { context, size in
-            let fontSize = min(25, max(14, size.height / 18))
+            let appearance = store.appearance
+            let lineHeight = appearance.lineHeight
+            let font = appearance.font
+            let inset = size.height * 0.05
+            let rows = max(0, Int((size.height - inset * 2) / lineHeight))
+            let fixedRows = min(2, rows / 3)
+            let scrollingRows = min(6, rows - fixedRows * 2)
+            context.opacity = appearance.opacity
             for item in active {
                 let entry = item.entry
-                let color = Color(red: Double((entry.color >> 16) & 255) / 255,
-                                  green: Double((entry.color >> 8) & 255) / 255,
-                                  blue: Double(entry.color & 255) / 255)
-                let text = context.resolve(Text(verbatim: entry.text).font(.system(size: fontSize, weight: .semibold)).foregroundColor(color))
-                let extent = text.measure(in: CGSize(width: 10_000, height: fontSize * 2))
-                let progress = (position - entry.time) / entry.mode.duration
+                let rgb = appearance.useSourceColors ? entry.color : 0xFFFFFF
+                let color = Color(red: Double((rgb >> 16) & 255) / 255,
+                                  green: Double((rgb >> 8) & 255) / 255,
+                                  blue: Double(rgb & 255) / 255)
+                let text = context.resolve(Text(verbatim: entry.text).font(font).foregroundColor(color))
+                let extent = text.measure(in: CGSize(width: 10_000, height: lineHeight))
+                let progress = (position - entry.time) / store.duration(for: entry.mode)
                 let x: CGFloat
                 let y: CGFloat
                 switch entry.mode {
                 case .scrolling:
+                    guard item.lane < scrollingRows else { continue }
                     x = size.width - (size.width + extent.width) * progress
-                    y = size.height * (0.26 + Double(item.lane) * 0.075)
+                    y = inset + Double(fixedRows + item.lane) * lineHeight
                 case .top:
+                    guard item.lane < fixedRows else { continue }
                     x = max(4, (size.width - extent.width) / 2)
-                    y = size.height * 0.08 + Double(item.lane) * fontSize * 1.4
+                    y = inset + Double(item.lane) * lineHeight
                 case .bottom:
+                    guard item.lane < fixedRows else { continue }
                     x = max(4, (size.width - extent.width) / 2)
-                    y = size.height * 0.8 + Double(item.lane) * fontSize * 1.4
+                    y = size.height - inset - Double(item.lane + 1) * lineHeight
                 }
                 var shadow = context
                 shadow.addFilter(.shadow(color: .black.opacity(0.95), radius: 2))

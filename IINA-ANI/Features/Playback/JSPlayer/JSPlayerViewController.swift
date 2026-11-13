@@ -60,12 +60,12 @@ class JSPlayerViewController: NSViewController {
     
     @IBOutlet weak var speedSlider: NSSlider!
     @IBAction func speedChanged(_ sender: NSSlider) {
-        danmakuWS?.send(.init(method: .dmSpeed, text: "\(sender.doubleValue)"))
+        Preferences.shared.dmSpeed = sender.doubleValue
     }
     
     @IBOutlet weak var opacitySlider: NSSlider!
     @IBAction func opacityChanged(_ sender: NSSlider) {
-        danmakuWS?.send(.init(method: .dmOpacity, text: "\(sender.doubleValue)"))
+        Preferences.shared.dmOpacity = sender.doubleValue
     }
     
     
@@ -281,7 +281,21 @@ class JSPlayerViewController: NSViewController {
         initWebView()
         
         danmakuWS = .init(id: "", site: .local, url: "", contextName: "", webview: webView)
-        danmakuWS.version = 1
+        danmakuWS.version = 2
+        NotificationCenter.default.addObserver(self, selector: #selector(danmakuSettingsChanged),
+            name: Preferences.danmakuSettingsDidChangeNotification, object: Preferences.shared)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func danmakuSettingsChanged() {
+        let settings = Preferences.shared.danmakuSettings
+        speedSlider.doubleValue = settings.speed
+        opacitySlider.doubleValue = settings.opacity
+        guard webViewFinishLoaded, !closed else { return }
+        danmakuWS?.synchronizeSettings()
     }
     
     func initTrackingAreas() {
@@ -668,6 +682,8 @@ class JSPlayerViewController: NSViewController {
         
         webView.navigationDelegate = nil
         webView.uiDelegate = nil
+        danmakuWS?.webview = nil
+        danmakuWS = nil
         webView.removeFromSuperview()
         webView = nil
     }
@@ -699,9 +715,7 @@ class JSPlayerViewController: NSViewController {
         Task { await danmaku?.loadDM() }
         danmaku?.delegate = self
         
-        danmakuWS.loadCustomFont()
-        danmakuWS.customDMSpeed()
-        danmakuWS.customDMOpdacity()
+        danmakuWS?.synchronizeSettings()
     }
     
     override func mouseEntered(with event: NSEvent) {
@@ -841,6 +855,7 @@ extension JSPlayerViewController: WKNavigationDelegate {
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         Log("Finish")
         webViewFinishLoaded = true
+        danmakuSettingsChanged()
         guard url != "", result == nil else { return }
         openLive()
     }
@@ -854,6 +869,8 @@ extension JSPlayerViewController: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         Log("windowWillClose")
         closed = true
+        NotificationCenter.default.removeObserver(self, name: Preferences.danmakuSettingsDidChangeNotification,
+            object: Preferences.shared)
         openGeneration = UUID()
         playbackGeneration = UUID().uuidString
         acceptsNaturalEnd = false

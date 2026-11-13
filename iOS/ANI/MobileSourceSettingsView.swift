@@ -1,4 +1,5 @@
 import SwiftUI
+import SourceRuntime
 
 struct MobileSourceSettingsView: View {
     @Environment(MobileSourceLibrary.self) private var sources
@@ -24,6 +25,9 @@ struct MobileSourceSettingsView: View {
                 Section {
                     Label("Some source files could not be loaded. Existing files were preserved.", systemImage: "exclamationmark.triangle")
                         .foregroundStyle(.secondary)
+                    ForEach(sources.issues, id: \.self) { issue in
+                        Text(verbatim: issue).font(.caption).foregroundStyle(.secondary)
+                    }
                     Button("Retry") { sources.reload() }
                 }
             }
@@ -47,8 +51,8 @@ private struct MobileSourceSettingsRow: View {
     var body: some View {
         Toggle(isOn: $enabled) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(verbatim: entry.configuration.name).font(.headline)
-                Text(verbatim: entry.configuration.hosts.joined(separator: " · "))
+                Text(verbatim: entry.source.name).font(.headline)
+                Text(verbatim: entry.source.hosts.joined(separator: " · "))
                     .font(.caption).foregroundStyle(.secondary)
             }.padding(.vertical, 2)
         }
@@ -62,7 +66,7 @@ struct MobileSourceURLImportView: View {
     var onSubscriptionApplied: () -> Void = {}
     var onImported: (String) -> Void = { _ in }
     @Environment(\.dismiss) private var dismiss
-    @State private var address = ""
+    @State private var address = SourceSubscriptionTransport.endpoint.absoluteString
     @State private var importer = MobileSourceURLImport.forApp()
     @State private var imported = false
     @FocusState private var addressFocused: Bool
@@ -102,7 +106,7 @@ struct MobileSourceURLImportView: View {
                             .foregroundStyle(.secondary).accessibilityIdentifier("source-import-error")
                     }
                 } header: { Text("Configuration URL") } footer: {
-                    Text("Source JSON, source lists, or CSS1 configurations. Review before saving.")
+                    Text("Import source JSON or source lists. The default CSS1 subscription only updates built-in search rules.")
                 }
             }
             .navigationTitle("Import from URL")
@@ -118,7 +122,7 @@ struct MobileSourceURLImportView: View {
         .onDisappear { importer.cancel() }
         .sheet(item: Binding(get: { importer.draft }, set: { if $0 == nil { importer.clearPreview() } }), onDismiss: finish) { draft in
             SourceImportPreview(draft: draft, replaces: sources.replaces(draft),
-                                currentRevision: sources.sources.first(where: { $0.id == draft.configuration.id })?.configuration.configurationRevision) {
+                                currentRevision: sources.sources.first(where: { $0.id == draft.configuration.id })?.source.configurationRevision) {
                 let id = try sources.apply(draft)
                 imported = true
                 onImported(id)
@@ -158,12 +162,6 @@ private struct MobileSourceBatchPreview: View {
     var body: some View {
         NavigationStack {
             Form {
-                if batch.drafts.contains(where: { $0.configuration.webSelector != nil }) {
-                    Section {
-                        Text("CSS1 samples passed search, episode listing and media URL resolution. Playback is not guaranteed. Failed checks are skipped for this import; existing sources are kept.")
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
-                }
                 if !batch.notices.isEmpty {
                     Section("Skipped sources") {
                         ForEach(Array(batch.notices.enumerated()), id: \.offset) { _, notice in

@@ -1,4 +1,7 @@
 import Foundation
+import struct SourceRuntime.SourceSubscriptionPlan
+import enum SourceRuntime.SourceSubscriptionConverter
+import enum SourceRuntime.SourceSubscriptionError
 @testable import IINA_ANI
 
 @main enum SourceSubscriptionRegression {
@@ -44,7 +47,7 @@ import Foundation
         let registry = SourceRegistry(builtinDirectory: builtin, userDirectory: temporary)
         try require(registry.loadError == nil, "isolated baseline failed to load")
 
-        // These indexed selectors are the actual css1 v2 shapes, not a universal indexed-list parser.
+        // Independent indexed selectors are retained and paired structurally when responses are parsed.
         let xifan = source("稀饭动漫", "https://dm1.xfdm.pro/search.html?wd={keyword}", format: "indexed",
                            names: "body > .box-width .search-box .thumb-content > .thumb-txt",
                            links: "body > .box-width .search-box .thumb-menu > a")
@@ -113,7 +116,7 @@ import Foundation
             source("auth path", "https://www.jibi.cc/login?wd={keyword}"),
             source("version", "https://www.jibi.cc/index.php/vod/search.html?wd={keyword}", version: 3),
             source("factory", "https://www.jibi.cc/index.php/vod/search.html?wd={keyword}", factory: "remote-script"),
-            source("indexed unknown shape", "https://dm1.xfdm.pro/search.html?wd={keyword}", format: "indexed", names: ".new-name", links: ".new-link"),
+            source("indexed invalid selector", "https://dm1.xfdm.pro/search.html?wd={keyword}", format: "indexed", names: "a[", links: ".new-link"),
             source("long selector", "https://www.fqdm.cc/index.php/vod/search.html?wd={keyword}", selector: String(repeating: "a", count: 1025))
         ]
         let unsupportedPlan = try SourceSubscriptionConverter.convert(data: feed(unsupported), registry: registry)
@@ -135,7 +138,9 @@ import Foundation
         let complete = try SourceSubscriptionConverter.convert(data: completeFeed, registry: registry)
         try require(Set(complete.overrides.keys) == SourceSubscriptionConverter.managedSourceIDs, "a supported search identity was lost")
         let mutedmSearch = try decoded(complete, "mutedm")
-        try require(mutedmSearch.search.format == "json" && mutedmSearch.resultURLTemplate == "https://www.mutedm.com/voddetail/{id}.html", "2k must retain its audited JSON and canonical detail template")
+        try require(mutedmSearch.search.format == "json" && mutedmSearch.search.jsonResultsPath == "list" &&
+                    mutedmSearch.search.resultURLTemplate == "/voddetail/{value}.html" && mutedmSearch.resultURLTemplate == nil,
+                    "2k must compile the exported same-row JSON fields and explicit detail template")
         try registry.applySubscription(complete, expectedRevision: registry.revision)
         try require(registry.nativeSearch(for: "mutedm")?.search.jsonIdentifierPath == "id", "2k JSON override must survive application")
         let malformedSelector = source("invalid CSS", "https://www.jibi.cc/index.php/vod/search.html?wd={keyword}", selector: "a[")
@@ -143,11 +148,27 @@ import Foundation
         try require(partial.overrides["jibi"] == nil && partial.overrides["fqdm"] != nil, "invalid individual selector must not invalidate unrelated entries")
         let empty = try SourceSubscriptionConverter.convert(data: feed([]), registry: registry)
         try require(empty.overrides.isEmpty, "missing sources must not manufacture overrides")
+        let rootFeed = try JSONSerialization.data(withJSONObject: ["schemaVersion": 2, "mediaSources": [changed, fqdm]])
+        let current = try SourceSubscriptionConverter.convert(data: rootFeed, registry: registry)
+        let legacy = try SourceSubscriptionConverter.convert(data: feed([changed, fqdm]), registry: registry)
+        try require(current.overrides == legacy.overrides, "current and legacy envelopes must convert the same search rules")
+        let rootWins = try JSONSerialization.data(withJSONObject: [
+            "mediaSources": [fqdm], "exportedMediaSourceDataList": ["mediaSources": [changed]]])
+        let preferred = try SourceSubscriptionConverter.convert(data: rootWins, registry: registry)
+        try require(preferred.overrides["fqdm"] != nil && preferred.overrides["jibi"] == nil,
+                    "root list must take precedence over legacy nested list")
+        let emptyRoot = try JSONSerialization.data(withJSONObject: [
+            "mediaSources": [], "exportedMediaSourceDataList": ["mediaSources": [changed]]])
+        let preferredEmpty = try SourceSubscriptionConverter.convert(data: emptyRoot, registry: registry)
+        try require(preferredEmpty.overrides.isEmpty, "an empty root list must not resurrect a nested subscription")
+        let malformedRoot = try JSONSerialization.data(withJSONObject: [
+            "mediaSources": NSNull(), "exportedMediaSourceDataList": ["mediaSources": [fqdm]]])
+        try expectFailure(malformedRoot, registry: registry, .malformed)
         try expectFailure(Data("{bad".utf8), registry: registry, .malformed)
         try expectFailure(Data("{}".utf8), registry: registry, .malformed)
         try expectFailure(feed([1, "bad", NSNull()]), registry: registry, .malformed)
         try expectFailure(Data(repeating: 32, count: 2 * 1024 * 1024 + 1), registry: registry, .tooLarge)
         try expectFailure(feed(Array(repeating: fqdm, count: 129)), registry: registry, .tooManyItems)
-        print("PASS css1 converter: real selector shapes, local pins, search-only whitelist, identity isolation, duplicate rejection, unsupported/missing preservation and bounded feed errors")
+        print("PASS source converter: general selector shapes, public templates, search-only whitelist, identity isolation, duplicate rejection, unsupported/missing preservation and bounded feed errors")
     }
 }

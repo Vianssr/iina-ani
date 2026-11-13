@@ -224,28 +224,21 @@ extension Danmaku {
 				if re.bizScene == .survive {
 					return nil
 				}
+                var comment = DanmakuComment(text: re.text)
 				
 				if re.dmType == .emoticon,
 				   let emoticon = re.emoticons.first?.value {
-					//		emoticons {
-					//		  key: "哇"
-					//		  value {
-					//			unique: "room_47867_14602"
-					//			url: "http://i0.hdslb.com/bfs/garb/b2836ddf5c7e2bbcb9d7e80a84ae17ac102003eb.png"
-					//			is_dynamic: true
-					//			in_player_area: 1
-					//			bulge_display: 1
-					//			height: 162
-					//			width: 162
-					//		  }
-					//		}
-					return biliLiveEmoticonDM(
-						url: emoticon.url,
-						unique: emoticon.unique,
-						width: .init(emoticon.width),
-						height: .init(emoticon.height))
-				}
-				return DanmakuComment(text: re.text)
+                    guard let imageComment = biliLiveEmoticonDM(
+                        url: emoticon.url,
+                        unique: emoticon.unique,
+                        width: .init(emoticon.width),
+                        height: .init(emoticon.height)) else { return nil }
+                    comment = imageComment
+                }
+                comment.color = re.color <= 0xFFFFFF ? Int(re.color) : nil
+                comment.mode = re.mode > 0 ? Int(re.mode) : nil
+                comment.fontSize = re.size > 0 ? Int(re.size) : nil
+                return comment
 			} catch let error {
 				print(error)
 			}
@@ -296,24 +289,36 @@ extension Danmaku {
 		}
 		
 		guard let info = json["info"] as? [Any],
-			  info.count > 0,
-			  let dms = info[0] as? [Any],
-			  dms.count > 15 else {
+              info.count > 1,
+              let dms = info[0] as? [Any],
+              dms.count >= 4 else {
 			return nil
 		}
+
+        func withMetadata(_ comment: DanmakuComment?) -> DanmakuComment? {
+            var comment = comment
+            if let color = dms[3] as? Int, (0...0xFFFFFF).contains(color) {
+                comment?.color = color
+            }
+            if let mode = dms[1] as? Int, mode > 0 {
+                comment?.mode = mode
+            }
+            if let size = dms[2] as? Int, size > 0 {
+                comment?.fontSize = size
+            }
+            return comment
+        }
 		
-		if let dm = dms[13] as? [String: Any],
+        if dms.indices.contains(13), let dm = dms[13] as? [String: Any],
 		   let unique = dm["emoticon_unique"] as? String,
-//		   let width = dm["width"] as? Int,
-//		   let height = dm["height"] as? Int,
 		   let url = dm["url"] as? String {
 			
-			return biliLiveEmoticonDM(
-				url: url,
-				unique: unique,
-				width: 180,
-				height: 180)
-		} else if let dm = dms[15] as? [String: Any],
+            return withMetadata(biliLiveEmoticonDM(
+                url: url,
+                unique: unique,
+                width: dm["width"] as? Int ?? 180,
+                height: dm["height"] as? Int ?? 180))
+        } else if dms.indices.contains(15), let dm = dms[15] as? [String: Any],
 		   let extra = dm["extra"],
 		   let str = extra as? String,
 		   let data = str.data(using: .utf8),
@@ -323,21 +328,21 @@ extension Danmaku {
 			guard !msg.emots.isEmpty else {
 				if let unique = msg.emoticonUnique,
 				   let emoticon = self.bililiveEmoticons.first(where: { $0.emoticonUnique == unique }) {
-					return emoticon.comment()
+                    return withMetadata(emoticon.comment())
 				} else {
-					return DanmakuComment(text: msg.content)
+                    return withMetadata(DanmakuComment(text: msg.content))
 				}
 			}
 			
 			let emot = msg.emots.values.first!
 			
-			return biliLiveEmoticonDM(
-				url: emot.url,
-				unique: emot.emoticonUnique,
-				width: emot.width,
-				height: emot.height)
-		} else if let msg = info[1] as? String {
-			return DanmakuComment(text: msg)
+            return withMetadata(biliLiveEmoticonDM(
+                url: emot.url,
+                unique: emot.emoticonUnique,
+                width: emot.width,
+                height: emot.height))
+        } else if let msg = info[1] as? String {
+            return withMetadata(DanmakuComment(text: msg))
 		} else {
 			return nil
 		}

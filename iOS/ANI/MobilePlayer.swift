@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 private enum PlayerPanel: String, Identifiable {
     case speed, subtitles, danmaku, episodes, settings
@@ -530,11 +531,67 @@ private struct DanmakuPanel: View {
                     .font(.footnote).foregroundStyle(.secondary)
             }
         }.navigationTitle("Danmaku")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    NavigationLink("Danmaku appearance") { DanmakuAppearancePanel(store: session.danmaku) }
+                        .accessibilityIdentifier("danmaku-appearance")
+                }
+            }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.xml, .json]) { result in
                 guard importEpisodeID == session.current.id else { return }
                 if case .success(let url) = result { session.importDanmaku(url) }
                 else if case .failure(let error) = result, (error as? CocoaError)?.code != .userCancelled { session.importFailed = true }
             }
+    }
+}
+
+private struct DanmakuAppearancePanel: View {
+    @Bindable var store: MobileDanmakuStore
+    private static let fontNames = UIFont.familyNames.flatMap { UIFont.fontNames(forFamilyName: $0) }.sorted()
+
+    var body: some View {
+        Form {
+            Section {
+                Picker("Danmaku font", selection: $store.appearance.fontName) {
+                    Text("System font").tag("")
+                    ForEach(Self.fontNames, id: \.self) { name in
+                        Text(verbatim: name).tag(name)
+                    }
+                }
+                .pickerStyle(.navigationLink)
+                .accessibilityIdentifier("danmaku-font")
+                LabeledContent("Danmaku font size", value: store.appearance.fontSize.formatted(.number.precision(.fractionLength(0))))
+                Slider(value: $store.appearance.fontSize, in: 12...48, step: 1) {
+                    Text("Danmaku font size")
+                }.accessibilityIdentifier("danmaku-fontSize")
+            }
+            Section {
+                LabeledContent("Danmaku speed", value: store.appearance.speed.formatted(.number.precision(.fractionLength(2))) + "×")
+                Slider(value: $store.appearance.speed, in: 0.5...2, step: 0.25) {
+                    Text("Danmaku speed")
+                }.accessibilityIdentifier("danmaku-speed")
+                Text("Danmaku speed does not change video playback speed.")
+                    .font(.footnote).foregroundStyle(.secondary)
+                LabeledContent("Danmaku opacity", value: store.appearance.opacity.formatted(.percent.precision(.fractionLength(0))))
+                Slider(value: $store.appearance.opacity, in: 0.1...1, step: 0.05) {
+                    Text("Danmaku opacity")
+                }.accessibilityIdentifier("danmaku-opacity")
+                Picker("Danmaku color", selection: $store.appearance.useSourceColors) {
+                    Text("Source colors").tag(true)
+                    Text("Uniform white").tag(false)
+                }.accessibilityIdentifier("danmaku-color")
+            }
+            Section("Danmaku preview") {
+                Text("Danmaku preview")
+                    .font(store.appearance.font)
+                    .foregroundStyle(store.appearance.useSourceColors ? .green : .white)
+                    .opacity(store.appearance.opacity)
+                    .frame(maxWidth: .infinity, minHeight: 80)
+                    .background(.black)
+                    .accessibilityIdentifier("danmaku-preview")
+            }
+        }
+        .navigationTitle("Danmaku appearance")
     }
 }
 

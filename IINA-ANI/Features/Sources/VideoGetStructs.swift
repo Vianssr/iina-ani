@@ -130,13 +130,22 @@ struct VideoSelectionCatalog: Sendable {
 /// Plans only within the immediate leaf group containing one exact durable page identity.
 /// Catalog indices and episode labels are presentation, never fallback identities.
 enum AutoplaySelection {
+    /// Native and routed sources need the played page; static v4 catalogs need the original work.
+    static func catalogSelection(after selection: PlayableSelection, registry: SourceRegistry) -> PlayableSelection {
+        guard registry.source(for: selection.item.sourceID)?.version != 4 else { return selection }
+        var choice = selection
+        choice.item = selection.episode ?? selection.item
+        choice.episode = nil
+        return choice
+    }
+
     private static func group(after selection: PlayableSelection, in nodes: [VideoTreeNode],
                               registry: SourceRegistry) -> (siblings: [VideoTreeNode], index: Int)? {
         let current = selection.episode ?? selection.item
         guard selection.torrent == nil, selection.item.sourceID != "torrent",
               current.sourceID == selection.item.sourceID,
               selection.classification.kind != .live, current.kind != .live,
-              let identity = try? registry.item(for: current.pageURL),
+              let identity = try? registry.item(for: current.pageURL, expectedKind: current.kind),
               identity.sourceID == current.sourceID else { return nil }
         var match: ([VideoTreeNode], Int)?
         var matchCount = 0
@@ -144,7 +153,7 @@ enum AutoplaySelection {
             for (index, node) in siblings.enumerated() {
                 if node.isLeaf {
                     if node.site.sourceID == current.sourceID,
-                       let ref = try? registry.item(for: node.selectionURL), ref == identity {
+                       let ref = try? registry.item(for: node.selectionURL, expectedKind: .episode), ref == identity {
                         match = (siblings, index)
                         matchCount += 1
                     }
@@ -165,7 +174,7 @@ enum AutoplaySelection {
         var identities = Set<SourceItemRef>()
         for leaf in siblings {
             guard leaf.isLeaf, !leaf.isLiving, leaf.site.sourceID == selection.item.sourceID,
-                  let item = try? registry.item(for: leaf.selectionURL),
+                  let item = try? registry.item(for: leaf.selectionURL, expectedKind: .episode),
                   item.sourceID == selection.item.sourceID, item.kind != .live, item.kind != .work,
                   identities.insert(item).inserted else { return nil }
             items.append(item)
@@ -177,17 +186,17 @@ enum AutoplaySelection {
                      registry: SourceRegistry) -> PlayableSelection? {
         guard let (siblings, index) = group(after: selection, in: nodes, registry: registry),
               siblings.indices.contains(index + 1),
-              let identity = try? registry.item(for: (selection.episode ?? selection.item).pageURL) else { return nil }
+              let identity = try? registry.item(for: (selection.episode ?? selection.item).pageURL, expectedKind: (selection.episode ?? selection.item).kind) else { return nil }
         let current = selection.episode ?? selection.item
         let leaf = siblings[index + 1]
         guard leaf.isLeaf, !leaf.isLiving, leaf.site.sourceID == current.sourceID,
-              let next = try? registry.item(for: leaf.selectionURL),
+              let next = try? registry.item(for: leaf.selectionURL, expectedKind: .episode),
               next.sourceID == current.sourceID, next != identity,
               next.kind != .live, next.kind != .work else { return nil }
         // An ambiguous repeated target must not create an autoplay loop.
         func count(_ nodes: [VideoTreeNode]) -> Int {
             nodes.reduce(0) { total, node in
-                total + (node.isLeaf ? ((try? registry.item(for: node.selectionURL)) == next ? 1 : 0) : count(node.children))
+                total + (node.isLeaf ? ((try? registry.item(for: node.selectionURL, expectedKind: .episode)) == next ? 1 : 0) : count(node.children))
             }
         }
         guard count(nodes) == 1 else { return nil }
